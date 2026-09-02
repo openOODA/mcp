@@ -1,0 +1,81 @@
+// # MCP Server CLI Command
+//
+// Logline: Routes `mcp [--stdio | --file <path> | --socket <path>]` into the transport-driven dispatcher under &BindCap+&FsWriteCap+&FsReadCap+&EnvCap.
+//
+// Setup: &BindCap+&FsWriteCap+&FsReadCap+&EnvCap drive transport. Defaults to stdio when no flag is given.
+//
+// Beats:
+//   1. Parse argv for --stdio, --file, --socket, or --help.
+//   2. Construct the matching McpTransport (stdio, file, or socket).
+//   3. Run engine_server_run and emit the framed output to stdout.
+//
+// ## CAPs
+//   &BindCap:       Gossip peer transport export.
+//   &FsWriteCap:    Persist dynamic graph state and lineage records.
+//   &FsReadCap:     Read codex and dynamic graph state.
+//   &EnvCap:        Resolve $OODACODEX override.
+
+import "engine/ANCHOR.oo";
+
+fn cmd_mcp_has_flag(args: List[String], flag: String) -> Bool {
+    let n: Int = list_len(args);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(args, i) == flag { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
+fn cmd_mcp_arg_value(args: List[String], flag: String) -> String {
+    let n: Int = list_len(args);
+    let mut i: Int = 0;
+    while i + 1 < n {
+        if list_get(args, i) == flag { return list_get(args, i + 1); }
+        i = i + 1;
+    }
+    return "";
+}
+
+pub fn run_ooda_mcp(bind: &BindCap, fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[String]) {
+    if cmd_mcp_has_flag(args, "--help") || cmd_mcp_has_flag(args, "-h") {
+        println("mcp — sovereign MCP stdio|file|socket server");
+        println("usage: mcp [--stdio | --file <path> | --socket <path>]");
+        return;
+    }
+    let has_stdio: Bool = cmd_mcp_has_flag(args, "--stdio");
+    let has_file: Bool = cmd_mcp_has_flag(args, "--file");
+    let has_sock: Bool = cmd_mcp_has_flag(args, "--socket");
+    let cnt: Int = (if has_stdio {1} else {0}) + (if has_file {1} else {0}) + (if has_sock {1} else {0});
+    if cnt > 1 {
+        println("ERR\tcli\tmcp: --stdio/--file/--socket are mutually exclusive");
+        process_exit(1);
+    }
+    let n: Int = list_len(args);
+    let mut i: Int = 0;
+    while i < n {
+        let a: String = list_get(args, i);
+        if a == "--stdio" || a == "--file" || a == "--socket" {
+            if a == "--file" || a == "--socket" {
+                if i + 1 >= n || str_starts_with(list_get(args, i + 1), "--") {
+                    println("ERR\tcli\tmcp: " + a + " requires <path>");
+                    process_exit(1);
+                }
+                i = i + 2;
+                continue;
+            }
+        } else if str_starts_with(a, "--") {
+            println("ERR\tcli\tmcp: unknown flag " + a);
+            process_exit(1);
+        }
+        i = i + 1;
+    }
+    let file_path: String = cmd_mcp_arg_value(args, "--file");
+    let sock_path: String = cmd_mcp_arg_value(args, "--socket");
+    let mut t: McpTransport = engine_transport_stdio();
+    if chars_len(file_path) > 0 { t = engine_transport_file(file_path); }
+    else if chars_len(sock_path) > 0 { t = engine_transport_socket(sock_path); }
+    else if has_stdio { t = engine_transport_stdio(); }
+    let out: String = engine_server_run(bind, fw, fr, env, &t);
+    if chars_len(out) > 0 { println(out); }
+}

@@ -1,0 +1,44 @@
+// # MCP Main — Package Entry Point
+//
+// Logline: Parse argv under the mcp binary and dispatch to the server or the safe-merge command. This is the standalone entry.
+//
+// Setup: argv[0] is the subcommand. argv[1..] are its args. Default subcommand (no args) is `mcp` (start the server in stdio mode).
+//
+// Beats:
+//   1. No subcommand → run the server in stdio mode (the editor case).
+//   2. `mcp` → run the server (same as default; explicit form).
+//   3. `mcp-merge <file>` → idempotently inject the ooda MCP entry into the agent-tool JSON config.
+//   4. Unknown subcommand prints help and exits 2.
+
+import "cmd_mcp.oo";
+import "safe_merge.oo";
+
+pub fn main(bind: &BindCap, fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[String]) -> Result<Int, String> {
+    if list_len(args) < 1 {
+        // default: start the server in stdio mode
+        run_ooda_mcp(bind, fw, fr, env, list_new());
+        return Ok(0);
+    }
+    let sub: String = list_get(args, 0);
+    let rest: List[String] = list_slice(args, 1, list_len(args));
+
+    // server
+    if sub == "mcp" || sub == "serve" || sub == "server" {
+        run_ooda_mcp(bind, fw, fr, env, rest);
+        return Ok(0);
+    }
+
+    // safe-merge
+    if sub == "mcp-merge" || sub == "merge" {
+        run_ooda_mcp_merge(fr, fw, rest);
+        return Ok(0);
+    }
+
+    // unknown
+    println("mcp — openOODA Model Context Protocol server");
+    println("usage: mcp [mcp | mcp-merge <file>]");
+    println("       mcp (default) starts the stdio server");
+    println("       mcp --file <path> runs one-shot file mode");
+    println("       mcp-merge <file> writes the ooda entry into an agent-tool config");
+    return Err("mcp: unknown subcommand: " + sub);
+}

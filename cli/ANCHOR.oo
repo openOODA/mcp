@@ -1,0 +1,17 @@
+// # MCP CLI Command Interface — Anchor for Agents
+//
+// Logline: Front door for the mcp command surface. Re-exports the standalone server entry plus the safe-merge utility.
+//
+// Setup: The mcp binary has 2 subcommands: `mcp` (start the server) and `mcp-merge <file>` (idempotently inject the ooda entry into an agent-tool JSON config). The dispatch is a one-line argv match.
+//
+// Beats:
+//   1. cmd_mcp.oo has run_ooda_mcp: parses --stdio/--file/--socket/--help, runs engine_server_run.
+//   2. safe_merge.oo has run_ooda_mcp_merge: idempotent agent-config writer.
+//   3. safe_merge_core.oo provides the pure string utilities used by safe_merge.
+//   4. main.oo is the package's binary entry: parse argv[0] (the subcommand), dispatch, return Result<Int, String>.
+//
+// Note: the original cli/mcp/test.oo (which ran the 55/55 MCP test suite via ooda/qa/tests_llms/test_all.oo) was deleted. The mcp-test command will be re-added in a later phase when a self-contained test runner is in place.
+
+import "cmd_mcp.oo";
+import "safe_merge.oo";
+import "safe_merge_core.oo";

@@ -1,0 +1,42 @@
+// # Sovereign ooda mcp-merge CLI command
+//
+// Logline: Idempotently inject the ooda MCP server entry into an agent-tool JSON config under FsReadCap+FsWriteCap.
+//
+// Setup: The shell install scripts call `ooda mcp-merge <file>` and read the exit code. 0 = no-op, 1 = written, 2 = error.
+//
+// Beats:
+//   1. Parse argv for the target file path.
+//   2. Call safe_mcp_merge_file under FsReadCap+FsWriteCap.
+//   3. Print a one-line status and exit with the matching code.
+
+import "safe_merge_core.oo";
+
+fn cmd_safe_mcp_merge_arg_positional(args: List[String]) -> String {
+    let n: Int = list_len(args);
+    let mut i: Int = 0;
+    while i < n {
+        let a: String = list_get(args, i);
+        if str_slice(a, 0, 1) != "-" { return a; }
+        i = i + 1;
+    }
+    return "";
+}
+
+pub fn run_ooda_mcp_merge(fr: &FsReadCap, fw: &FsWriteCap, args: List[String]) {
+    let path: String = cmd_safe_mcp_merge_arg_positional(args);
+    if chars_len(path) == 0 {
+        println("usage: ooda mcp-merge <config.json>");
+        process_exit(2);
+    }
+    let rc: Int = safe_mcp_merge_file(fr, fw, path);
+    if rc == 0 {
+        println("noop\t" + path);
+        process_exit(0);
+    }
+    if rc == 1 {
+        println("merged\t" + path);
+        process_exit(0);
+    }
+    println("error\t" + path);
+    process_exit(2);
+}

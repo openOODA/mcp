@@ -1,0 +1,140 @@
+// # Sovereign MCP Server-Config Safe Merge
+//
+// Logline: Idempotently inject the ooda MCP entry into any agent-tool JSON config under FsReadCap+FsWriteCap.
+//
+// Setup: Pure string scanning and atomic file rewrite. No external tools. Fail-closed on malformed JSON.
+//
+// Beats:
+//   1. Parse the target file: detect top-level object and locate mcpServers key.
+//   2. If ooda is already registered, exit 0 silently (idempotent).
+//   3. If mcpServers is empty/missing, add the ooda entry into the right place.
+//   4. Write atomically via tmp+rename under FsWriteCap.
+
+pub fn safe_mcp_merge_ooda_entry() -> String {
+    return "\"ooda\":{\"command\":\"ooda\",\"args\":[\"mcp\"]}";
+}
+
+pub fn safe_mcp_merge_already_has_ooda(text: String) -> Bool {
+    let block: String = safe_mcp_merge_locate_block(text, "mcpServers");
+    if chars_len(block) < 2 { return false; }
+    if str_contains(block, "\"ooda\"") { return true; }
+    return false;
+}
+
+pub fn safe_mcp_merge_locate_block(text: String, key: String) -> String {
+    let n: Int = chars_len(text);
+    let pat: String = "\"" + key + "\"";
+    let plen: Int = chars_len(pat);
+    let mut i: Int = 0;
+    while i + plen <= n {
+        if str_slice(text, i, i + plen) == pat {
+            let mut j: Int = i + plen;
+            while j < n {
+                let c: String = char_at(text, j);
+                if c == " " || c == "\t" || c == "\n" || c == "\r" { j = j + 1; continue; }
+                if c == ":" { j = j + 1; }
+                break;
+            }
+            while j < n {
+                let c: String = char_at(text, j);
+                if c == " " || c == "\t" || c == "\n" || c == "\r" { j = j + 1; continue; }
+                if c == "{" { return safe_mcp_merge_brace_block(text, j); }
+                return "";
+            }
+            return "";
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
+fn safe_mcp_merge_brace_block(text: String, start: Int) -> String {
+    let n: Int = chars_len(text);
+    let mut depth: Int = 0;
+    let mut in_str: Bool = false;
+    let mut esc: Bool = false;
+    let mut i: Int = start;
+    while i < n {
+        let c: String = char_at(text, i);
+        if in_str {
+            if esc { esc = false; }
+            else if c == "\\" { esc = true; }
+            else if c == "\"" { in_str = false; }
+        } else if c == "\"" {
+            in_str = true;
+        } else if c == "{" {
+            depth = depth + 1;
+        } else if c == "}" {
+            depth = depth - 1;
+            if depth == 0 {
+                return str_slice(text, start, i + 1);
+            }
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
+pub fn safe_mcp_merge_is_empty_object(block: String) -> Bool {
+    let n: Int = chars_len(block);
+    if n < 2 { return false; }
+    let mut i: Int = 1;
+    while i < n - 1 {
+        let c: String = char_at(block, i);
+        if c == " " || c == "\t" || c == "\n" || c == "\r" { i = i + 1; continue; }
+        return false;
+    }
+    return true;
+}
+
+pub fn safe_mcp_merge_top_level_with_ooda(text: String) -> String {
+    let block: String = safe_mcp_merge_locate_block(text, "mcpServers");
+    if chars_len(block) >= 2 {
+        if safe_mcp_merge_is_empty_object(block) {
+            return "{" + safe_mcp_merge_ooda_entry() + "}";
+        }
+        let n: Int = chars_len(block);
+        let inner: String = str_slice(block, 1, n - 1);
+        return "{" + inner + "," + safe_mcp_merge_ooda_entry() + "}";
+    }
+    if safe_mcp_merge_is_empty_object(text) {
+        return "{" + safe_mcp_merge_ooda_entry() + "}";
+    }
+    let tn: Int = chars_len(text);
+    let tinner: String = str_slice(text, 1, tn - 1);
+    return "{" + tinner + "," + "\"mcpServers\":{" + safe_mcp_merge_ooda_entry() + "}}";
+}
+
+pub fn safe_mcp_merge_apply(text: String) -> Result[String, String] {
+    if chars_len(text) == 0 { return Err("empty text"); }
+    if char_at(text, 0) != "{" { return Err("not json"); }
+    if safe_mcp_merge_already_has_ooda(text) { return Ok(text); }
+    let new_text: String = safe_mcp_merge_top_level_with_ooda(text);
+    if chars_len(new_text) < 2 { return Err("invalid merge"); }
+    return Ok(new_text);
+}
+
+pub fn safe_mcp_merge_file(fr: &FsReadCap, fw: &FsWriteCap, path: String) -> Int {
+    if !path_exists(fr, path) {
+        let new_text: String = "{" + safe_mcp_merge_ooda_entry() + "}";
+        let wr: Result[Void, String] = write_file(fw, path, new_text);
+        if wr.is_err() { return 2; }
+        return 1;
+    }
+    let rr: Result[String, String] = read_file(fr, path);
+    if rr.is_err() { return 2; }
+    let text: String = match rr { Ok(s) => s, Err(_) => "" };
+    if chars_len(text) == 0 {
+        let new_text: String = "{" + safe_mcp_merge_ooda_entry() + "}";
+        let wr2: Result[Void, String] = write_file(fw, path, new_text);
+        if wr2.is_err() { return 2; }
+        return 1;
+    }
+    if safe_mcp_merge_already_has_ooda(text) { return 0; }
+    let ar: Result[String, String] = safe_mcp_merge_apply(text);
+    if ar.is_err() { return 2; }
+    let new_text: String = match ar { Ok(v) => v, Err(_) => "" };
+    let wr3: Result[Void, String] = write_file(fw, path, new_text);
+    if wr3.is_err() { return 2; }
+    return 1;
+}

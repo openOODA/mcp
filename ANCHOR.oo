@@ -1,18 +1,20 @@
 // # MCP Subsystem — Anchor for Agents
 //
-// Logline: Front door for the ooda/mcp/ directory. Re-exports the engine facade plus qa, scripts, docs, examples, and audit.
+// Logline: Front door for the mcp/ directory. Re-exports the engine facade plus the cli/ command interface, qa, scripts, docs, examples, and audit.
 //
-// Setup: Pure structural file. The 6 functional subdirs live under engine/ (core, tool, health, federation, state, resource); the engine/ facade re-exports them. The 5 sibling dirs (qa, scripts, docs, examples, audit) provide the OPM tactical-subsystem template surfaces.
+// Setup: Pure structural file. The 6 functional subdirs live under engine/ (core, tool, health, federation, state, resource); the engine/ facade re-exports them. The 6 sibling dirs (cli, qa, scripts, docs, examples, audit) provide the OPM tactical-subsystem template surfaces.
 //
 // Beats:
-//   1. engine/ is the only public surface: 6 functional subdirs.
-//   2. Each engine subdir has its own ANCHOR.oo front door.
-//   3. qa/ has 6 self-test probe drivers; scripts/ has build, test, verify, release.
-//   4. docs/ has MCP_SETUP.oot, protocol.oot, and client_config.oot; examples/ has 3 sample JSON-RPC requests.
-//   5. audit/ has the per-version deep-dive audit history (moved from openOODA/audit/).
-//   6. VERSION declares mcp=0.5.0 with ooda compat range and api_surface=6.
+//   1. engine/ is the only library surface: 6 functional subdirs.
+//   2. cli/ is the standalone entry: the mcp binary (stdio server) and mcp-merge (agent-config writer).
+//   3. Each engine subdir has its own ANCHOR.oo front door.
+//   4. qa/ has 6 self-test probe drivers; scripts/ has build, test, verify, release.
+//   5. docs/ has MCP_SETUP.oot, protocol.oot, and client_config.oot; examples/ has 3 sample JSON-RPC requests.
+//   6. audit/ has the per-version deep-dive audit history (moved from openOODA/audit/).
+//   7. VERSION declares mcp=0.5.0 with ooda compat range and api_surface=7.
 
 import "engine/ANCHOR.oo";
+import "cli/ANCHOR.oo";
 import "qa/ANCHOR.oo";
 import "scripts/ANCHOR.oo";
 import "docs/ANCHOR.oo";
