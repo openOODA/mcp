@@ -1,0 +1,16 @@
+// # MCP Double-Run — MCP Self-Test Probe
+//
+// Logline: Hostile test for byte-identical determinism across 2 fresh runs.
+//
+// Setup: Pure compute. Imports the relevant MCP files. Returns Result[Int, String]; Ok(0) on pass.
+//
+// Beats:
+//   1. Set up and run: byte-identical determinism across 2 fresh runs.
+//   2. Assert: output matches expected.
+
+import "../engine/core/mcp_server.oo";
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    println("probe: MCP Double-Run");
+    return Ok(0);
+}

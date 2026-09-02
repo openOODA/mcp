@@ -1,0 +1,20 @@
+// # MCP Engine
+//
+// Logline: Front door for the MCP engine. Re-exports the six functional sub-modules: core, tool, health, federation, state, resource.
+//
+// Setup: Pure dispatch facade. Per-cap effects via the sub-module facades. No direct file IO here.
+//
+// Beats:
+//   1. core: dispatch, server, session, transport, batch, workspace, scheduler.
+//   2. tool: tool, tool_dispatch, dynamic_ops.
+//   3. health: health, heartbeat, audit, redteam.
+//   4. federation: federation, gossip, lineage, lineage_chain, lineage_compaction, codex.
+//   5. state: graph, graph_dynamic, cap, real_caps, stream, ooda_state, notification, sampling, em.
+//   6. resource: format, schema, context_budget.
+
+import "core/ANCHOR.oo";
+import "tool/ANCHOR.oo";
+import "health/ANCHOR.oo";
+import "federation/ANCHOR.oo";
+import "state/ANCHOR.oo";
+import "resource/ANCHOR.oo";

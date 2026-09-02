@@ -1,0 +1,7 @@
+// # MCP Examples Index — Anchor for Agents
+//
+// Logline: Index of the 3 sample JSON-RPC request files for the MCP server.
+
+import "initialize_request.oot";
+import "tools_list_request.oot";
+import "tool_call_request.oot";

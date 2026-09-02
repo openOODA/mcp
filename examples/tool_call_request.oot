@@ -1,0 +1,29 @@
+# Sample MCP Tool Call Request
+
+File: ooda/mcp/examples/tool_call_request.oot
+
+## Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": {
+    "name": "ooda.northstar",
+    "arguments": {}
+  }
+}
+```
+
+## Expected Response (abbreviated)
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "content": [{"type": "text", "text": "openOODA is a systems programming language..."}]
+  }
+}
+```

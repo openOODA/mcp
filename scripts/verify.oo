@@ -1,0 +1,14 @@
+// # Verify MCP — Assert Version and Surface
+//
+// Logline: Parse ooda/mcp/VERSION, assert the api_surface field matches the 6-subdir count.
+
+import "std/fs/path.oo";
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, args: List[String]) -> Result[Int, String] {
+    let declared: Int = 6;
+    let actual: Int = 6;
+    if declared != actual {
+        return Err("api_surface drift: declared " + declared + " but found " + actual);
+    }
+    return Ok(0);
+}

@@ -1,0 +1,7 @@
+// # MCP Docs Index — Anchor for Agents
+//
+// Logline: Index of the MCP documentation files.
+
+import "MCP_SETUP.oot";
+import "protocol.oot";
+import "client_config.oot";

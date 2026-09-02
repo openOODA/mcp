@@ -1,0 +1,48 @@
+// # Heartbeat Gossip
+//
+// Logline: A live-state heartbeat on top of the unix-socket gossip snapshot. Every publish emits a small JSON with the publisher's current epoch; every fetch reads the most recent heartbeat from the peer's heartbeat socket. Pull-based (no threads).
+//
+// Setup: Heartbeat socket path is openOODA/mcp-sockets/<instance_id>.heartbeat.sock (separate from the snapshot socket). Heartbeat body is `{"instance":"...","epoch":N,"type":"heartbeat"}`. Runtime must expose unix_* builtins.
+//
+// Beats:
+//   1. mcp_heartbeat_path: build a heartbeat socket path.
+//   2. mcp_heartbeat_publish: bind, accept, write heartbeat JSON, close.
+//   3. mcp_heartbeat_fetch: connect, read, close.
+
+import "std/net/unix_socket.oo";
+import "engine/federation/mcp_gossip.oo";
+
+// Heartbeat socket path for an instance. Suffix `.heartbeat.sock` distinguishes it from the snapshot socket.
+pub fn mcp_heartbeat_path(instance_id: String) -> String {
+    return mcp_gossip_socket_dir() + "/" + instance_id + ".heartbeat.sock";
+}
+
+// Publish a heartbeat. Returns 1 on success, 0 on failure. Epoch is the publisher's current request_seq.
+pub fn mcp_heartbeat_publish(bind: &BindCap, fw: &FsWriteCap, fs: &FsCap, instance_id: String, epoch: Int) -> Int {
+    let path: String = mcp_heartbeat_path(instance_id);
+    let _ = oo_fs_mkdir(fw, mcp_gossip_socket_dir());
+    let br: Result[UnixSocketHandle, String] = unix_socket_bind(bind, fw, path);
+    if br.is_err() { return 0; }
+    let listener: UnixSocketHandle = match br { Ok(h) => h, Err(_) => return 0; };
+    let ar: Result[UnixConnection, String] = unix_socket_accept(fs, listener);
+    if ar.is_err() { let _ = unix_socket_close_listener(fs, fw, listener); return 0; }
+    let conn: UnixConnection = match ar { Ok(c) => c, Err(_) => { let _ = unix_socket_close_listener(fs, fw, listener); return 0; } };
+    let body: String = "{\"instance\":\"" + instance_id + "\",\"epoch\":" + epoch.to_string() + ",\"type\":\"heartbeat\"}";
+    let written: Int = unix_socket_write(fs, conn, body);
+    let _ = unix_socket_close_connection(fs, fw, conn);
+    let _ = unix_socket_close_listener(fs, fw, listener);
+    if written <= 0 { return 0; }
+    return 1;
+}
+
+// Fetch a peer's latest heartbeat. Returns the JSON or "" on failure.
+pub fn mcp_heartbeat_fetch(fs: &FsCap, fw: &FsWriteCap, instance_id: String) -> String {
+    let path: String = mcp_heartbeat_path(instance_id);
+    let cr: Result[UnixConnection, String] = unix_socket_connect(fs, fw, path);
+    if cr.is_err() { return ""; }
+    let conn: UnixConnection = match cr { Ok(c) => c, Err(_) => return ""; };
+    let rr: Result[String, String] = unix_socket_read(fs, conn, 4096);
+    let data: String = match rr { Ok(s) => s, Err(_) => "" };
+    let _ = unix_socket_close_connection(fs, fw, conn);
+    return data;
+}

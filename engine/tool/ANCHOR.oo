@@ -1,0 +1,14 @@
+// # Mcp Tool Interface
+//
+// Logline: Tool trait, tool dispatch, and dynamic ops surface for the MCP tool layer.
+//
+// Setup: MCP tool layer: tool trait, dispatch, dynamic operation surface.
+//
+// Beats:
+//   1. mcp_dynamic_ops.oo.
+//   2. mcp_tool.oo.
+//   3. mcp_tool_dispatch.oo.
+
+import "mcp_dynamic_ops.oo";
+import "mcp_tool.oo";
+import "mcp_tool_dispatch.oo";

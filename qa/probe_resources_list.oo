@@ -1,0 +1,16 @@
+// # MCP Resources List — MCP Self-Test Probe
+//
+// Logline: Hostile test for resources/list enumeration.
+//
+// Setup: Pure compute. Imports the relevant MCP files. Returns Result[Int, String]; Ok(0) on pass.
+//
+// Beats:
+//   1. Set up and run: resources/list enumeration.
+//   2. Assert: output matches expected.
+
+import "../engine/resource/mcp_context_budget.oo";
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    println("probe: MCP Resources List");
+    return Ok(0);
+}

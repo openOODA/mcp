@@ -1,0 +1,32 @@
+# Sample MCP Initialize Request
+
+File: ooda/mcp/examples/initialize_request.oot
+
+## Request
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "initialize",
+  "params": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {},
+    "clientInfo": {"name": "openooda-mcp-client", "version": "0.1.0"}
+  }
+}
+```
+
+## Expected Response (abbreviated)
+
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": "2024-11-05",
+    "capabilities": {"tools": {"listChanged": false}, "resources": {"subscribe": false}},
+    "serverInfo": {"name": "openooda-mcp", "version": "0.5.0"}
+  }
+}
+```

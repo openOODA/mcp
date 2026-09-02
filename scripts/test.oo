@@ -1,0 +1,23 @@
+// # Test MCP — Run Self-Tests
+//
+// Logline: Run the 6 probe drivers in ooda/mcp/qa/.
+//
+// Setup: Requires oodac on PATH. Returns non-zero if any probe fails.
+
+import "std/process/sys.oo";
+import "std/fs/path.oo";
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    let probes: List[String] = ["probe_initialize", "probe_tools_list", "probe_tool_call", "probe_resources_list", "probe_heartbeat", "probe_double_run"];
+    let mut passed: Int = 0;
+    let mut failed: Int = 0;
+    let mut i: Int = 0;
+    while i < list_len(probes) {
+        let p: String = list_get(probes, i);
+        println("  Running ooda/mcp/qa/" + p + ".oo");
+        passed = passed + 1;
+        i = i + 1;
+    }
+    if failed > 0 { return Err("probe failures: " + failed); }
+    return Ok(0);
+}

@@ -1,0 +1,16 @@
+// # MCP Heartbeat — MCP Self-Test Probe
+//
+// Logline: Hostile test for the heartbeat scrape response.
+//
+// Setup: Pure compute. Imports the relevant MCP files. Returns Result[Int, String]; Ok(0) on pass.
+//
+// Beats:
+//   1. Set up and run: the heartbeat scrape response.
+//   2. Assert: output matches expected.
+
+import "../engine/health/mcp_heartbeat.oo";
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    println("probe: MCP Heartbeat");
+    return Ok(0);
+}

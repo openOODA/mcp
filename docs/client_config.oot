@@ -1,0 +1,24 @@
+# MCP Client Configuration
+
+File: ooda/mcp/docs/client_config.oot
+
+## 1. Launching the server
+
+```sh
+ooda mcp              # stdio
+ooda mcp request.txt  # one-shot
+```
+
+## 2. Editor configuration
+
+For Claude Desktop:
+```json
+{
+  "mcpServers": {
+    "openooda": {
+      "command": "ooda",
+      "args": ["mcp"]
+    }
+  }
+}
+```

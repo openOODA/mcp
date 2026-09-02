@@ -1,0 +1,72 @@
+// # MCP Context Budget — Token-Economy Tools
+//
+// Logline: Expose 5 token-management primitives so the LLM client can pull just what fits its context window instead of the full board / codex / registry each time.
+//
+// Setup: Tier 1 of the blue-ocean MCP expansion. Every tool answers a single question about cost. No tool reads from disk implicitly; reads are explicit (FsReadCap on summarize_board). Compress is plain-text truncation with a JSON envelope; no tokenizer builtin is required.
+//
+// Beats:
+//   1. mcp_context_budget_get_board_index — list 13 boards with name, path, priority, summary char count.
+//   2. mcp_context_budget_summarize_board — read + truncate one board to max_chars (FsReadCap).
+//   3. mcp_context_budget_compress_orient — truncate the codex text the client already has.
+//   4. mcp_context_budget_get_context — session bytes/seq/caps/audit/notifs snapshot.
+//   5. mcp_context_budget_estimate_chars — cheap char count proxy for token count.
+
+import "lsp/wire/lsp_jsonrpc.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+
+pub fn mcp_context_budget_estimate_chars(text: String) -> Int {
+    return chars_len(text);
+}
+
+pub fn mcp_context_budget_get_board_index(g: &McpGraph) -> String {
+    let brds: List[McpBoard] = g.boards;
+    let n: Int = list_len(brds);
+    let mut out: String = "[";
+    let mut i: Int = 0;
+    while i < n {
+        if i > 0 { out = out + ","; }
+        let b: McpBoard = list_get(brds, i);
+        out = out + "{\"name\":\"" + b.name + "\",\"path\":\"" + b.path + "\",\"priority\":" + b.read_priority.to_string() + ",\"summary_chars\":" + chars_len(b.summary).to_string() + "}";
+        i = i + 1;
+    }
+    return out + "]";
+}
+
+pub fn mcp_context_budget_summarize_board(fs: &FsReadCap, g: &McpGraph, name: String, max_chars: Int) -> String {
+    if max_chars <= 0 { return mcp_context_budget_envelope("board:" + name, true, 0, 0, ""); }
+    let brds: List[McpBoard] = g.boards;
+    let n: Int = list_len(brds);
+    let mut found: Bool = false;
+    let mut path: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let b: McpBoard = list_get(brds, i);
+        if b.name == name { path = b.path; found = true; i = n; } else { i = i + 1; }
+    }
+    if !found { return "{\"error\":\"board not found\",\"name\":\"" + name + "\"}"; }
+    let rr: Result[String, String] = read_file(fs, path);
+    if rr.is_err() { return "{\"error\":\"cannot read\",\"path\":\"" + path + "\"}"; }
+    let text: String = match rr { Ok(s) => s, Err(_) => "" };
+    return mcp_context_budget_truncate(text, max_chars, "board:" + name);
+}
+
+pub fn mcp_context_budget_compress_orient(codex_text: String, max_chars: Int) -> String {
+    if max_chars <= 0 { return mcp_context_budget_envelope("orient", true, 0, 0, ""); }
+    return mcp_context_budget_truncate(codex_text, max_chars, "orient");
+}
+
+pub fn mcp_context_budget_get_context(s: &McpSession) -> String {
+    return "{\"bytes_in\":" + s.bytes_in.to_string() + ",\"bytes_out\":" + s.bytes_out.to_string() + ",\"request_seq\":" + s.request_seq.to_string() + ",\"caps_held\":" + s.caps_held.to_string() + ",\"rate_window_count\":" + s.rate_window_count.to_string() + ",\"audit_count\":" + list_len(s.audit_log).to_string() + ",\"pending_notifs\":" + list_len(s.pending_notifications).to_string() + ",\"seen_ids\":" + list_len(s.seen_ids).to_string() + ",\"client_roots\":" + list_len(s.client_roots).to_string() + "}";
+}
+
+fn mcp_context_budget_truncate(text: String, max_chars: Int, kind: String) -> String {
+    let n: Int = chars_len(text);
+    if n <= max_chars { return mcp_context_budget_envelope(kind, false, n, n, text); }
+    let cut: String = str_slice(text, 0, max_chars);
+    return mcp_context_budget_envelope(kind, true, n, max_chars, cut);
+}
+
+fn mcp_context_budget_envelope(kind: String, truncated: Bool, orig: Int, returned: Int, text: String) -> String {
+    return "{\"kind\":\"" + kind + "\",\"truncated\":" + (if truncated { "true" } else { "false" }) + ",\"orig_chars\":" + orig.to_string() + ",\"returned_chars\":" + returned.to_string() + ",\"text\":\"" + lsp_jsonrpc_escape(text) + "\"}";
+}

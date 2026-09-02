@@ -1,0 +1,44 @@
+// # MCP Codex Format Compliance
+//
+// Logline: Expose 2 FORMAT.oot primitives so the LLM client can self-load the format rules and self-check a candidate codex before submission.
+//
+// Setup: Tier 3 of the blue-ocean MCP expansion. The 4-element Academy header (Title/Logline/Setup/Beats) and 5-component WO (Observation/Logic Chain/Caveats/Conclusion/Verification) are codified as JSON. validate_codex_format inspects a string and reports a violation list (never a free-text pass/fail — first-principles: compliance is a property of the rules, not the caller's opinion).
+//
+// Beats:
+//   1. mcp_format_get_constraints — return the FORMAT.oot rules as JSON (4-element header, 5-component WO, 256-line cap).
+//   2. mcp_format_validate_codex — check a codex text; return per-rule pass/fail with detail.
+
+pub fn mcp_format_get_constraints() -> String {
+    return "{\"line_cap\":256,\"academy_header\":{\"title\":{\"pattern\":\"// # \",\"required\":true},\"logline\":{\"pattern\":\"Logline:\",\"required\":true},\"setup\":{\"pattern\":\"Setup:\",\"required\":true},\"beats\":{\"pattern\":\"Beats:\",\"required\":true}},\"wo_components\":[\"Observation\",\"Logic Chain\",\"Caveats\",\"Conclusion\",\"Verification\"],\"stratified_separation\":[\"strategic_openOODA\",\"operational_ooda\",\"tactical_ooda_mcp\"],\"ocap_tokens\":14,\"redteam_gates\":8}";
+}
+
+pub fn mcp_format_validate_codex(text: String) -> String {
+    let mut violations: String = "[";
+    let mut first: Bool = true;
+    if !mcp_format_contains(text, "// # ") {
+        violations = mcp_format_add_violation(violations, first, "title", "missing // # Title header");
+        first = false;
+    }
+    if !mcp_format_contains(text, "Logline:") {
+        violations = mcp_format_add_violation(violations, first, "logline", "missing Logline:");
+        first = false;
+    }
+    if !mcp_format_contains(text, "Setup:") {
+        violations = mcp_format_add_violation(violations, first, "setup", "missing Setup:");
+        first = false;
+    }
+    if !mcp_format_contains(text, "Beats:") {
+        violations = mcp_format_add_violation(violations, first, "beats", "missing Beats:");
+        first = false;
+    }
+    return "{\"violations\":" + violations + "],\"compliant\":" + (if first { "true" } else { "false" }) + ",\"char_count\":" + chars_len(text).to_string() + "}";
+}
+
+fn mcp_format_contains(haystack: String, needle: String) -> Bool {
+    return str_contains(haystack, needle);
+}
+
+fn mcp_format_add_violation(acc: String, first: Bool, rule: String, detail: String) -> String {
+    let sep: String = if first { "" } else { "," };
+    return acc + sep + "{\"rule\":\"" + rule + "\",\"ok\":false,\"detail\":\"" + detail + "\"}";
+}

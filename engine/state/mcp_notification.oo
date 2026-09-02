@@ -1,0 +1,94 @@
+// # MCP Notification Queue + Drain
+//
+// Logline: Cap-revocation notifications are queued on McpSession.pending_notifications and drained either on demand or appended to every server response.
+//
+// Setup: McpSession has a pending_notifications: List[String] field. The queue grows on every revocation event; the drain pops everything in order. mcp_server_handle_body appends drained notifications to every response (G21R).
+//
+// Beats:
+//   1. mcp_queue_notification: append a notification to the session's queue.
+//   2. mcp_drain_notifications: concat and clear the queue.
+//   3. mcp_drain_into_response: drain session queue, frame each via transport_emit, append to response.
+//   4. mcp_revalidate_and_queue_caps: revalidate + enqueue + return (replaces G18#8).
+//   5. mcp_pending_count: count of queued notifications.
+
+import "engine/state/mcp_graph.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_cap.oo";
+import "engine/core/mcp_transport.oo";
+
+// Append a JSON notification string to the session's pending queue.
+pub fn mcp_queue_notification(s: &mut McpSession, notif: String) -> Int {
+    if chars_len(notif) == 0 { return 0; }
+    s.pending_notifications = list_push(s.pending_notifications, notif);
+    return 1;
+}
+
+// Count of pending notifications on the session.
+pub fn mcp_pending_count(s: &McpSession) -> Int {
+    let notifs: List[String] = s.pending_notifications;
+    return list_len(notifs);
+}
+
+// Drain the queue. Returns all queued notifications concatenated by newlines, then clears the queue.
+pub fn mcp_drain_notifications(s: &mut McpSession) -> String {
+    let notifs: List[String] = s.pending_notifications;
+    let n: Int = list_len(notifs);
+    if n == 0 { return ""; }
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        if i > 0 { out = out + "\n"; }
+        let entry: String = list_get(notifs, i);
+        out = out + entry;
+        i = i + 1;
+    }
+    let empty_notifs: List[String] = list_new();
+    s.pending_notifications = empty_notifs;
+    return out;
+}
+
+// Drain the session's pending notification queue, frame each via mcp_transport_emit, append to response.
+// Returns the augmented response.
+pub fn mcp_drain_into_response(s: &mut McpSession, raw: String, response: String) -> String {
+    let n: Int = mcp_pending_count(s);
+    if n == 0 { return response; }
+    let notifs: List[String] = s.pending_notifications;
+    let mut out: String = response;
+    let mut i: Int = 0;
+    while i < n {
+        let entry: String = list_get(notifs, i);
+        if chars_len(entry) > 0 { out = out + mcp_transport_emit(raw, entry); }
+        i = i + 1;
+    }
+    let empty_notifs: List[String] = list_new();
+    s.pending_notifications = empty_notifs;
+    return out;
+}
+
+// Revalidate session caps against the codex's McpGraph using the 14-bit G19 surface.
+// Enqueues the notifications/cap_revoked JSON on the session queue AND returns the same JSON for
+// callers that want immediate emit (e.g. mcp_server_run at session close). Returns "" if no revocation.
+pub fn mcp_revalidate_and_queue_caps(s: &mut McpSession, g: &McpGraph) -> String {
+    let before: Int = s.caps_held;
+    let valid_mask: Int = mcp_caps_bitmask_from_graph(g);
+    s.caps_held = s.caps_held & valid_mask;
+    let revoked_bits: Int = before - (before & valid_mask);
+    if revoked_bits == 0 { return ""; }
+    let mut revoked: String = "";
+    let mut bit: Int = 0;
+    while bit < 14 {
+        let mask: Int = 1 << bit;
+        if (before & mask) > 0 && (valid_mask & mask) == 0 {
+            let name: String = mcp_bit_to_token(bit);
+            if chars_len(name) > 0 {
+                if chars_len(revoked) > 0 { revoked = revoked + ","; }
+                revoked = revoked + "\"" + name + "\"";
+            }
+        }
+        bit = bit + 1;
+    }
+    if chars_len(revoked) == 0 { return ""; }
+    let notif: String = "{\"method\":\"notifications/cap_revoked\",\"params\":{\"revoked\":[" + revoked + "]}}";
+    let _ = mcp_queue_notification(s, notif);
+    return notif;
+}

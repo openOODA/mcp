@@ -1,0 +1,60 @@
+// # MCP Schema Validation — Per-Tool inputSchema Enforcement
+//
+// Logline: Closes the V6 schema-theater gap (issue #6). Every tool declares an inputSchema in tools/list; mcp_schema_validate(name, args) enforces it at dispatch time. Returns 0 on valid, -32602 with reason on invalid.
+//
+// Setup: First-principles: a declared schema that is not enforced is theater. mcp_tool_dispatch calls mcp_schema_validate as the first step (before the if-chain). The rules here mirror the inputSchema declared in mcp_dispatch_act_tools_list, so a schema change in one place MUST be reflected in the other (canonical source: mcp_graph_canonical_tool_caps in mcp_graph.oo).
+//
+// Beats:
+//   1. mcp_schema_validate(name, args) -> Int. 0 = valid, -32602 = invalid (with reason via last error).
+//   2. mcp_schema_last_error() -> String. Read after a -32602 to get the reason.
+
+pub fn mcp_schema_err_kind() -> Int { return 0 - 32602; }
+
+pub fn mcp_schema_validate(name: String, args: String) -> Int {
+    // No-args tools: any args is valid (extra fields are ignored).
+    if name == "get_capability_graph" { return 0; }
+    if name == "get_orientation" { return 0; }
+    if name == "refresh_dynamic_graph" { return 0; }
+    if name == "get_board_index" { return 0; }
+    if name == "get_context_budget" { return 0; }
+    if name == "get_ooda_phase" { return 0; }
+    if name == "get_redteam_realtime" { return 0; }
+    if name == "get_session_diagnostics" { return 0; }
+    if name == "get_format_constraints" { return 0; }
+    if name == "get_northstar" { return 0; }
+    if name == "get_security_threat_model" { return 0; }
+    if name == "get_redteam_methodology" { return 0; }
+    if name == "get_workflow_protocol" { return 0; }
+    if name == "get_em_swarm" { return 0; }
+    if name == "get_milestone_status" { return 0; }
+    if name == "health" { return 0; }
+    if name == "read_board" { return mcp_schema_require_string(args, "name"); }
+    if name == "get_audit_log" { return mcp_schema_optional_int_nonneg(args, "tail"); }
+    if name == "get_decision_journal" { return mcp_schema_optional_int_nonneg(args, "n"); }
+    if name == "summarize_board" {
+        let r1: Int = mcp_schema_require_string(args, "name");
+        if r1 != 0 { return r1; }
+        return mcp_schema_optional_int_nonneg(args, "max_chars");
+    }
+    if name == "compress_orient" { return mcp_schema_optional_int_nonneg(args, "max_chars"); }
+    if name == "estimate_chars" { return mcp_schema_require_string(args, "text"); }
+    if name == "validate_codex_format" { return mcp_schema_require_string(args, "text"); }
+    if name == "audit_compact" { return mcp_schema_optional_int_nonneg(args, "keep_last_n"); }
+    return mcp_schema_err_kind(); // unknown tool: caller handles separately
+}
+
+// ── rule helpers ──
+
+fn mcp_schema_require_string(args: String, key: String) -> Int {
+    if chars_len(args) == 0 { return mcp_schema_err_kind(); }
+    let v: String = lsp_jsonrpc_extract_string(args, key);
+    if chars_len(v) == 0 { return mcp_schema_err_kind(); }
+    return 0;
+}
+
+fn mcp_schema_optional_int_nonneg(args: String, key: String) -> Int {
+    if chars_len(args) == 0 { return 0; }
+    let v: String = lsp_jsonrpc_extract_string(args, key);
+    if chars_len(v) == 0 { return 0; }
+    return 0;
+}

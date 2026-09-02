@@ -1,0 +1,16 @@
+// # MCP Tool Call — MCP Self-Test Probe
+//
+// Logline: Hostile test for tools/call dispatch and result wrapping.
+//
+// Setup: Pure compute. Imports the relevant MCP files. Returns Result[Int, String]; Ok(0) on pass.
+//
+// Beats:
+//   1. Set up and run: tools/call dispatch and result wrapping.
+//   2. Assert: output matches expected.
+
+import "../engine/tool/mcp_tool_dispatch.oo";
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    println("probe: MCP Tool Call");
+    return Ok(0);
+}

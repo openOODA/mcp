@@ -1,0 +1,247 @@
+// # MCP Observe/Orient/Decide/Act Dispatcher Table
+//
+// Logline: Decompose MCP request handling into OODA phases with capability-gated Act.
+//
+// Setup: Pure dispatch table implementing OODA phases, JSON-RPC envelopes, and 14-bit OCap token auditing.
+//
+// Beats: Orient extracts params; Decide phase+tier+per-method audits OCap; Act builds envelopes.
+
+import "lsp/wire/lsp_jsonrpc.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/state/mcp_stream.oo";
+
+type McpOrient = struct {
+    uri: String,
+    tool_name: String,
+    tool_args: String,
+    prompt_name: String,
+    cancelled_id: String,
+    if_none_match: String,
+    root_uri: String,
+    extracted: Bool
+};
+
+pub fn mcp_orient_empty() -> McpOrient {
+    return McpOrient { uri: "", tool_name: "", tool_args: "{}", prompt_name: "", cancelled_id: "", if_none_match: "", root_uri: "", extracted: false };
+}
+
+pub fn mcp_dispatch_orient(method: String, params: String) -> McpOrient {
+    let mut o: McpOrient = mcp_orient_empty();
+    if method == "resources/read" {
+        o.uri = lsp_jsonrpc_extract_string(params, "uri");
+        o.if_none_match = lsp_jsonrpc_extract_string(params, "ifNoneMatch");
+        if chars_len(o.uri) > 0 { o.extracted = true; }
+        return o;
+    }
+    if method == "roots/list" {
+        o.root_uri = lsp_jsonrpc_extract_string(params, "root");
+        o.extracted = true;
+        return o;
+    }
+    if method == "tools/call" {
+        o.tool_name = lsp_jsonrpc_extract_string(params, "name");
+        o.tool_args = lsp_jsonrpc_extract_string(params, "arguments");
+        if chars_len(o.tool_name) > 0 { o.extracted = true; }
+        return o;
+    }
+    if method == "prompts/get" {
+        o.prompt_name = lsp_jsonrpc_extract_string(params, "name");
+        if chars_len(o.prompt_name) > 0 { o.extracted = true; }
+        return o;
+    }
+    if method == "notifications/cancelled" {
+        o.cancelled_id = lsp_jsonrpc_extract_string(params, "id");
+        o.extracted = true;
+        return o;
+    }
+    return o;
+}
+
+pub fn mcp_dispatch_decide(s: &McpSession, g: &McpGraph, method: String, orient: &McpOrient) -> Int {
+    if !mcp_session_allows(s, method) {
+        return 0 - 32600;
+    }
+    if !mcp_session_tier_allows(s.tier, method) {
+        return 0 - 32604;
+    }
+    if s.cancelled && method != "exit" && method != "ping" {
+        return 0 - 32603;
+    }
+    if method == "resources/read" {
+        if chars_len(orient.uri) == 0 { return 0 - 32602; }
+        if !mcp_orient_uri_is_canonical(orient.uri) { return 0 - 32602; }
+        return 0;
+    }
+    if method == "tools/call" {
+        if !orient.extracted { return 0 - 32602; }
+        let req: Int = mcp_dispatch_tool_required_caps(g, orient.tool_name);
+        if req == 0 - 1 { return 0 - 32601; }
+        if req == 0 { return 0; }
+        if (req & s.caps_held) != req { return 0 - 32603; }
+        return 0;
+    }
+    if method == "prompts/get" {
+        if orient.prompt_name == "orientation" { return 0; }
+        return 0 - 32601;
+    }
+    return 0;
+}
+
+pub fn mcp_dispatch_err_tier(id: String, tier: Int, method: String) -> String {
+    return lsp_jsonrpc_make_error(id, 0 - 32604, "Tier " + tier.to_string() + " does not allow method: " + method);
+}
+
+// N-02: the canonical gate allows the 8 URIs that resources/list advertises.
+fn mcp_orient_uri_is_canonical(uri: String) -> Bool {
+    if uri == "ooda://orientation" || uri == "ooda://orientation/graph" || uri == "ooda://orientation/header" { return true; }
+    if uri == "ooda://orientation/boards" || uri == "ooda://orientation/capabilities" || uri == "ooda://orientation/redteam" { return true; }
+    if uri == "ooda://em/metrics" || uri == "ooda://registry/catalog" { return true; }
+    return false;
+}
+
+pub fn mcp_dispatch_ok(id: String, body: String) -> String {
+    return lsp_jsonrpc_make_response(id, body);
+}
+
+pub fn mcp_dispatch_err(id: String, code: Int, msg: String) -> String {
+    return lsp_jsonrpc_make_error(id, code, msg);
+}
+
+// F-08: substantive pong. Returns server state so the client sees a real handshake, not a no-op {}.
+pub fn mcp_dispatch_pong(id: String, s: &McpSession) -> String {
+    let body: String = "{\"pong\":true,\"phase\":" + s.phase.to_string() + ",\"tier\":" + s.tier.to_string() + ",\"request_seq\":" + s.request_seq.to_string() + ",\"caps_held\":" + s.caps_held.to_string() + ",\"bytes_in\":" + s.bytes_in.to_string() + ",\"bytes_out\":" + s.bytes_out.to_string() + ",\"protocol\":\"" + s.served_protocol + "\"}";
+    return lsp_jsonrpc_make_response(id, body);
+}
+
+pub fn mcp_dispatch_act_capabilities(codex_version: String, server_version: String) -> String {
+    return "{\"protocolVersion\":\"" + mcp_wire_protocol_version() + "\",\"capabilities\":{\"resources\":{},\"tools\":{},\"prompts\":{}},\"serverInfo\":{\"name\":\"openOODA Sovereign MCP Server\",\"version\":\"" + server_version + "\",\"codexVersion\":\"" + codex_version + "\"}}";
+}
+
+// G6: 8-char prefix of the Gold-Master SHA is the codex version.
+pub fn mcp_dispatch_codex_version(sha: String) -> String {
+    if chars_len(sha) < 8 { return "unverified"; }
+    return str_slice(sha, 0, 8);
+}
+
+pub fn mcp_dispatch_not_modified(id: String) -> String {
+    return lsp_jsonrpc_make_error(id, 0 - 32606, "Not modified");
+}
+
+pub fn mcp_dispatch_etag_matches(etag: String, sha: String) -> Bool {
+    if chars_len(etag) == 0 { return false; }
+    if chars_len(sha) < 8 { return false; }
+    let prefix: String = str_slice(sha, 0, 8);
+    return etag == prefix;
+}
+
+pub fn mcp_dispatch_act_resource_read(uri: String, codex_text: String, g: &McpGraph) -> String {
+    let u: String = lsp_jsonrpc_escape(uri);
+    if uri == "ooda://orientation/graph" { let body: String = mcp_graph_to_json(g); return "{\"uri\":\"" + u + "\",\"mimeType\":\"application/vnd.ooda.graph+json\",\"text\":\"" + body + "\"}"; }
+    if uri == "ooda://orientation/header" { return "{\"uri\":\"" + u + "\",\"mimeType\":\"application/vnd.ooda.header+json\",\"text\":\"" + mcp_dispatch_act_header_json(g) + "\"}"; }
+    if uri == "ooda://orientation/boards" { return "{\"uri\":\"" + u + "\",\"mimeType\":\"application/vnd.ooda.boards+json\",\"text\":\"" + mcp_dispatch_act_boards_json(g) + "\"}"; }
+    if uri == "ooda://orientation/capabilities" { return "{\"uri\":\"" + u + "\",\"mimeType\":\"application/vnd.ooda.caps+json\",\"text\":\"" + mcp_dispatch_act_caps_json(g) + "\"}"; }
+    if uri == "ooda://orientation/redteam" { return "{\"uri\":\"" + u + "\",\"mimeType\":\"application/vnd.ooda.redteam+json\",\"text\":\"" + mcp_dispatch_act_gates_json(g) + "\"}"; }
+    // Z-17/Z-24: session-aware URIs must be computed by handle_body with session context; reaching this function is a programmer error.
+    if uri == "ooda://em/metrics" { return lsp_jsonrpc_make_error("0", 0 - 32603, "ooda://em/metrics needs session context: route via mcp_server_handle_body"); }
+    if uri == "ooda://registry/catalog" { return lsp_jsonrpc_make_error("0", 0 - 32603, "ooda://registry/catalog needs session context: route via mcp_server_handle_body"); }
+    // Default: ooda://orientation (bare) -> LLMS.oot codex text.
+    let esc: String = lsp_jsonrpc_escape(codex_text);
+    return "{\"uri\":\"" + u + "\",\"mimeType\":\"text/x-ooda-tree\",\"text\":\"" + esc + "\"}";
+}
+
+fn mcp_dispatch_act_header_json(g: &McpGraph) -> String { return "{\"version\":\"" + g.version + "\",\"floor\":" + g.floor.to_string() + ",\"thrust\":" + g.thrust.to_string() + ",\"patch\":" + g.patch.to_string() + ",\"protocol\":\"" + g.protocol + "\"}"; }
+
+fn mcp_dispatch_act_caps_json(g: &McpGraph) -> String {
+    let mut out: String = "[";
+    let caps: List[McpCapability] = g.capabilities;
+    let n: Int = list_len(caps);
+    let mut i: Int = 0;
+    while i < n {
+        if i > 0 { out = out + ","; }
+        let c: McpCapability = list_get(caps, i);
+        out = out + mcp_graph_cap_to_json(&c);
+        i = i + 1;
+    }
+    return out + "]";
+}
+
+fn mcp_dispatch_act_boards_json(g: &McpGraph) -> String {
+    let mut out: String = "[";
+    let brds: List[McpBoard] = g.boards;
+    let mut i: Int = 0;
+    let n: Int = list_len(brds);
+    while i < n { if i > 0 { out = out + ","; } out = out + mcp_graph_board_to_json(&list_get(brds, i)); i = i + 1; }
+    return out + "]";
+}
+
+pub fn mcp_dispatch_act_resource_read_stream(uri: String, id: String, g: &McpGraph) -> String {
+    let mut parts: List[String] = list_new();
+    let brds: List[McpBoard] = g.boards;
+    let n: Int = list_len(brds);
+    let mut i: Int = 0;
+    while i < n {
+        let b: McpBoard = list_get(brds, i);
+        parts = list_push(parts, "{\"name\":\"" + b.name + "\",\"priority\":" + b.read_priority.to_string() + "}");
+        i = i + 1;
+    }
+    let progress_frames: String = mcp_stream_build(id, "tok-" + id, parts);
+    let final_body: String = "{\"uri\":\"" + uri + "\",\"mimeType\":\"application/vnd.ooda.boards+json\",\"text\":" + mcp_dispatch_act_boards_json(g) + ",\"streamed\":true,\"frames\":" + n.to_string() + "}";
+    return progress_frames + lsp_jsonrpc_make_response(id, final_body) + "\n";
+}
+
+fn mcp_dispatch_act_gates_json(g: &McpGraph) -> String {
+    let mut out: String = "[";
+    let gts: List[McpRedteamGate] = g.redteam_gates;
+    let mut i: Int = 0;
+    let n: Int = list_len(gts);
+    while i < n { if i > 0 { out = out + ","; } out = out + mcp_graph_gate_to_json(&list_get(gts, i)); i = i + 1; }
+    return out + "]";
+}
+
+fn mcp_dispatch_tools_entry(g: &McpGraph, name: String, desc: String, props: String, req: String) -> String {
+    let cap: Int = mcp_dispatch_tool_required_caps(g, name);
+    let n: String = lsp_jsonrpc_escape(name); let d: String = lsp_jsonrpc_escape(desc);
+    return "{\"name\":\"" + n + "\",\"description\":\"" + d + "\",\"inputSchema\":{\"type\":\"object\",\"properties\":" + props + ",\"required\":" + req + "},\"requiresCap\":" + cap.to_string() + "}";
+}
+
+// F-05: tools/list advertises each tool's required cap bitmask so clients can mint the right cap upfront. -1 for unknown tools. Tiers 1-4 (blue ocean): 18 additional tools.
+pub fn mcp_dispatch_act_tools_list(g: &McpGraph) -> String {
+    return "{\"tools\":[" + mcp_dispatch_tools_entry(g, "get_capability_graph", "Return the typed sovereign capability graph", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_orientation", "Return the textual orientation codex", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "read_board", "Read one canonical process board", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]") + "," + mcp_dispatch_tools_entry(g, "refresh_dynamic_graph", "Reload the dynamic graph from the live substrate under FsWriteCap", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_audit_log", "Return the last N entries of the per-session hash-chained audit log", "{\"tail\":{\"type\":\"integer\"}}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_board_index", "List all 13 canonical process boards with name/path/priority/summary chars", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "summarize_board", "Read + truncate one board to max_chars (FsReadCap)", "{\"name\":{\"type\":\"string\"},\"max_chars\":{\"type\":\"integer\"}}", "[]") + "," + mcp_dispatch_tools_entry(g, "compress_orient", "Truncate the orientation codex to max_chars", "{\"max_chars\":{\"type\":\"integer\"}}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_context_budget", "Return session bytes/seq/caps/audit/notifs snapshot", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "estimate_chars", "Char count proxy for token count", "{\"text\":{\"type\":\"string\"}}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_ooda_phase", "Return current OODA phase (idle/orient/decide/act) + label", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_decision_journal", "Last N substantive decisions (filtered audit log)", "{\"n\":{\"type\":\"integer\"}}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_redteam_realtime", "Live fire of all 8 redteam gates, returned as JSON array", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_session_diagnostics", "Comprehensive session health snapshot", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_format_constraints", "Return FORMAT.oot rules as JSON (4-element header, 5-component WO, 256-line cap)", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "validate_codex_format", "Check a codex text against FORMAT.oot; return violations", "{\"text\":{\"type\":\"string\"}}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_northstar", "Read the NORTHSTAR board (mission + design principles)", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_security_threat_model", "Read SECURITY (threat models, fail-closed ops)", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_redteam_methodology", "Read REDTEAM (8D adversarial matrix)", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_workflow_protocol", "Read WORKFLOW (branching, merge, release)", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_em_swarm", "Read STRUCTURE_EM (E-M multi-agent topology)", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "get_milestone_status", "Read ROADMAP + SHIPPED merged (status + completed)", "{}", "[]") + "," + mcp_dispatch_tools_entry(g, "audit_compact", "Drop all but the last N audit entries (FsWriteCap)", "{\"keep_last_n\":{\"type\":\"integer\"}}", "[]") + "]}";
+}
+
+pub fn mcp_dispatch_act_prompts_list() -> String {
+    return "{\"prompts\":[{\"name\":\"orientation\",\"description\":\"Sovereign AI system prompt orientation for openOODA\",\"arguments\":[]}]}";
+}
+
+pub fn mcp_dispatch_act_prompt_get(name: String) -> String {
+    if name != "orientation" { return ""; }
+    return "{\"description\":\"Sovereign AI system prompt orientation for openOODA\",\"messages\":[{\"role\":\"user\",\"content\":{\"type\":\"text\",\"text\":\"You are a sovereign openOODA AI agent. Read the 13 process boards. Honor the 14 capability tokens. Submit to the 8 redteam gates. Compute specific excess power before every action.\"}}]}";
+}
+
+// S-10 + F-04: per-tool cap table sourced from the McpGraph substrate.
+pub fn mcp_dispatch_tool_required_caps(g: &McpGraph, tool_name: String) -> Int {
+    let tcs: List[McpToolCap] = g.tool_caps;
+    let n: Int = list_len(tcs);
+    let mut i: Int = 0;
+    while i < n {
+        let t: McpToolCap = list_get(tcs, i);
+        if t.tool == tool_name { return t.required_caps; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+// R7: protocol-level cap audit. tools/call delegates to the per-tool table.
+pub fn mcp_dispatch_required_caps(method: String) -> Int {
+    if method == "resources/read"    { return 1; }
+    if method == "tools/call"        { return 0; }
+    return 0;
+}
+
+pub fn mcp_dispatch_cap_audit(method: String, caps_held: Int) -> Int {
+    let req: Int = mcp_dispatch_required_caps(method);
+    if req == 0 { return 0; }
+    if (req & caps_held) != req { return 0 - 32603; }
+    return 0;
+}

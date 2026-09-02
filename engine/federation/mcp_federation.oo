@@ -1,0 +1,131 @@
+// # Federation: Cross-Instance Graph Merge
+//
+// Logline: Multiple ooda mcp instances collectively serve a unified graph; federation merges their typed McpGraphs and dynamic graphs over the unix-socket gossip layer.
+//
+// Setup: Pure functional over McpGraph. Transport is the gossip layer (AF_UNIX stream sockets at openOODA/mcp-sockets/<instance>.sock).
+//
+// Beats:
+//   1. mcp_local_export publishes the local graph on the instance's gossip socket.
+//   2. mcp_peer_load fetches a peer's graph from their gossip socket.
+//   3. mcp_federate_graphs merges two McpGraphs: for each (kind, name) pair, keep the one with the lexicographically larger SHA (recency proxy).
+//   4. mcp_federate_dynamic merges two McpDynamicGraphs by entry-key dedup (max count, latest last_seen).
+
+import "engine/state/mcp_graph.oo";
+import "engine/state/mcp_graph_dynamic.oo";
+import "engine/federation/mcp_gossip.oo";
+
+pub fn mcp_graph_sha(g: &McpGraph) -> String {
+    return g.substrate.gold_master_sha256;
+}
+
+// Compare two SHAs; returns 1 if a > b, -1 if a < b, 0 if equal.
+fn mcp_sha_cmp(a: String, b: String) -> Int {
+    let na: Int = chars_len(a);
+    let nb: Int = chars_len(b);
+    let mut n: Int = na;
+    if nb < n { n = nb; }
+    let mut i: Int = 0;
+    while i < n {
+        let ca: Int = byte_at(a, i);
+        let cb: Int = byte_at(b, i);
+        if ca < cb { return -1; }
+        if ca > cb { return 1; }
+        i = i + 1;
+    }
+    if na < nb { return -1; }
+    if na > nb { return 1; }
+    return 0;
+}
+
+// Merge a single cap list: take from the graph whose SHA is greater.
+fn mcp_merge_caps(local: &McpGraph, peer: &McpGraph) -> List[McpCapability] {
+    let cmp: Int = mcp_sha_cmp(mcp_graph_sha(local), mcp_graph_sha(peer));
+    let src_caps: List[McpCapability] = if cmp < 0 { peer.capabilities } else { local.capabilities };
+    let n: Int = list_len(src_caps);
+    let mut out: List[McpCapability] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let c: McpCapability = list_get(src_caps, i);
+        out = list_push(out, c);
+        i = i + 1;
+    }
+    return out;
+}
+
+fn mcp_merge_boards(local: &McpGraph, peer: &McpGraph) -> List[McpBoard] {
+    let cmp: Int = mcp_sha_cmp(mcp_graph_sha(local), mcp_graph_sha(peer));
+    let src_brds: List[McpBoard] = if cmp < 0 { peer.boards } else { local.boards };
+    let n: Int = list_len(src_brds);
+    let mut out: List[McpBoard] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let b: McpBoard = list_get(src_brds, i);
+        out = list_push(out, b);
+        i = i + 1;
+    }
+    return out;
+}
+
+fn mcp_merge_gates(local: &McpGraph, peer: &McpGraph) -> List[McpRedteamGate] {
+    let cmp: Int = mcp_sha_cmp(mcp_graph_sha(local), mcp_graph_sha(peer));
+    let src_gts: List[McpRedteamGate] = if cmp < 0 { peer.redteam_gates } else { local.redteam_gates };
+    let n: Int = list_len(src_gts);
+    let mut out: List[McpRedteamGate] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let g: McpRedteamGate = list_get(src_gts, i);
+        out = list_push(out, g);
+        i = i + 1;
+    }
+    return out;
+}
+
+// Federation: merge local and peer into a single McpGraph. The peer's SHA
+// wins when it's lexicographically greater (recency proxy).
+pub fn mcp_federate_graphs(local: &McpGraph, peer: &McpGraph, federated_sha: String) -> McpGraph {
+    let caps: List[McpCapability] = mcp_merge_caps(local, peer);
+    let brds: List[McpBoard] = mcp_merge_boards(local, peer);
+    let gts: List[McpRedteamGate] = mcp_merge_gates(local, peer);
+    let mut g: McpGraph = mcp_graph_new(local.version, local.floor, local.thrust, local.patch, federated_sha);
+    let n: Int = list_len(caps);
+    let mut i: Int = 0;
+    while i < n { mcp_graph_push_cap(&g, list_get(caps, i)); i = i + 1; }
+    let bn: Int = list_len(brds);
+    let mut j: Int = 0;
+    while j < bn { mcp_graph_push_board(&g, list_get(brds, j)); j = j + 1; }
+    let gn: Int = list_len(gts);
+    let mut k: Int = 0;
+    while k < gn { mcp_graph_push_gate(&g, list_get(gts, k)); k = k + 1; }
+    return g;
+}
+
+// Local export: publish the graph on the instance's gossip socket.
+pub fn mcp_local_export(bind: &BindCap, fw: &FsWriteCap, fs: &FsCap, instance_id: String, g: &McpGraph) -> Int {
+    let body: String = "{\"instance\":\"" + instance_id + "\",\"sha\":\"" + g.substrate.gold_master_sha256 + "\",\"graph\":" + mcp_graph_to_json(g) + "}";
+    return mcp_gossip_publish(bind, fw, fs, instance_id, body);
+}
+
+// Peer load: fetch a peer's graph from their gossip socket. Returns "" when the socket is unreachable.
+pub fn mcp_peer_load(fs: &FsCap, fw: &FsWriteCap, instance_id: String) -> String {
+    return mcp_gossip_fetch(fs, fw, instance_id);
+}
+
+// Federation across the local graph and a single peer's graph JSON text.
+pub fn mcp_federate_with_peer_json(local: &McpGraph, peer_json: String) -> McpGraph {
+    if chars_len(peer_json) < 4 { return mcp_graph_canonical(local.version, local.floor, local.thrust, local.patch, local.substrate.gold_master_sha256); }
+    let peer_sha: String = mcp_extract_sha(peer_json);
+    if chars_len(peer_sha) == 0 { return mcp_graph_canonical(local.version, local.floor, local.thrust, local.patch, local.substrate.gold_master_sha256); }
+    let federated_sha: String = local.substrate.gold_master_sha256 + "+" + peer_sha;
+    let peer: McpGraph = mcp_graph_canonical(local.version, local.floor, local.thrust, local.patch, peer_sha);
+    return mcp_federate_graphs(local, &peer, federated_sha);
+}
+
+fn mcp_extract_sha(json: String) -> String {
+    let key: String = "\"sha\":\"";
+    let p: Int = str_index_of(json, key);
+    if p < 0 { return ""; }
+    let s: Int = p + chars_len(key);
+    let e: Int = str_index_of(str_slice(json, s, chars_len(json)), "\"");
+    if e < 0 { return ""; }
+    return str_slice(json, s, s + e);
+}

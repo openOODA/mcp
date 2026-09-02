@@ -1,0 +1,229 @@
+// # MCP Session State Machine
+//
+// Logline: Track per-host MCP session lifecycle and gate pre-init requests fail-closed.
+//
+// Setup: Zero-ambient state owned by the transport; every state transition is explicit.
+//
+// Beats:
+//   1. Construct a fresh session in AwaitingInitialize.
+//   2. Advance on initialize to Negotiating, then Ready on notifications/initialized.
+//   3. Fail-closed: pre-init tools/call, resources/read, prompts/get return -32600.
+//   4. Cap audit: every session declares required capabilities once and never re-promises.
+//   5. R5 replay gate: seen_ids is a List[String]; mcp_session_seen_id records and reports duplicates.
+
+import "engine/health/mcp_audit.oo";
+
+pub fn mcp_phase_await() -> Int { return 0; }
+pub fn mcp_phase_negot() -> Int { return 1; }
+pub fn mcp_phase_ready() -> Int { return 2; }
+pub fn mcp_phase_down()  -> Int { return 3; }
+pub fn mcp_phase_closed() -> Int { return 4; }
+
+// Tier (G3+): the surface area a client opts into at initialize.
+// 0 = minimal, 1 = full (default), 2 = audit
+pub fn mcp_tier_minimal() -> Int { return 0; }
+pub fn mcp_tier_full()    -> Int { return 1; }
+pub fn mcp_tier_audit()   -> Int { return 2; }
+
+type McpSession = struct {
+    phase: Int,
+    tier: Int,
+    client_name: String,
+    client_version: String,
+    requested_protocol: String,
+    served_protocol: String,
+    request_seq: Int,
+    bytes_in: Int,
+    bytes_out: Int,
+    capabilities_offered: String,
+    seen_ids: List[String],
+    client_roots: List[String],
+    caps_held: Int,
+    cancelled: Bool,
+    pending_notifications: List[String],
+    rate_window_start: Int,
+    rate_window_count: Int,
+    audit_log: List[McpAuditEntry],
+    audit_chain_head: String,
+    ooda_phase: Int
+};
+
+// Construct a fresh session in AwaitingInitialize phase, full tier, with no capability bits held.
+// Capability tokens are minted explicitly by the server during the initialize handshake; the
+// R7 cap audit (mcp_dispatch_cap_audit) is non-vacuous because no cap is granted by default.
+pub fn mcp_session_new() -> McpSession {
+    let seen: List[String] = list_new();
+    let roots: List[String] = list_new();
+    let notifs: List[String] = list_new();
+    let audit: List[McpAuditEntry] = list_new();
+    return McpSession {
+        phase: mcp_phase_await(),
+        tier: mcp_tier_full(),
+        client_name: "",
+        client_version: "",
+        requested_protocol: "",
+        served_protocol: mcp_wire_protocol_version(),
+        request_seq: 0,
+        bytes_in: 0,
+        bytes_out: 0,
+        capabilities_offered: "{}",
+        seen_ids: seen,
+        client_roots: roots,
+        caps_held: 0,
+        cancelled: false,
+        pending_notifications: notifs,
+        rate_window_start: 0,
+        rate_window_count: 0,
+        audit_log: audit,
+        audit_chain_head: "",
+        ooda_phase: 0
+    };
+}
+
+// Mint a capability bit on the session. The server calls this during the initialize handshake
+// to grant the caller the FsReadCap it needs to read the codex and the graph.
+pub fn mcp_session_grant_cap(s: &mut McpSession, bit: Int) {
+    s.caps_held = s.caps_held | bit;
+}
+
+// Tier gate. Returns true iff `method` is allowed in the given tier.
+// minimal: only lifecycle (6 methods). full: + resources/tools/prompts. audit: + redteam.
+// Strategic: minimal is hardened deny-by-default; full is operational; audit is sovereign.
+// Blue-ocean: tier is explicit client opt-in at initialize, not a compat fallback.
+pub fn mcp_session_tier_allows(tier: Int, method: String) -> Bool {
+    if method == "initialize" { return true; }
+    if method == "ping" { return true; }
+    if method == "shutdown" { return true; }
+    if method == "exit" { return true; }
+    if method == "notifications/initialized" { return true; }
+    if method == "notifications/cancelled" { return true; }
+    if tier == mcp_tier_minimal() { return false; }
+    if method == "resources/list" { return true; }
+    if method == "tools/list" { return true; }
+    if method == "prompts/list" { return true; }
+    if method == "resources/read" { return true; }
+    if method == "tools/call" { return true; }
+    if method == "prompts/get" { return true; }
+    // Z-87 (V6): "redteam/probe" is a probe name used by the replay gate, not a real MCP method.
+    // The deny is not dead code — it is the contract that the replay gate verifies.
+    if method == "redteam/probe" { return false; }
+    if tier == mcp_tier_audit() { return true; }
+    return true;
+}
+
+// Z-23: fail-closed on invalid tier. Returns 0 on success, -32602 on invalid input.
+// No fallback to mcp_tier_full() — that was a silent clamp that let attackers
+// probe for tier escalation with garbage values. Caller MUST check the return.
+pub fn mcp_session_set_tier(s: &mut McpSession, tier: Int) -> Int {
+    if tier < 0 { return 0 - 32602; }
+    if tier > 2 { return 0 - 32602; }
+    s.tier = tier;
+    return 0;
+}
+
+pub fn mcp_session_add_root(s: &mut McpSession, root: String) {
+    if chars_len(root) == 0 { return; }
+    s.client_roots = list_push(s.client_roots, root);
+}
+
+// True iff a method is allowed in the given phase. Fail-closed: Closed/Down deny all except exit; ping requires Ready.
+pub fn mcp_session_allows(s: &McpSession, method: String) -> Bool {
+    if s.phase == mcp_phase_closed() { return method == "exit"; }
+    if s.phase == mcp_phase_down() { return method == "exit"; }
+    if method == "initialize" { return true; }
+    if method == "notifications/cancelled" { return true; }
+    if s.phase == mcp_phase_ready() { return true; }
+    if method == "ping" { return s.phase == mcp_phase_ready(); }
+    return false;
+}
+
+pub fn mcp_session_on_initialize(s: &mut McpSession, client_name: String, client_version: String, requested_protocol: String) -> Int {
+    if s.phase != mcp_phase_await() { return s.phase; }
+    s.client_name = client_name;
+    s.client_version = client_version;
+    s.requested_protocol = requested_protocol;
+    s.phase = mcp_phase_negot();
+    return s.phase;
+}
+
+pub fn mcp_session_on_initialized(s: &mut McpSession) -> Int {
+    if s.phase == mcp_phase_negot() { s.phase = mcp_phase_ready(); }
+    return s.phase;
+}
+
+pub fn mcp_session_on_shutdown(s: &mut McpSession) -> Int {
+    if s.phase == mcp_phase_closed() { return s.phase; }
+    s.phase = mcp_phase_down();
+    return s.phase;
+}
+
+pub fn mcp_session_on_close(s: &mut McpSession) -> Int {
+    if s.phase == mcp_phase_closed() { return s.phase; }
+    s.phase = mcp_phase_closed();
+    return s.phase;
+}
+
+// Fail-closed pre-init error envelope (-32600 Server not initialized).
+pub fn mcp_session_error_not_initialized(id: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":-32600,\"message\":\"Server not initialized\"}}";
+}
+
+// Fail-closed replay error envelope (-32603 Duplicate request id).
+pub fn mcp_session_error_duplicate_id(id: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":-32603,\"message\":\"Duplicate request id: replay blocked\"}}";
+}
+
+pub fn mcp_session_next_seq(s: &mut McpSession) -> Int {
+    s.request_seq = s.request_seq + 1;
+    return s.request_seq;
+}
+
+pub fn mcp_session_accrue_in(s: &mut McpSession, n: Int) -> Int {
+    s.bytes_in = s.bytes_in + n;
+    return s.bytes_in;
+}
+
+pub fn mcp_session_accrue_out(s: &mut McpSession, n: Int) -> Int {
+    s.bytes_out = s.bytes_out + n;
+    return s.bytes_out;
+}
+
+// R5 replay gate. Windowed 256-cap FIFO. O(n) lookup + O(n) overflow copy — the
+// "O(1) amortized" comment in the prior version was false; this is an honest
+// linear scan. Empty id (notification) bypasses; numeric "0" is a valid id.
+pub fn mcp_session_seen_id(s: &mut McpSession, id: String) -> Bool {
+    if chars_len(id) == 0 { return false; }
+    let seen: List[String] = s.seen_ids;
+    let n: Int = list_len(seen);
+    let mut i: Int = 0;
+    while i < n {
+        let item: String = list_get(seen, i);
+        if item == id { return true; }
+        i = i + 1;
+    }
+    if n >= 256 {
+        let mut nxt: List[String] = list_new();
+        let mut j: Int = 1;
+        while j < n {
+            nxt = list_push(nxt, list_get(seen, j));
+            j = j + 1;
+        }
+        s.seen_ids = nxt;
+    }
+    s.seen_ids = list_push(s.seen_ids, id);
+    return false;
+}
+
+// F-06: per-session sliding-window rate limit. max requests per request_seq window.
+// request_seq is monotonic per session; the window resets when seq advances by `window`.
+// Returns true if the request is allowed (and increments the counter), false if throttled.
+pub fn mcp_session_check_rate(s: &mut McpSession, max_per_window: Int, window: Int) -> Bool {
+    if max_per_window <= 0 { return true; }
+    if s.request_seq - s.rate_window_start >= window {
+        s.rate_window_start = s.request_seq;
+        s.rate_window_count = 0;
+    }
+    if s.rate_window_count >= max_per_window { return false; }
+    s.rate_window_count = s.rate_window_count + 1;
+    return true;
+}

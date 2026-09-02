@@ -1,0 +1,14 @@
+// # Mcp Resource Surface
+//
+// Logline: Resource format, schema, and context budget enforcement for MCP requests.
+//
+// Setup: MCP resource surface: format, schema, and context budget.
+//
+// Beats:
+//   1. mcp_context_budget.oo.
+//   2. mcp_format.oo.
+//   3. mcp_schema.oo.
+
+import "mcp_context_budget.oo";
+import "mcp_format.oo";
+import "mcp_schema.oo";

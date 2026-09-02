@@ -1,0 +1,17 @@
+// # Mcp Federation and Lineage
+//
+// Logline: Federated multi-instance MCP: gossip, lineage chain, lineage compaction, codex cache.
+//
+// Setup: MCP federation, gossip, lineage tracking and compaction, and the codex cache.
+//
+// Beats:
+//   1. mcp_codex.oo, mcp_federation.oo.
+//   2. mcp_gossip.oo, mcp_lineage.oo.
+//   3. mcp_lineage_chain.oo, mcp_lineage_compaction.oo.
+
+import "mcp_codex.oo";
+import "mcp_federation.oo";
+import "mcp_gossip.oo";
+import "mcp_lineage.oo";
+import "mcp_lineage_chain.oo";
+import "mcp_lineage_compaction.oo";

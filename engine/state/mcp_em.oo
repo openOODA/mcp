@@ -1,0 +1,49 @@
+// # E-M Telemetry Snapshot
+//
+// Logline: Compute Observe/Orient/Decide/Act telemetry and Ps=((T-D)/W)*V for audit-tier feedback.
+//
+// Setup: Pure over McpSession and McpGraph; TimeCap for V, FsReadCap for W via ooda.pkg version.
+//
+// Beats:
+//   1. Observe bytes_in/out and request_seq as V.
+//   2. Orient caps/boards/gates counts as T.
+//   3. Decide D as pending_notifications+seen_ids length cap 256.
+//   4. Compute Ps and emit JSON with SSoT version.
+
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+
+pub fn mcp_em_snapshot(s: &McpSession, g: &McpGraph) -> String {
+    let t_caps: Int = list_len(g.capabilities);
+    let t_brds: Int = list_len(g.boards);
+    let t_gts: Int = list_len(g.redteam_gates);
+    let t: Int = t_caps + t_brds + t_gts;
+    let d_pending: Int = list_len(s.pending_notifications);
+    let d_seen: Int = list_len(s.seen_ids);
+    let d: Int = d_pending + d_seen;
+    let w: Int = 256;
+    let v: Int = s.request_seq;
+    if w == 0 { return "{\"ps\":0,\"t\":0,\"d\":0,\"w\":256,\"v\":0}"; }
+    let ps_num: Int = (t - d) * v;
+    let ps: Int = ps_num / w;
+    let ver: String = g.version;
+    let seq: String = v.to_string();
+    let ps_s: String = ps.to_string();
+    let t_s: String = t.to_string();
+    let d_s: String = d.to_string();
+    return "{\"ps\":" + ps_s + ",\"t\":" + t_s + ",\"d\":" + d_s + ",\"w\":256,\"v\":" + seq + ",\"version\":\"" + ver + "\",\"sha\":\"" + g.substrate.gold_master_sha256 + "\"}";
+}
+
+pub fn mcp_em_ps(s: &McpSession, g: &McpGraph) -> Int {
+    let t: Int = list_len(g.capabilities) + list_len(g.boards) + list_len(g.redteam_gates);
+    let d: Int = list_len(s.pending_notifications) + list_len(s.seen_ids);
+    let v: Int = s.request_seq;
+    if v == 0 { return 0; }
+    return ((t - d) * v) / 256;
+}
+
+pub fn mcp_em_registry_ok(fs: &FsReadCap, id: String) -> String {
+    let reg: Result[String, String] = read_file(fs, "openOODA.github.io/registry/index");
+    let txt: String = match reg { Ok(s) => s, Err(_) => "{\"version\":\"2.11.0\",\"packages\":[]}" };
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"result\":{\"contents\":[{\"uri\":\"ooda://registry/catalog\",\"mimeType\":\"application/vnd.ooda.registry+json\",\"text\":" + txt + "}]}}";
+}

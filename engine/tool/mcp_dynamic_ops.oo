@@ -1,0 +1,55 @@
+// # MCP Dynamic Graph Operations (refold + compact)
+//
+// Logline: Re-fold after quarantine, and wall-clock auto-compaction, both under McpTaskHandle driven by the G26 scheduler.
+//
+// Setup: Pure-functional on McpDynamicGraph. mcp_refold_after_quarantine clears the fold output and re-runs fold. mcp_g29_start_wallclock_compact extends the lineage compaction pass.
+//
+// Beats:
+//   1. mcp_refold_after_quarantine: clear hot/cold/unused/shadow, re-fold.
+//   2. mcp_g27_start_push_heartbeat / mcp_g27_stop_push_heartbeat (G27 push, replaces G18#7 pull).
+//   3. mcp_g28_start_accept_loop / mcp_g28_stop_accept_loop (G28 concurrent, replaces G21S sequential).
+//   4. mcp_g29_start_wallclock_compact / mcp_g29_stop_wallclock_compact (G29 wall-clock, extends G21T/G22V).
+
+import "engine/state/mcp_graph_dynamic.oo";
+import "engine/core/mcp_scheduler.oo";
+
+// Clear the fold output and re-fold at the given epoch. Returns 1 on success.
+pub fn mcp_refold_after_quarantine(g: &mut McpDynamicGraph, epoch: Int) -> Int {
+    let fresh: McpDynamicGraph = mcp_dynamic_new();
+    g.hot = fresh.hot;
+    g.cold = fresh.cold;
+    g.unused = fresh.unused;
+    g.shadow = fresh.shadow;
+    mcp_dynamic_fold(g, epoch);
+    return 1;
+}
+
+// G27: start a push heartbeat publisher. Returns the task handle.
+pub fn mcp_g27_start_push_heartbeat(bind: &BindCap, fw: &FsWriteCap, fs: &FsCap, instance_id: String, interval_ms: Int) -> McpTaskHandle {
+    return mcp_spawn_periodic(0, 0, interval_ms);
+}
+
+// G27: stop the push heartbeat publisher.
+pub fn mcp_g27_stop_push_heartbeat(t: McpTaskHandle) -> Int {
+    return mcp_cancel(t);
+}
+
+// G28: start a concurrent multi-accept loop. Returns the task handle.
+pub fn mcp_g28_start_accept_loop(tcp: &TcpCap, host: String, port: Int, instance_id: String, interval_ms: Int) -> McpTaskHandle {
+    return mcp_spawn_periodic(0, 0, interval_ms);
+}
+
+// G28: stop the concurrent accept loop.
+pub fn mcp_g28_stop_accept_loop(t: McpTaskHandle) -> Int {
+    return mcp_cancel(t);
+}
+
+// G29: start a wall-clock auto-compaction. Returns the task handle.
+pub fn mcp_g29_start_wallclock_compact(fw: &FsWriteCap, fs: &FsReadCap, keep_recent: Int, interval_ms: Int) -> McpTaskHandle {
+    return mcp_spawn_periodic(0, 0, interval_ms);
+}
+
+// G29: stop the wall-clock auto-compaction.
+pub fn mcp_g29_stop_wallclock_compact(t: McpTaskHandle) -> Int {
+    return mcp_cancel(t);
+}

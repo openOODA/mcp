@@ -1,0 +1,11 @@
+// # MCP Audit Index — Anchor for Agents
+//
+// Logline: Index of the MCP audit history (versions 2.9.2 through 4.0).
+//
+// Setup: Historical records from the MCP project, moved from openOODA/audit/ to the mcp repo. These are the per-version deep-dive audits, red-team certifications, and QA reorganization reports.
+//
+// Beats:
+//   1. MCP_2.9.2_REDTEAM_CERT — final G1-G70 closure.
+//   2. MCP_3.0 through 3.5 — V3-V7 deep-dive audits, fresh-eyes, security + performance + Generational OODA.
+//   3. MCP_3.6 through 3.9 — V8 QA reorganization audits.
+//   4. MCP_4.0 — V8 round 5, verify the reorg by testing it.

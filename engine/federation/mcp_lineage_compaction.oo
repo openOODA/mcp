@@ -1,0 +1,100 @@
+// # Lineage Compaction Pass
+//
+// Logline: The lineage log is append-only per session and grows unbounded; a compaction pass keeps the last `keep_recent` entries and replaces older ones with a single marker line that records the count, first sha, last sha, and epoch of the compacted range. The chain still verifies correctly because the marker is a single chained entry.
+//
+// Setup: Pure functional on the lineage NDJSON file. Reads the whole log, keeps the last `keep_recent` entries, writes a single compacted marker followed by the kept entries. mcp_lineage_verify still returns "ok" because the marker is a regular chained entry.
+//
+// Beats:
+//   1. mcp_compaction_count: count current entries.
+//   2. mcp_compaction_run: keep `keep_recent`, replace older with a single marker.
+//   3. mcp_auto_compact_if_due: cron-like auto-compaction when entry count is a multiple of `interval`.
+
+import "engine/federation/mcp_lineage.oo";
+import "engine/federation/mcp_lineage_chain.oo";
+import "std/fs/file_writer.oo";
+
+fn compaction_path() -> String { return "openOODA/mcp-lineage.jsonl"; }
+fn compaction_version() -> String { return mcp_protocol_version(); }
+
+// Count current entries in the lineage log.
+pub fn mcp_compaction_count(fs: &FsReadCap) -> Int {
+    return mcp_lineage_count(fs);
+}
+
+// Run compaction. Keeps the last `keep_recent` entries; replaces older entries with a single
+// compaction marker line. The marker is a regular chained entry (entryHash included), so
+// verify still returns "ok". Returns 1 on success, 0 on failure.
+pub fn mcp_compaction_run(fw: &FsWriteCap, fs: &FsReadCap, keep_recent: Int) -> Int {
+    let total: Int = mcp_lineage_count(fs);
+    if total <= keep_recent { return 1; }
+    let to_compact: Int = total - keep_recent;
+    let first_entry: String = mcp_lineage_at_index(fs, 0);
+    let last_compacted_entry: String = mcp_lineage_at_index(fs, to_compact - 1);
+    let first_sha: String = extract_string(first_entry, "sha");
+    let last_sha: String = extract_string(last_compacted_entry, "sha");
+    let first_epoch_s: String = extract_int_string(first_entry, "epoch");
+    let last_epoch_s: String = extract_int_string(last_compacted_entry, "epoch");
+    let marker_sha: String = "compacted:" + first_sha + ":" + last_sha;
+    let prev_sha_for_marker: String = if total > 0 { mcp_lineage_latest_sha(fs) } else { "" };
+    // We can't reuse mcp_lineage_append_chained because it computes entryHash from a non-marker shape.
+    // Instead, construct the marker line manually: type=compaction, with the standard chain fields.
+    let version: String = compaction_version();
+    let prev_entry_hash: String = mcp_lineage_latest_entry_hash(fs);
+    let marker_entry_hash_payload: String = version + "|" + marker_sha + "|" + prev_sha_for_marker + "|" + prev_entry_hash + "|" + to_compact.to_string() + "|" + last_epoch_s;
+    let marker_entry_hash: String = crypto_sha256_internal(marker_entry_hash_payload);
+    if chars_len(marker_entry_hash) != 64 { return 0; }
+    // The marker JSON must include "boardCount" and "epoch" fields because mcp_lineage_verify
+    // reads them via the extract_int_string helper. The marker hash payload uses
+    // to_compact and last_epoch_s in those slot positions, so the JSON fields must match
+    // exactly (boardCount = to_compact, epoch = last_epoch_s) for the chain to verify.
+    let marker_line: String = "{\"version\":\"" + version + "\",\"type\":\"compaction\",\"sha\":\"" + marker_sha + "\",\"prevSha\":\"" + prev_sha_for_marker + "\",\"boardCount\":" + to_compact.to_string() + ",\"epoch\":" + last_epoch_s + ",\"count\":" + to_compact.to_string() + ",\"firstSha\":\"" + first_sha + "\",\"lastSha\":\"" + last_sha + "\",\"firstEpoch\":" + first_epoch_s + ",\"lastEpoch\":" + last_epoch_s + ",\"entryHash\":\"" + marker_entry_hash + "\"}\n";
+    // Rewrite the log: marker line + the last `keep_recent` entries.
+    let mut new_log: String = marker_line;
+    let mut k: Int = 0;
+    while k < keep_recent {
+        let entry: String = mcp_lineage_at_index(fs, to_compact + k);
+        new_log = new_log + entry + "\n";
+        k = k + 1;
+    }
+    let mk_res: Result[Void, String] = oo_fs_mkdir(fw, "openOODA");
+    let wr: Result[Void, String] = write_file(fw, compaction_path(), new_log);
+    if wr.is_err() { return 0; }
+    return 1;
+}
+
+fn extract_string(s: String, key: String) -> String {
+    let needle: String = "\"" + key + "\":\"";
+    let kpos: Int = str_index_of(s, needle);
+    if kpos < 0 { return ""; }
+    let start: Int = kpos + chars_len(needle);
+    let qpos: Int = str_index_of(str_slice(s, start, chars_len(s)), "\"");
+    if qpos < 0 { return ""; }
+    return str_slice(s, start, start + qpos);
+}
+
+fn extract_int_string(s: String, key: String) -> String {
+    let needle: String = "\"" + key + "\":";
+    let kpos: Int = str_index_of(s, needle);
+    if kpos < 0 { return ""; }
+    let start: Int = kpos + chars_len(needle);
+    let n: Int = chars_len(s);
+    let mut end: Int = start;
+    while end < n {
+        let c: String = char_at(s, end);
+        if !char_is_digit(c) { break; }
+        end = end + 1;
+    }
+    if end == start { return ""; }
+    return str_slice(s, start, end);
+}
+
+// Cron-like auto-compaction: runs compaction automatically when the total entry count is a
+// positive multiple of `interval`. keep_recent is set to interval/2 (rounded down).
+pub fn mcp_auto_compact_if_due(fw: &FsWriteCap, fs: &FsReadCap, total_entries: Int, interval: Int) -> Int {
+    if interval < 2 { return 0; }
+    if total_entries <= 0 { return 0; }
+    if total_entries % interval != 0 { return 0; }
+    let keep_recent: Int = interval / 2;
+    if keep_recent < 1 { return 0; }
+    return mcp_compaction_run(fw, fs, keep_recent);
+}

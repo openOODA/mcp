@@ -1,0 +1,18 @@
+# MCP Wire Protocol
+
+File: ooda/mcp/docs/protocol.oot
+
+## 1. JSON-RPC 2.0 Framing
+
+The MCP server speaks JSON-RPC 2.0 over Content-Length-framed stream transport (stdio).
+
+## 2. Request / Response / Notification
+
+Standard JSON-RPC 2.0 envelope.
+
+## 3. MCP Methods Implemented
+
+- Lifecycle: `initialize`, `initialized`, `shutdown`, `exit`
+- Tools: `tools/list`, `tools/call`
+- Resources: `resources/list`, `resources/read`
+- Health: `ping`

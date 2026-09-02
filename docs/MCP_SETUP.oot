@@ -1,0 +1,31 @@
+# openOODA MCP Server — Editor Setup
+
+File: ooda/mcp/docs/MCP_SETUP.oot
+
+The openOODA MCP (Model Context Protocol) server is a pure-`.oo` self-hosted MCP server. It speaks MCP 3.0 over stdio (JSON-RPC 2.0 framed) and provides tools/list, tools/call, resources/list, resources/read, and a heartbeat health probe.
+
+## How to launch
+
+```sh
+# stdio (the real editor case)
+ooda mcp
+
+# one-shot file mode
+ooda mcp path/to/request.txt
+```
+
+## Capabilities
+
+| Method | Purpose |
+|---|---|
+| `initialize` | Lifecycle start, server capabilities |
+| `tools/list` | Enumerate the 23 typed tools |
+| `tools/call` | Dispatch to a single tool, wrap the result |
+| `resources/list` | Enumerate the 6 knowledge resources |
+| `resources/read` | Read a specific resource (board, codex, schema, format, context-budget) |
+| `ping` | Heartbeat (returns 7 server-wide health fields) |
+
+## See also
+
+- `protocol.oot` — the JSON-RPC 2.0 wire protocol
+- `client_config.oot` — how to configure MCP clients

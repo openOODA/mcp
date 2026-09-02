@@ -1,0 +1,75 @@
+// # MCP Capability Encoding (14-bit) + Revalidation
+//
+// Logline: Canonical 14-token -> bit map (G19). Caps_held, cap_audit, bitmask_from_graph, and revalidate-and-queue all operate on the full 14-bit surface. Replaces the legacy 5-bit field (no compat, no fallback).
+//
+// Setup: Bit assignments (canonical, in McpGraph order):
+//   bit  0: FsReadCap       bit  1: FsWriteCap     bit  2: FsCap
+//   bit  3: ProcessCap      bit  4: SysCap         bit  5: NetCap
+//   bit  6: HttpCap         bit  7: TcpCap         bit  8: UdpCap
+//   bit  9: BindCap         bit 10: EnvCap         bit 11: TimeCap
+//   bit 12: RandCap         bit 13: AllocCap
+// Full mask = 16383 (0b11111111111111).
+//
+// Beats:
+//   1. mcp_cap_full_mask: 16383.
+//   2. mcp_token_to_bit: token -> bit (0-13) or -1 if unknown.
+//   3. mcp_bit_to_token: bit -> token or "" if out of range.
+//   4. mcp_caps_bitmask_from_graph: walk McpCapability list, OR all 14 known bits.
+
+import "engine/state/mcp_graph.oo";
+
+// G19: full 14-bit mask = 0b11111111111111 = 16383.
+pub fn mcp_cap_full_mask() -> Int { return 16383; }
+
+// G19: map a cap token to its 14-bit position. Returns -1 if unknown.
+pub fn mcp_token_to_bit(token: String) -> Int {
+    if token == "FsReadCap"  { return 0; }
+    if token == "FsWriteCap" { return 1; }
+    if token == "FsCap"      { return 2; }
+    if token == "ProcessCap" { return 3; }
+    if token == "SysCap"     { return 4; }
+    if token == "NetCap"     { return 5; }
+    if token == "HttpCap"    { return 6; }
+    if token == "TcpCap"     { return 7; }
+    if token == "UdpCap"     { return 8; }
+    if token == "BindCap"    { return 9; }
+    if token == "EnvCap"     { return 10; }
+    if token == "TimeCap"    { return 11; }
+    if token == "RandCap"    { return 12; }
+    if token == "AllocCap"   { return 13; }
+    return 0 - 1;
+}
+
+// G19: map a 14-bit position to its token. Returns "" if out of range.
+pub fn mcp_bit_to_token(bit: Int) -> String {
+    if bit == 0  { return "FsReadCap"; }
+    if bit == 1  { return "FsWriteCap"; }
+    if bit == 2  { return "FsCap"; }
+    if bit == 3  { return "ProcessCap"; }
+    if bit == 4  { return "SysCap"; }
+    if bit == 5  { return "NetCap"; }
+    if bit == 6  { return "HttpCap"; }
+    if bit == 7  { return "TcpCap"; }
+    if bit == 8  { return "UdpCap"; }
+    if bit == 9  { return "BindCap"; }
+    if bit == 10 { return "EnvCap"; }
+    if bit == 11 { return "TimeCap"; }
+    if bit == 12 { return "RandCap"; }
+    if bit == 13 { return "AllocCap"; }
+    return "";
+}
+
+// G19: build the full 14-bit bitmask of all caps present in the codex's McpGraph.
+pub fn mcp_caps_bitmask_from_graph(g: &McpGraph) -> Int {
+    let mut mask: Int = 0;
+    let caps: List[McpCapability] = g.capabilities;
+    let n: Int = list_len(caps);
+    let mut i: Int = 0;
+    while i < n {
+        let c: McpCapability = list_get(caps, i);
+        let bit: Int = mcp_token_to_bit(c.token);
+        if bit >= 0 { mask = mask + (1 << bit); }
+        i = i + 1;
+    }
+    return mask;
+}

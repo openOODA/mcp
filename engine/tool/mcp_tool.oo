@@ -1,0 +1,38 @@
+// # MCP Tool Descriptor and Dispatch ◈ ZERO-DRAG
+//
+// Logline: Canonical home for the McpTool type and its dispatch. Pure data — no caps.
+//
+// Setup: Imported by mcp_dispatch.oo and mcp/ANCHOR.oo. No side effects.
+//
+// Beats:
+//   1. mcp_tool_new: build a tool descriptor.
+//   2. mcp_tool_dispatch: match by tool name, return Ok or Err, no fallback.
+
+pub type McpTool = struct {
+  name: String,
+  argc: Int
+};
+
+pub fn mcp_tool_new(name: String, argc: Int) -> McpTool {
+  return McpTool {
+    name: name,
+    argc: argc
+  };
+}
+
+pub fn mcp_tool_dispatch(
+  t: McpTool,
+  args: List[String]
+) -> Result[String, String] {
+  let n: Int = list_len(args);
+  if n != t.argc {
+    return Err("argc mismatch");
+  }
+  if t.name == "ping" {
+    return Ok("pong");
+  }
+  if t.name == "echo" {
+    return Ok(list_get(args, 0));
+  }
+  return Err("unknown tool");
+}

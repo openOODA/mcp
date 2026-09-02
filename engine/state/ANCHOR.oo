@@ -1,0 +1,20 @@
+// # Mcp State and Graph
+//
+// Logline: Runtime graph state, capabilities, stream, OODA state, notification, sampling, E-M telemetry.
+//
+// Setup: MCP runtime state: graph, capabilities, stream, OODA state, notification, sampling, E-M telemetry.
+//
+// Beats:
+//   1. mcp_cap.oo, mcp_em.oo, mcp_graph.oo.
+//   2. mcp_graph_dynamic.oo, mcp_notification.oo, mcp_ooda_state.oo.
+//   3. mcp_real_caps.oo, mcp_sampling.oo, mcp_stream.oo.
+
+import "mcp_cap.oo";
+import "mcp_em.oo";
+import "mcp_graph.oo";
+import "mcp_graph_dynamic.oo";
+import "mcp_notification.oo";
+import "mcp_ooda_state.oo";
+import "mcp_real_caps.oo";
+import "mcp_sampling.oo";
+import "mcp_stream.oo";

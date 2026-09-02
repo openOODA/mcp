@@ -1,0 +1,10 @@
+// # MCP Scripts Index — Anchor for Agents
+//
+// Logline: Index of the 4 build entry points for the MCP server.
+//
+// Setup: build -> test -> verify -> release.
+
+import "build.oo";
+import "test.oo";
+import "verify.oo";
+import "release.oo";
