@@ -11,7 +11,7 @@
 //   4. qa/ has 6 self-test probe drivers; scripts/ has build, test, verify, release.
 //   5. docs/ has MCP_SETUP.oot, protocol.oot, and client_config.oot; examples/ has 3 sample JSON-RPC requests.
 //   6. audit/ has the per-version deep-dive audit history (moved from openOODA/audit/).
-//   7. VERSION declares mcp=0.5.0 with ooda compat range and api_surface=7.
+//   7. VERSION declares mcp=0.6.0 with ooda compat range and api_surface=7.
 
 import "engine/ANCHOR.oo";
 import "cli/ANCHOR.oo";
