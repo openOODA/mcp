@@ -2,16 +2,34 @@
 
 File: ooda/mcp/docs/client_config.oot
 
-## 1. Launching the server
+This doc covers how to wire the openOODA MCP server into MCP-aware clients. The server is a stdio binary; the client spawns it, sends framed JSON-RPC over stdin, and reads framed JSON-RPC from stdout.
+
+## 1. Launching the server directly
+
+The server is a standalone binary. Run it under the ooda toolchain:
 
 ```sh
-ooda mcp              # stdio
-ooda mcp request.txt  # one-shot
+ooda mcp                # stdio (default)
+ooda mcp --stdio        # explicit stdio
+ooda mcp --file <path>  # one-shot file mode
+ooda mcp --socket <path> # Unix socket
+ooda mcp-merge <file>   # inject into a client config
 ```
 
-## 2. Editor configuration
+For MCP clients, the typical entry point is `ooda mcp` (stdio). The client must keep the process alive for the duration of the session and route every JSON-RPC envelope through stdin and stdout.
 
-For Claude Desktop:
+## 2. Claude Desktop
+
+Claude Desktop reads its MCP server list from a JSON config file. The config is at `claude_desktop_config.json` (the path varies by OS):
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+
+Add the openOODA server under `mcpServers`:
+
 ```json
 {
   "mcpServers": {
@@ -22,3 +40,118 @@ For Claude Desktop:
   }
 }
 ```
+
+The `ooda` binary must be on the PATH visible to Claude Desktop. If it is not, give the absolute path:
+
+```json
+{
+  "mcpServers": {
+    "openooda": {
+      "command": "/home/user/.oodaup/bin/ooda",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Restart Claude Desktop after editing the config. The openOODA server should appear in the tool list with 23 tools.
+
+## 3. Cursor
+
+Cursor reads MCP server config from `~/.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "openooda": {
+      "command": "ooda",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+Cursor auto-discovers servers on launch. Use the Command Palette (`Ctrl+Shift+P` → "MCP: List Servers") to verify the openOODA server is active.
+
+## 4. Other MCP-aware clients
+
+The openOODA server is a standard MCP server. Any client that speaks JSON-RPC 2.0 over stdio with Content-Length framing can host it. The minimum config is:
+
+```json
+{
+  "command": "ooda",
+  "args": ["mcp"]
+}
+```
+
+Some clients accept additional fields (env, cwd, timeout). The openOODA server reads one env var, `OODACODEX`, to override the codex path. Pass it through your client's env mechanism if you need a non-default codex:
+
+```json
+{
+  "command": "ooda",
+  "args": ["mcp"],
+  "env": {
+    "OODACODEX": "/opt/openooda/codex/LLMS.oot"
+  }
+}
+```
+
+## 5. Initialize options
+
+The `initialize` call accepts three optional fields beyond the standard MCP params:
+
+| Field | Type | Purpose |
+|-------|------|---------|
+| `tier` | `"minimal" \| "standard" \| "audit"` | Server tier (default `standard`) |
+| `clientName` | string | Recorded in the session for audit |
+| `clientVersion` | string | Recorded in the session for audit |
+
+The tier controls which resources and tools are visible. The `minimal` tier excludes `ooda://em/metrics` and `ooda://registry/catalog`. The `audit` tier unlocks the full read surface.
+
+## 6. One-shot file mode (CI, smoke tests)
+
+For batch jobs, the server can read a single request from a file and exit. The file contains a raw JSON-RPC envelope (no Content-Length header required):
+
+```sh
+ooda mcp --file path/to/initialize_request.oot
+```
+
+See `examples/initialize_request.oot`, `examples/tools_list_request.oot`, and `examples/tool_call_request.oot` for three canonical request bodies.
+
+## 7. Idempotent config merge (`mcp-merge`)
+
+The `ooda mcp-merge` command injects the openOODA entry into an existing client config without overwriting other entries. It is idempotent: re-running it on an already-merged file is a no-op.
+
+```sh
+ooda mcp-merge ~/.config/openooda/agent-config.json
+```
+
+Exit codes:
+
+| Code | Meaning |
+|------|---------|
+| 0 | No-op (entry already present) |
+| 1 | Written (entry was added) |
+| 2 | Error (file unreadable, parse failure) |
+
+The merge is atomic: the file is written only if all checks pass.
+
+## 8. Capability tokens
+
+The server enforces a 14-bit capability token system. By default, every session starts with cap bit `1` granted (the basic read cap). Tools that need more cap bits (filesystem write, network bind, environment, etc.) advertise their `requiresCap` in `tools/list` responses.
+
+A client that needs to call `audit_compact` (which requires `FsWriteCap`) must hold the write cap bit at `tools/call` time. The default session does not grant this. Most clients do not need to mint extra caps; the 5 original tools + 18 blue-ocean tools are callable with the default cap.
+
+## 9. Troubleshooting
+
+- **Server exits immediately**: the stdio transport expects JSON-RPC frames on stdin. A non-MCP client that just spawns the process will see it exit on the first EOF.
+- **Method not found (-32601)**: the method namespace is MCP, not LSP. Use `tools/list`, not `textDocument/*`.
+- **Schema invalid (-32602)**: the `arguments` field does not match the tool's `inputSchema`. Run `tools/list` to get the current schema.
+- **Refused (-32603)**: the session was cancelled, or the caller lacks the required cap. Re-initialize the session.
+- **Tier denies (-32604)**: the requested method is not in the current tier. Pass `"tier": "audit"` in `initialize` for the full surface.
+
+## See also
+
+- `MCP_SETUP.oot` — installation and transport
+- `protocol.oot` — the JSON-RPC 2.0 wire protocol
+- `TOOLS.oot` — the 23-tool catalog

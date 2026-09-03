@@ -1,31 +1,141 @@
-# openOODA MCP Server — Editor Setup
+# openOODA MCP Server — Setup
 
 File: ooda/mcp/docs/MCP_SETUP.oot
 
-The openOODA MCP (Model Context Protocol) server is a pure-`.oo` self-hosted MCP server. It speaks MCP 3.0 over stdio (JSON-RPC 2.0 framed) and provides tools/list, tools/call, resources/list, resources/read, and a heartbeat health probe.
+The openOODA MCP (Model Context Protocol) server is a pure-`.oo` self-hosted MCP server. It speaks MCP protocol version `2024-11-05` over stdio (JSON-RPC 2.0 framed) and provides `tools/list`, `tools/call`, `resources/list`, `resources/read`, `prompts/list`, `prompts/get`, and a `ping` health probe.
 
-## How to launch
+The server is one of seven openOODA subsystems. It is a transport-only adapter: it parses JSON-RPC envelopes, runs an OODA dispatch loop, and emits framed responses. All semantic logic lives in the engine sub-modules under `engine/`.
+
+## Installation
+
+The MCP server ships as part of the `mcp` package. Install the `ooda` toolchain, then add the `mcp` package to your project:
 
 ```sh
-# stdio (the real editor case)
-ooda mcp
+# 1. install the ooda toolchain (one-time)
+oodaup install ooda@2.10.0
 
-# one-shot file mode
-ooda mcp path/to/request.txt
+# 2. add the mcp package to your project
+oodaup add mcp@0.5.0
+
+# 3. verify the install
+ooda mcp --help
 ```
 
-## Capabilities
+The mcp package declares its compatibility range in `VERSION`:
+
+```
+mcp=0.5.0
+ooda=2.10.0
+ooda_max=2.99.0
+oodac=2.10.0
+std=2.10.0
+api_surface=7
+```
+
+The mcp package refuses to run if the installed ooda toolchain is outside the declared range.
+
+## Environment variables
+
+The server reads one environment variable:
+
+| Name | Purpose | Default |
+|------|---------|---------|
+| `OODACODEX` | Override the path to the orientation codex (LLMS.oot) | repo-relative path |
+
+The codex override is resolved under `EnvCap`. No other environment variables are read.
+
+## Launching the server
+
+The server binary has two subcommands: `mcp` (run the server) and `mcp-merge` (inject the ooda entry into an agent-tool JSON config).
+
+Run the server in stdio mode (the editor case):
+
+```sh
+ooda mcp                # equivalent to: ooda mcp --stdio
+ooda mcp --stdio        # explicit stdio flag
+```
+
+Run the server in one-shot file mode (a single batch read from a file, then exit):
+
+```sh
+ooda mcp --file path/to/request.txt
+```
+
+Run the server over a Unix socket:
+
+```sh
+ooda mcp --socket /tmp/ooda-mcp.sock
+```
+
+Inject the openOODA entry into an MCP client config (idempotent):
+
+```sh
+ooda mcp-merge ~/.config/openooda/agent-config.json
+```
+
+Exit codes for `mcp-merge`: `0` = no-op (already present), `1` = written, `2` = error.
+
+## Transport
+
+The server uses one of three transports, selected at launch:
+
+1. **stdio** (default). The server reads the full stdin chunk, processes it, and writes framed responses to stdout. This is the standard MCP transport for editor integrations.
+2. **file**. The server reads one request from the given file path under `FsReadCap`, processes it, and exits. Use this for batch jobs and CI smoke tests.
+3. **socket**. The server binds a Unix-domain socket under `BindCap` and accepts connections.
+
+All three transports use the same JSON-RPC 2.0 framing.
+
+## JSON-RPC 2.0 framing
+
+The server uses LSP-style Content-Length framing on stdio. Each message is one HTTP-style header followed by a JSON body:
+
+```
+Content-Length: 123\r\n
+\r\n
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}
+```
+
+The header is mandatory. Raw JSON objects without the Content-Length header are also accepted by the file transport, but stdio clients should always emit the header.
+
+## MCP vs LSP
+
+The openOODA polyrepo ships both an MCP server and an LSP server. The two share framing but differ in semantics:
+
+| | MCP (this server) | LSP |
+|---|---|---|
+| Purpose | Tool use for AI agents | Editor-state for IDEs |
+| Caller | LLM agent | Code editor |
+| Methods | `tools/list`, `tools/call`, `resources/*`, `prompts/*` | `textDocument/*`, `workspace/*`, `completion`, `hover` |
+| State | Per-request (session) | Long-lived (open documents) |
+| Framing | JSON-RPC 2.0 + Content-Length | JSON-RPC 2.0 + Content-Length |
+| Dispatch | OODA: Orient → Decide → Act | LSP: server state machine |
+| Capabilities | 14 cap tokens | None |
+
+MCP is request-response for tool use. LSP is editor-state-driven.
+
+## Capabilities (method summary)
 
 | Method | Purpose |
 |---|---|
 | `initialize` | Lifecycle start, server capabilities |
+| `notifications/initialized` | Client ack (notification, no response) |
 | `tools/list` | Enumerate the 23 typed tools |
 | `tools/call` | Dispatch to a single tool, wrap the result |
-| `resources/list` | Enumerate the 6 knowledge resources |
-| `resources/read` | Read a specific resource (board, codex, schema, format, context-budget) |
+| `resources/list` | Enumerate the 8 knowledge resources |
+| `resources/read` | Read a specific resource (orientation, graph, header, boards, capabilities, redteam, em, registry) |
+| `prompts/list` | Enumerate the 1 prompt template |
+| `prompts/get` | Read a prompt template by name |
 | `ping` | Heartbeat (returns 7 server-wide health fields) |
+| `shutdown` | Graceful shutdown |
+| `exit` | Terminate the server |
+| `roots/list` | Read the client-declared root URIs |
+| `sampling/createMessage` | Refused (server does not sample) |
+| `notifications/cancelled` | Mark a request as cancelled |
+| `notifications/roots/list_changed` | Client added a new root URI |
+| `notifications/progress` | Server-to-client progress frames |
 
 ## See also
 
 - `protocol.oot` — the JSON-RPC 2.0 wire protocol
 - `client_config.oot` — how to configure MCP clients
+- `TOOLS.oot` — full catalog of the 23 tools

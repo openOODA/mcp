@@ -1,0 +1,214 @@
+# MCP Tool Catalog
+
+File: ooda/mcp/docs/TOOLS.oot
+
+The MCP server exposes 23 typed tools under `tools/call`. Each tool has a name, a one-line description, an input schema (JSON Schema fragment), and a `requiresCap` bitmask. Tools that read files need `FsReadCap`; tools that write need `FsWriteCap`. A `requiresCap` of `0` means the tool is callable with the default session cap.
+
+All tool results are wrapped in the standard MCP content envelope:
+
+```json
+{"content":[{"type":"text","text":"<json-string-payload>"}]}
+```
+
+The payload is a JSON string. Clients parse the inner `text` field to recover the typed result.
+
+## The 23 Tools
+
+| # | Name | Tier | Input | Description |
+|---|------|------|-------|-------------|
+| 1 | `get_capability_graph` | 0 | `{}` | Return the typed sovereign capability graph |
+| 2 | `get_orientation` | 0 | `{}` | Return the textual orientation codex |
+| 3 | `read_board` | 0 | `{"name":string}` | Read one canonical process board |
+| 4 | `refresh_dynamic_graph` | 0 | `{}` | Reload the dynamic graph under FsWriteCap |
+| 5 | `get_audit_log` | 0 | `{"tail":int}` | Return the last N audit-log entries |
+| 6 | `get_board_index` | 1 | `{}` | List all 13 canonical process boards |
+| 7 | `summarize_board` | 1 | `{"name":string,"max_chars":int}` | Read + truncate one board (FsReadCap) |
+| 8 | `compress_orient` | 1 | `{"max_chars":int}` | Truncate the orientation codex |
+| 9 | `get_context_budget` | 1 | `{}` | Session bytes/seq/caps/audit snapshot |
+| 10 | `estimate_chars` | 1 | `{"text":string}` | Char count proxy for token count |
+| 11 | `get_ooda_phase` | 2 | `{}` | Current OODA phase (idle/orient/decide/act) |
+| 12 | `get_decision_journal` | 2 | `{"n":int}` | Last N substantive decisions |
+| 13 | `get_redteam_realtime` | 2 | `{}` | Live fire of all 8 redteam gates |
+| 14 | `get_session_diagnostics` | 2 | `{}` | Comprehensive session health snapshot |
+| 15 | `get_format_constraints` | 3 | `{}` | Return FORMAT.oot rules as JSON |
+| 16 | `validate_codex_format` | 3 | `{"text":string}` | Check a codex text against FORMAT.oot |
+| 17 | `get_northstar` | 4 | `{}` | Read the NORTHSTAR board |
+| 18 | `get_security_threat_model` | 4 | `{}` | Read SECURITY (threat models) |
+| 19 | `get_redteam_methodology` | 4 | `{}` | Read REDTEAM (8D adversarial matrix) |
+| 20 | `get_workflow_protocol` | 4 | `{}` | Read WORKFLOW (branching, merge, release) |
+| 21 | `get_em_swarm` | 4 | `{}` | Read STRUCTURE_EM (E-M topology) |
+| 22 | `get_milestone_status` | 4 | `{}` | Read ROADMAP + SHIPPED merged |
+| 23 | `audit_compact` | 4 | `{"keep_last_n":int}` | Drop all but the last N audit entries |
+
+## Tier 0 — Core (5 tools)
+
+The five original tools. All read from the loaded McpGraph substrate.
+
+### `get_capability_graph`
+- Input: `{}` (no args)
+- Output: JSON for the typed 14-cap / 13-board / 8-gate graph
+- requiresCap: `0`
+
+### `get_orientation`
+- Input: `{}` (no args)
+- Output: the textual orientation codex (LLMS.oot)
+- requiresCap: `0`
+
+### `read_board`
+- Input: `{"name":string}` (required)
+- Output: the board's text wrapped in `ooda://orientation/board/<name>` resource envelope
+- requiresCap: `FsReadCap` (reads from disk)
+
+### `refresh_dynamic_graph`
+- Input: `{}` (no args)
+- Output: `{"content":[{"type":"text","text":"refresh started; fold runs on session close under FsWriteCap"}]}`
+- requiresCap: `FsWriteCap` (fold writes the dynamic-graph state file)
+
+### `get_audit_log`
+- Input: `{"tail":int}` (optional, default 10)
+- Output: the last N entries of the per-session hash-chained audit log
+- requiresCap: `0`
+
+## Tier 1 — Token economy (5 tools)
+
+Reduce context-window cost. The five token-saving tools.
+
+### `get_board_index`
+- Input: `{}` (no args)
+- Output: array of all 13 boards with name, path, priority, and summary char count
+- requiresCap: `0`
+
+### `summarize_board`
+- Input: `{"name":string, "max_chars":int}` (both optional, default `max_chars=2000`)
+- Output: the board text truncated to `max_chars`
+- requiresCap: `FsReadCap` (reads the board file)
+
+### `compress_orient`
+- Input: `{"max_chars":int}` (optional, default 2000)
+- Output: the orientation codex truncated to `max_chars`
+- requiresCap: `0`
+
+### `get_context_budget`
+- Input: `{}` (no args)
+- Output: session bytes-in, bytes-out, request seq, caps held, audit count, notification count
+- requiresCap: `0`
+
+### `estimate_chars`
+- Input: `{"text":string}` (required)
+- Output: the char count of the input text (proxy for token count)
+- requiresCap: `0`
+
+## Tier 2 — OODA state (4 tools)
+
+Inspect the live OODA loop state.
+
+### `get_ooda_phase`
+- Input: `{}` (no args)
+- Output: current phase (one of `idle`, `orient`, `decide`, `act`) and a label
+- requiresCap: `0`
+
+### `get_decision_journal`
+- Input: `{"n":int}` (optional, default 10)
+- Output: the last N substantive decisions (filtered audit log)
+- requiresCap: `0`
+
+### `get_redteam_realtime`
+- Input: `{}` (no args)
+- Output: live fire of all 8 redteam gates, returned as a JSON array
+- requiresCap: `0`
+
+### `get_session_diagnostics`
+- Input: `{}` (no args)
+- Output: a comprehensive session health snapshot (phase + tier + caps + counters)
+- requiresCap: `0`
+
+## Tier 3 — Format (2 tools)
+
+Validate codex format.
+
+### `get_format_constraints`
+- Input: `{}` (no args)
+- Output: the FORMAT.oot rules as JSON (4-element header, 5-component WO, 256-line cap)
+- requiresCap: `0`
+
+### `validate_codex_format`
+- Input: `{"text":string}` (required)
+- Output: a list of format violations
+- requiresCap: `0`
+
+## Tier 4 — Workspace + audit (7 tools)
+
+Read individual process boards and run audit maintenance.
+
+### `get_northstar`
+- Input: `{}` (no args)
+- Output: the NORTHSTAR board (mission and design principles)
+- requiresCap: `FsReadCap`
+
+### `get_security_threat_model`
+- Input: `{}` (no args)
+- Output: the SECURITY board (threat models and fail-closed operations)
+- requiresCap: `FsReadCap`
+
+### `get_redteam_methodology`
+- Input: `{}` (no args)
+- Output: the REDTEAM board (8D adversarial matrix)
+- requiresCap: `FsReadCap`
+
+### `get_workflow_protocol`
+- Input: `{}` (no args)
+- Output: the WORKFLOW board (branching, merge, and release rules)
+- requiresCap: `FsReadCap`
+
+### `get_em_swarm`
+- Input: `{}` (no args)
+- Output: the STRUCTURE_EM board (E-M multi-agent topology)
+- requiresCap: `FsReadCap`
+
+### `get_milestone_status`
+- Input: `{}` (no args)
+- Output: ROADMAP + SHIPPED merged (status and completed milestones)
+- requiresCap: `FsReadCap`
+
+### `audit_compact`
+- Input: `{"keep_last_n":int}` (optional, default 100)
+- Output: `{"dropped":<n>,"kept":<k>}` after dropping the oldest audit entries
+- requiresCap: `FsWriteCap` (mutates the audit log)
+
+## Capability Reference
+
+The MCP server enforces a 14-bit capability token system. Each tool advertises its required cap as a bitmask in the `tools/list` response. A `requiresCap` of `0` means the default session cap is enough. Non-zero values mean the caller must hold those cap bits.
+
+The 14 cap bits include filesystem read (`FsReadCap`), filesystem write (`FsWriteCap`), network bind (`BindCap`), and environment (`EnvCap`), among others. Read `ooda://orientation/capabilities` at runtime for the full table.
+
+## Examples
+
+Call a tool with no args (Tier 0, no cap):
+
+```json
+{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_orientation","arguments":{}}}
+```
+
+Call a tool with required args:
+
+```json
+{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"read_board","arguments":{"name":"NORTHSTAR"}}}
+```
+
+Call a tool with optional args:
+
+```json
+{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"get_audit_log","arguments":{"tail":50}}}
+```
+
+Unknown tool returns:
+
+```json
+{"error":"unknown tool: <name>"}
+```
+
+## See also
+
+- `protocol.oot` — the JSON-RPC 2.0 wire format
+- `MCP_SETUP.oot` — installation and transport
+- `client_config.oot` — wiring into MCP clients
