@@ -25,9 +25,9 @@ fn mcp_codex_path_env(env: &EnvCap) -> String {
 
 // S-12: single source of truth for the MCP protocol version. Matches ooda.pkg.
 // The 4-tuple (major, minor, patch) is exposed for callers that need the integers.
-pub fn mcp_protocol_version()  -> String { return "2.11.0"; }
+pub fn mcp_protocol_version()  -> String { return "2.12.0"; }
 pub fn mcp_protocol_major()     -> Int    { return 2; }
-pub fn mcp_protocol_minor()     -> Int    { return 11; }
+pub fn mcp_protocol_minor()     -> Int    { return 12; }
 pub fn mcp_protocol_patch()     -> Int    { return 0; }
 pub fn mcp_wire_protocol_version() -> String { return "2024-11-05"; }
 
