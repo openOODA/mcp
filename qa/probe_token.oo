@@ -1,0 +1,63 @@
+// # MCP Token Tools Probe
+//
+// Logline: Hostile test for estimate_tokens, token_status, and token_ingest.
+//
+// Setup: Direct ingest must not accrue on bad JSONL. Empty text is schema-invalid.
+//
+// Beats:
+//   1. estimate_tokens without text returns -32602.
+//   2. Bad JSONL ingest does not move session totals.
+//   3. Valid JSONL ingest increases prompt tokens and tool_calls.
+
+import "../engine/core/mcp_server.oo";
+import "../engine/core/mcp_session.oo";
+import "../engine/state/mcp_graph.oo";
+import "../engine/tool/mcp_tool.oo";
+import "../engine/tool/mcp_tool_token.oo";
+
+fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let _: String = mcp_server_handle_body(fs, s, g, "codex", init);
+    return mcp_server_handle_body(fs, s, g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+}
+
+pub fn probe_token_run(fs: &FsReadCap) -> Result[Int, String] {
+    if mcp_tool_count() != 22 { return Err("tool count drifted from 22"); }
+    let est: String = mcp_token_estimate("abcdefghijklmnop");
+    if !str_contains(est, "\"tokens\"") { return Err("estimate missing tokens"); }
+    if str_contains(est, "\"tokens\":0") { return Err("non-empty text must not be zero tokens"); }
+
+    let mut s0: McpSession = mcp_session_new();
+    let before_tok: Int = s0.token_prompt_tokens;
+    let before_calls: Int = s0.token_calls;
+    let bad: String = mcp_token_ingest(&mut s0, "not-jsonl");
+    if str_contains(bad, "\"ok\":true") { return Err("bad jsonl must not ok"); }
+    if s0.token_prompt_tokens != before_tok { return Err("bad jsonl must not accrue tokens"); }
+    if s0.token_calls != before_calls { return Err("bad jsonl must not accrue calls"); }
+    let empty: String = mcp_token_ingest(&mut s0, "");
+    if str_contains(empty, "\"ok\":true") { return Err("empty ingest must not ok"); }
+
+    let good: String = mcp_token_ingest(&mut s0, "{\"role\":\"user\",\"content\":\"hi\"}\n");
+    if !str_contains(good, "\"ok\":true") { return Err("valid jsonl must ok: " + good); }
+    if s0.token_prompt_tokens <= before_tok { return Err("valid jsonl must increase prompt tokens"); }
+    if s0.token_calls <= before_calls { return Err("valid jsonl must increase tool_calls"); }
+
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
+    let mut s: McpSession = mcp_session_new();
+    let _: String = probe_ready(fs, &mut s, &g);
+    let miss: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"estimate_tokens\",\"arguments\":{}}}");
+    if !str_contains(miss, "-32602") { return Err("estimate_tokens without text must return -32602"); }
+    let ok: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"estimate_tokens\",\"arguments\":{\"text\":\"hello world from mcp\"}}}");
+    if !str_contains(ok, "tokens") { return Err("estimate_tokens must return tokens"); }
+    let ing_bad: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"token_ingest\",\"arguments\":{\"text\":\"not-jsonl\"}}}");
+    if !str_contains(ing_bad, "jsonl failed") && !str_contains(ing_bad, "\"ok\":false") { return Err("tools/call bad ingest must fail closed"); }
+    let st: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"token_status\",\"arguments\":{}}}");
+    if !str_contains(st, "tool_calls") { return Err("token_status missing tool_calls"); }
+    if s.token_calls < 1 { return Err("tools/call must record token_calls"); }
+    return Ok(0);
+}
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    println("probe: MCP Token");
+    return probe_token_run(fs_r);
+}

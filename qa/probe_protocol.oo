@@ -1,0 +1,69 @@
+// # MCP Protocol Probe
+//
+// Logline: Hostile test for batch, prompts, roots, ETag, shutdown, and exit.
+//
+// Setup: In-memory graph. Batch must run notifications, not drop them.
+//
+// Beats:
+//   1. Batch initialize + initialized + ping returns pong.
+//   2. prompts/list and prompts/get orientation succeed; unknown prompt is -32601.
+//   3. roots/list_changed then roots/list includes the uri.
+//   4. Matching ifNoneMatch returns -32606.
+//   5. shutdown then tools/call returns -32600. exit then ping returns -32600.
+
+import "../engine/core/mcp_server.oo";
+import "../engine/core/mcp_session.oo";
+import "../engine/state/mcp_graph.oo";
+
+fn probe_graph() -> McpGraph {
+    return mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
+}
+
+fn probe_init_body() -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+}
+
+pub fn probe_protocol_run(fs: &FsReadCap) -> Result[Int, String] {
+    let g: McpGraph = probe_graph();
+    let mut sb: McpSession = mcp_session_new();
+    let batch: String = "[" + probe_init_body() + ",{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\",\"params\":{}}]";
+    let br: String = mcp_server_handle_batch(fs, &mut sb, &g, "codex", batch);
+    if !str_contains(br, "2024-11-05") { return Err("batch initialize missing protocol"); }
+    if !str_contains(br, "\"pong\":true") { return Err("batch must process initialized then ping"); }
+
+    let mut s: McpSession = mcp_session_new();
+    let _: String = mcp_server_handle_body(fs, &mut s, &g, "codex", probe_init_body());
+    let _: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let pl: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"prompts/list\",\"params\":{}}");
+    if !str_contains(pl, "orientation") { return Err("prompts/list missing orientation"); }
+    let pg: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"prompts/get\",\"params\":{\"name\":\"orientation\"}}");
+    if !str_contains(pg, "messages") { return Err("prompts/get orientation missing messages"); }
+    let pu: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"prompts/get\",\"params\":{\"name\":\"nope\"}}");
+    if !str_contains(pu, "-32601") { return Err("unknown prompt must return -32601"); }
+
+    let _: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{\"uri\":\"file:///tmp/ws\"}}");
+    let roots: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"roots/list\",\"params\":{}}");
+    if !str_contains(roots, "file:///tmp/ws") { return Err("roots/list missing declared uri"); }
+
+    let et: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"resources/read\",\"params\":{\"uri\":\"ooda://orientation\",\"ifNoneMatch\":\"01234567\"}}");
+    if !str_contains(et, "-32606") { return Err("matching ETag must return -32606"); }
+    let et2: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"resources/read\",\"params\":{\"uri\":\"ooda://orientation\",\"ifNoneMatch\":\"deadbeef\"}}");
+    if str_contains(et2, "-32606") { return Err("mismatching ETag must not be not-modified"); }
+
+    let _: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":8,\"method\":\"shutdown\",\"params\":{}}");
+    let after: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}");
+    if !str_contains(after, "-32600") { return Err("tools/call after shutdown must return -32600"); }
+
+    let mut se: McpSession = mcp_session_new();
+    let _: String = mcp_server_handle_body(fs, &mut se, &g, "codex", probe_init_body());
+    let _: String = mcp_server_handle_body(fs, &mut se, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let _: String = mcp_server_handle_body(fs, &mut se, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"exit\"}");
+    let dead: String = mcp_server_handle_body(fs, &mut se, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\",\"params\":{}}");
+    if !str_contains(dead, "-32600") { return Err("ping after exit must return -32600"); }
+    return Ok(0);
+}
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    println("probe: MCP Protocol");
+    return probe_protocol_run(fs_r);
+}

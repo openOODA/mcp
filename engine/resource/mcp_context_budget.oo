@@ -15,10 +15,6 @@ import "engine/core/mcp_session.oo";
 import "engine/state/mcp_graph.oo";
 import "engine/tool/mcp_tool.oo";
 
-pub fn mcp_context_budget_estimate_chars(text: String) -> Int {
-    return chars_len(text);
-}
-
 pub fn mcp_context_budget_get_board_index(g: &McpGraph) -> String {
     let brds: List[McpBoard] = g.boards;
     let n: Int = list_len(brds);
@@ -58,7 +54,7 @@ pub fn mcp_context_budget_compress_orient(codex_text: String, max_chars: Int) ->
 }
 
 pub fn mcp_context_budget_get_context(s: &McpSession) -> String {
-    return "{\"bytes_in\":" + s.bytes_in.to_string() + ",\"bytes_out\":" + s.bytes_out.to_string() + ",\"request_seq\":" + s.request_seq.to_string() + ",\"caps_held\":" + s.caps_held.to_string() + ",\"rate_window_count\":" + s.rate_window_count.to_string() + ",\"audit_count\":" + list_len(s.audit_log).to_string() + ",\"pending_notifs\":" + list_len(s.pending_notifications).to_string() + ",\"seen_ids\":" + list_len(s.seen_ids).to_string() + ",\"client_roots\":" + list_len(s.client_roots).to_string() + "}";
+    return "{\"bytes_in\":" + s.bytes_in.to_string() + ",\"bytes_out\":" + s.bytes_out.to_string() + ",\"request_seq\":" + s.request_seq.to_string() + ",\"caps_held\":" + s.caps_held.to_string() + ",\"rate_window_count\":" + s.rate_window_count.to_string() + ",\"audit_count\":" + list_len(s.audit_log).to_string() + ",\"pending_notifs\":" + list_len(s.pending_notifications).to_string() + ",\"seen_ids\":" + list_len(s.seen_ids).to_string() + ",\"client_roots\":" + list_len(s.client_roots).to_string() + ",\"token_prompt_tokens\":" + s.token_prompt_tokens.to_string() + ",\"token_calls\":" + s.token_calls.to_string() + "}";
 }
 
 fn mcp_context_budget_truncate(text: String, max_chars: Int, kind: String) -> String {

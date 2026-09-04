@@ -27,7 +27,9 @@ pub fn mcp_schema_validate(name: String, args: String) -> Int {
     if name == "read_board" { return mcp_schema_require_string(args, "name"); }
     if name == "get_rfc" { return mcp_schema_require_string(args, "name"); }
     if name == "get_practice" { return mcp_schema_require_string(args, "name"); }
-    if name == "estimate_chars" { return mcp_schema_require_string(args, "text"); }
+    if name == "estimate_tokens" { return mcp_schema_require_string(args, "text"); }
+    if name == "token_status" { return 0; }
+    if name == "token_ingest" { return mcp_schema_require_string(args, "text"); }
     if name == "validate_codex_format" { return mcp_schema_require_string(args, "text"); }
     if name == "get_audit_log" { return mcp_schema_optional_int_nonneg(args, "tail"); }
     if name == "get_decision_journal" { return mcp_schema_optional_int_nonneg(args, "n"); }

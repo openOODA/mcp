@@ -142,7 +142,6 @@ pub fn mcp_graph_canonical_tool_caps() -> List[McpToolCap] {
     out = list_push(out, McpToolCap { tool: "summarize_board",         required_caps: 1 });
     out = list_push(out, McpToolCap { tool: "compress_orient",         required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "get_context_budget",      required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "estimate_chars",          required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "get_ooda_phase",          required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "get_decision_journal",    required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "get_redteam_realtime",    required_caps: 0 });
@@ -154,6 +153,9 @@ pub fn mcp_graph_canonical_tool_caps() -> List[McpToolCap] {
     out = list_push(out, McpToolCap { tool: "get_rfc",                 required_caps: 1 });
     out = list_push(out, McpToolCap { tool: "get_practice",            required_caps: 1 });
     out = list_push(out, McpToolCap { tool: "audit_compact",           required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "estimate_tokens",         required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "token_status",            required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "token_ingest",            required_caps: 0 });
     return out;
 }
 

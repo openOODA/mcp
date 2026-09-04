@@ -1,12 +1,12 @@
 // # MCP Tool Dispatch
 //
-// Logline: Route tools/call to one of 20 typed tools and wrap the result. Unknown tool fails closed.
+// Logline: Route tools/call to one of 22 typed tools and wrap the result. Unknown tool fails closed.
 //
 // Setup: Schema first. Board tools call mcp_tool_read_board. No health alias. No deleted-board tools.
 //
 // Beats:
 //   1. Validate schema.
-//   2. Dispatch the 20 names.
+//   2. Dispatch the 22 names.
 //   3. Unknown name returns an error object.
 
 import "engine/core/mcp_json.oo";
@@ -17,6 +17,7 @@ import "engine/state/mcp_ooda_state.oo";
 import "engine/resource/mcp_context_budget.oo";
 import "engine/resource/mcp_format.oo";
 import "engine/tool/mcp_tool.oo";
+import "engine/tool/mcp_tool_token.oo";
 
 pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &McpGraph, s: &mut McpSession, fs: &FsReadCap) -> String {
     if name == "get_capability_graph" { return mcp_tool_wrap(mcp_graph_to_json(g)); }
@@ -29,7 +30,6 @@ pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &Mcp
     }
     if name == "compress_orient" { return mcp_tool_wrap(mcp_context_budget_compress_orient(codex_text, mcp_tool_arg_int(args, "max_chars", 2000))); }
     if name == "get_context_budget" { return mcp_tool_wrap(mcp_context_budget_get_context(s)); }
-    if name == "estimate_chars" { return mcp_tool_wrap(chars_len(mcp_json_extract_string(args, "text")).to_string()); }
     if name == "get_ooda_phase" { return mcp_tool_wrap(mcp_ooda_state_get_phase(s)); }
     if name == "get_decision_journal" { return mcp_tool_wrap(mcp_ooda_state_get_decision_journal(s, mcp_tool_arg_int(args, "n", 10))); }
     if name == "get_redteam_realtime" { return mcp_tool_wrap(mcp_ooda_state_get_redteam_realtime()); }
@@ -44,6 +44,13 @@ pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &Mcp
         let keep: Int = mcp_tool_arg_int(args, "keep_last_n", 100);
         let dropped: Int = mcp_audit_compact(s, keep);
         return mcp_tool_wrap("{\"dropped\":" + dropped.to_string() + ",\"kept\":" + keep.to_string() + "}");
+    }
+    if name == "estimate_tokens" {
+        return mcp_tool_wrap(mcp_token_estimate(mcp_tool_arg_string(args, "text", "")));
+    }
+    if name == "token_status" { return mcp_tool_wrap(mcp_token_status(s)); }
+    if name == "token_ingest" {
+        return mcp_tool_wrap(mcp_token_ingest(s, mcp_tool_arg_string(args, "text", "")));
     }
     return "{\"error\":\"unknown tool: " + name + "\"}";
 }

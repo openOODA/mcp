@@ -7,7 +7,7 @@
 // Beats:
 //   1. engine/ is the library: core, tool, health, federation, state, resource.
 //   2. cli/ is the mcp binary: stdio/file server and mcp-merge.
-//   3. qa/ has eight hostile probes that return Err on failure.
+//   3. qa/ has ten hostile probes that return Err on failure.
 //   4. scripts/ has build, test, verify, release; all fail closed.
 //   5. docs/ is the live protocol surface. audit/ is historical only.
 

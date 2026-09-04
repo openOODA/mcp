@@ -12,6 +12,7 @@
 test_*.out
 test_*.err
 *.log
+mcp-merge-probe.json
 
 # ==========================================
 # Editor / OS

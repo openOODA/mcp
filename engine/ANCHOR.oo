@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. core: json, dispatch, server, session, transport, batch.
-//   2. tool: catalog and dispatch for 20 tools.
+//   2. tool: catalog and dispatch for 22 tools.
 //   3. health: audit log and 8D redteam fires.
 //   4. federation: OODACODEX loader only.
 //   5. state: graph, caps, session-adjacent telemetry.

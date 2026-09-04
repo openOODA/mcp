@@ -21,6 +21,7 @@ import "engine/state/mcp_em.oo";
 import "engine/health/mcp_audit.oo";
 import "engine/tool/mcp_tool_dispatch.oo";
 import "engine/tool/mcp_tool.oo";
+import "engine/tool/mcp_tool_token.oo";
 import "engine/resource/mcp_schema.oo";
 import "engine/state/mcp_ooda_state.oo";
 import "engine/state/mcp_graph.oo";
@@ -123,6 +124,7 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
             response = mcp_dispatch_err(id, 0 - 32602, "schema invalid for tool: " + orient.tool_name);
         } else {
             s.ooda_phase = mcp_ooda_state_act();
+            mcp_token_record(s, orient.tool_name, orient.tool_args);
             let body_str: String = mcp_tool_dispatch(orient.tool_name, orient.tool_args, codex_text, g, s, fs);
             s.ooda_phase = mcp_ooda_state_idle();
             response = mcp_dispatch_ok(id, body_str);
@@ -164,8 +166,9 @@ pub fn mcp_server_handle_batch(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph,
     let mut i: Int = 0;
     while i < n {
         let item: String = list_get(items, i);
-        if !mcp_batch_is_notification(item) {
-            responses = list_push(responses, mcp_server_handle_body(fs, s, g, codex_text, item));
+        let resp: String = mcp_server_handle_body(fs, s, g, codex_text, item);
+        if chars_len(resp) > 0 {
+            responses = list_push(responses, resp);
         }
         i = i + 1;
     }

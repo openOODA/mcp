@@ -1,0 +1,63 @@
+// # MCP Token Tools
+//
+// Logline: Estimate, record, and report LLM context tokens for an MCP session.
+//
+// Setup: Uses std/app/agent/token. Session stores running totals. No ambient PATH.
+//
+// Beats:
+//   1. estimate_tokens counts one string with the default estimator.
+//   2. token_status returns session totals.
+//   3. token_ingest adds a JSONL blob into those totals.
+//   4. mcp_token_record accrues one tools/call payload.
+
+import "engine/core/mcp_session.oo";
+import "std/app/agent/token/token_estimator.oo";
+import "std/app/agent/token/jsonl_strict.oo";
+
+pub fn mcp_token_estimate(text: String) -> String {
+    let e: TokenEstimator = token_estimator_default();
+    let b: Int = chars_len(text);
+    let tok: Int = token_estimator_estimate_text(e, text);
+    return "{\"bytes\":" + b.to_string() + ",\"tokens\":" + tok.to_string() + ",\"estimator\":\"" + e.name + "\"}";
+}
+
+pub fn mcp_token_status(s: &McpSession) -> String {
+    let e: TokenEstimator = token_estimator_default();
+    let in_tok: Int = token_estimator_estimate(e, s.bytes_in);
+    let out_tok: Int = token_estimator_estimate(e, s.bytes_out);
+    return "{\"prompt_tokens\":" + s.token_prompt_tokens.to_string()
+        + ",\"tool_calls\":" + s.token_calls.to_string()
+        + ",\"tool_payload_bytes\":" + s.token_tool_payload_bytes.to_string()
+        + ",\"bytes_in\":" + s.bytes_in.to_string()
+        + ",\"bytes_out\":" + s.bytes_out.to_string()
+        + ",\"session_in_tokens\":" + in_tok.to_string()
+        + ",\"session_out_tokens\":" + out_tok.to_string()
+        + ",\"estimator\":\"" + e.name + "\"}";
+}
+
+pub fn mcp_token_ingest(s: &mut McpSession, text: String) -> String {
+    if chars_len(text) == 0 {
+        return "{\"ok\":false,\"error\":\"missing text\"}";
+    }
+    let stats: ParseStats = jsonl_strict_parse_transcript(text);
+    if stats.lines_failed > 0 || stats.lines_parsed == 0 {
+        return "{\"ok\":false,\"error\":\"jsonl failed\",\"lines_parsed\":" + stats.lines_parsed.to_string() + ",\"lines_failed\":" + stats.lines_failed.to_string() + "}";
+    }
+    let e: TokenEstimator = token_estimator_default();
+    let tok: Int = token_estimator_estimate_text(e, text);
+    s.token_prompt_tokens = s.token_prompt_tokens + tok;
+    s.token_tool_payload_bytes = s.token_tool_payload_bytes + chars_len(text);
+    s.token_calls = s.token_calls + stats.lines_parsed;
+    return "{\"ok\":true,\"lines_parsed\":" + stats.lines_parsed.to_string()
+        + ",\"lines_failed\":" + stats.lines_failed.to_string()
+        + ",\"tokens_added\":" + tok.to_string() + "}";
+}
+
+pub fn mcp_token_record(s: &mut McpSession, tool: String, args: String) {
+    let e: TokenEstimator = token_estimator_default();
+    let b: Int = chars_len(args) + chars_len(tool);
+    let tok: Int = token_estimator_estimate(e, b);
+    s.token_prompt_tokens = s.token_prompt_tokens + tok;
+    s.token_tool_payload_bytes = s.token_tool_payload_bytes + b;
+    s.token_calls = s.token_calls + 1;
+}

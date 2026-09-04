@@ -14,6 +14,8 @@ File: mcp/examples/tools_list_request.oot
 
 ## Expected
 
-20 tools. Names include get_orientation, get_rules, get_rfc, get_practice.
+22 tools. Names include get_orientation, get_rules, get_rfc, get_practice, estimate_tokens, token_status, token_ingest.
+
+Names do not include estimate_chars.
 
 Names do not include ooda.northstar or get_milestone_status.

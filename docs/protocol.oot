@@ -48,6 +48,26 @@ Seven URIs: ooda://orientation, /graph, /header, /boards, /capabilities, /redtea
 
 em/metrics requires audit tier. Registry catalog is not served.
 
+## prompts
+
+`prompts/list` returns the `orientation` template. `prompts/get` with `name=orientation` returns messages. Unknown names return -32601.
+
+## roots
+
+`notifications/roots/list_changed` params.uri is appended. `roots/list` returns the declared URIs.
+
+## ETag
+
+`resources/read` with `ifNoneMatch` equal to the 8-char gold-master SHA prefix returns -32606.
+
+## batch
+
+A JSON array is a batch. Notifications in the array are executed. They produce no response item.
+
+## shutdown and exit
+
+`shutdown` returns null and moves the session to Down. Later methods return -32600 except `exit`. `exit` is a notification and closes the session.
+
 ## ping
 
 Requires Ready. Returns pong, phase, tier, request_seq, caps_held, bytes_in, bytes_out, protocol.

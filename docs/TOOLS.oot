@@ -1,7 +1,7 @@
 # MCP Tool Catalog
 File: mcp/docs/TOOLS.oot
 
-Twenty tools. Results wrap as `{"content":[{"type":"text","text":"..."}]}`.
+Twenty-two tools. Results wrap as `{"content":[{"type":"text","text":"..."}]}`.
 
 requiresCap 0 uses the session default. requiresCap 1 is FsReadCap.
 
@@ -15,7 +15,6 @@ requiresCap 0 uses the session default. requiresCap 1 is FsReadCap.
 | summarize_board | 1 | {name, max_chars?} | Truncated board |
 | compress_orient | 0 | {max_chars?} | Truncated codex |
 | get_context_budget | 0 | {} | Session counters |
-| estimate_chars | 0 | {text} | Character count |
 | get_ooda_phase | 0 | {} | idle/orient/decide/act |
 | get_decision_journal | 0 | {n?} | Substantive audit slice |
 | get_redteam_realtime | 0 | {} | Live 8-gate fire |
@@ -27,5 +26,8 @@ requiresCap 0 uses the session default. requiresCap 1 is FsReadCap.
 | get_rfc | 1 | {name} | One RFC board (RFC-0001..) |
 | get_practice | 1 | {name} | REDTEAM, WORKFLOW, or RELEASE |
 | audit_compact | 0 | {keep_last_n?} | Drop old audit rows |
+| estimate_tokens | 0 | {text} | LLM token estimate (std estimator) |
+| token_status | 0 | {} | Session LLM token totals |
+| token_ingest | 0 | {text} | Add a JSONL transcript into session totals |
 
 Boards: ANCHOR, RULES, NORTHSTAR, RFC-0001..RFC-0006, REDTEAM, WORKFLOW, RELEASE.

@@ -44,7 +44,10 @@ pub type McpSession = struct {
     rate_window_count: Int,
     audit_log: List[McpAuditEntry],
     audit_chain_head: String,
-    ooda_phase: Int
+    ooda_phase: Int,
+    token_prompt_tokens: Int,
+    token_tool_payload_bytes: Int,
+    token_calls: Int
 };
 
 pub fn mcp_session_new() -> McpSession {
@@ -67,7 +70,10 @@ pub fn mcp_session_new() -> McpSession {
         rate_window_count: 0,
         audit_log: list_new(),
         audit_chain_head: "",
-        ooda_phase: 0
+        ooda_phase: 0,
+        token_prompt_tokens: 0,
+        token_tool_payload_bytes: 0,
+        token_calls: 0
     };
 }
 

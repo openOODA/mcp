@@ -1,6 +1,6 @@
 // # MCP Tools List Probe
 //
-// Logline: Hostile test that tools/list advertises the live 20 tools and not deleted names.
+// Logline: Hostile test that tools/list advertises the live 22 tools and not deleted names.
 //
 // Setup: Session must reach Ready. Ghost tools must be absent.
 //
@@ -31,7 +31,11 @@ pub fn probe_tools_list_run(fs: &FsReadCap) -> Result[Int, String] {
     if str_contains(r, "get_milestone_status") { return Err("ghost tool get_milestone_status still listed"); }
     if str_contains(r, "ooda.northstar") { return Err("ghost tool ooda.northstar still listed"); }
     if str_contains(r, "get_em_swarm") { return Err("ghost tool get_em_swarm still listed"); }
-    if mcp_tool_count() != 20 { return Err("tool count drifted from 20"); }
+    if mcp_tool_count() != 22 { return Err("tool count drifted from 22"); }
+    if !str_contains(r, "estimate_tokens") { return Err("tools/list missing estimate_tokens"); }
+    if !str_contains(r, "token_status") { return Err("tools/list missing token_status"); }
+    if !str_contains(r, "token_ingest") { return Err("tools/list missing token_ingest"); }
+    if str_contains(r, "estimate_chars") { return Err("ghost tool estimate_chars still listed"); }
     return Ok(0);
 }
 

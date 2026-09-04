@@ -1,18 +1,18 @@
 // # MCP Config Merge Probe
 //
-// Logline: Hostile test that mcp-merge splices the ooda entry and does not drop sibling keys.
+// Logline: Hostile test that mcp-merge splices JSON and writes a real file under FsWriteCap.
 //
-// Setup: Pure string apply. No filesystem.
+// Setup: String apply first. Then create a file, merge, and prove a second merge is a no-op.
 //
 // Beats:
 //   1. Empty or non-object text fails closed.
 //   2. Existing mcpServers keeps other servers and adds ooda.
-//   3. Second apply is a no-op.
-//   4. Missing mcpServers inserts the key without dropping others.
+//   3. File merge writes ooda and keeps sibling keys.
+//   4. Second file merge returns 0.
 
 import "../cli/safe_merge_core.oo";
 
-pub fn probe_merge_run() -> Result[Int, String] {
+pub fn probe_merge_run(fr: &FsReadCap, fw: &FsWriteCap) -> Result[Int, String] {
     let e1: Result[String, String] = safe_mcp_merge_apply("");
     if e1.is_ok() { return Err("empty text must fail"); }
     let e2: Result[String, String] = safe_mcp_merge_apply("[1]");
@@ -29,16 +29,24 @@ pub fn probe_merge_run() -> Result[Int, String] {
     if a2.is_err() { return Err("idempotent apply must succeed"); }
     let out2: String = match a2 { Ok(s) => s, Err(_) => "" };
     if out2 != out { return Err("second apply must be a no-op"); }
-    let bare: String = "{\"name\":\"claude\"}";
-    let a3: Result[String, String] = safe_mcp_merge_apply(bare);
-    if a3.is_err() { return Err("object without mcpServers must merge"); }
-    let out3: String = match a3 { Ok(s) => s, Err(_) => "" };
-    if !str_contains(out3, "\"mcpServers\"") { return Err("merge must add mcpServers"); }
-    if !str_contains(out3, "\"name\":\"claude\"") { return Err("merge must keep name"); }
+
+    let path: String = "mcp-merge-probe.json";
+    let wr: Result[Void, String] = write_file(fw, path, "{\"keep\":true,\"mcpServers\":{\"other\":{\"command\":\"x\"}}}");
+    if wr.is_err() { return Err("cannot write merge probe file"); }
+    let rc1: Int = safe_mcp_merge_file(fr, fw, path);
+    if rc1 != 1 { return Err("first file merge must return 1, got " + rc1.to_string()); }
+    let rr: Result[String, String] = read_file(fr, path);
+    if rr.is_err() { return Err("merge file unreadable"); }
+    let disk: String = match rr { Ok(s) => s, Err(_) => "" };
+    if !str_contains(disk, "\"ooda\":") { return Err("file merge missing ooda"); }
+    if !str_contains(disk, "\"keep\":true") { return Err("file merge dropped keep"); }
+    if !str_contains(disk, "\"other\"") { return Err("file merge dropped other"); }
+    let rc2: Int = safe_mcp_merge_file(fr, fw, path);
+    if rc2 != 0 { return Err("second file merge must return 0, got " + rc2.to_string()); }
     return Ok(0);
 }
 
-pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
     println("probe: MCP Merge");
-    return probe_merge_run();
+    return probe_merge_run(fs_r, fw);
 }
