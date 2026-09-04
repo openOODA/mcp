@@ -1,6 +1,14 @@
 // # MCP Docs Index — Anchor for Agents
 //
 // Logline: Index of the MCP documentation files.
+//
+// Setup: RFC-0005. Website Source: openOODA/mcp/docs/.
+//
+// Beats:
+//   1. MCP_SETUP.oot — host over stdio.
+//   2. protocol.oot — JSON-RPC wire.
+//   3. client_config.oot — client config.
+//   4. TOOLS.oot — 22 tools. SSoT for the website mcp page.
 
 import "MCP_SETUP.oot";
 import "protocol.oot";
