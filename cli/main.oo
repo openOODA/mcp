@@ -15,7 +15,7 @@ import "safe_merge.oo";
 
 pub fn main(fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
     if list_len(args) < 1 {
-        return run_ooda_mcp(fw, fr, env, list_new());
+        return run_ooda_mcp(fw, fr, env, args);
     }
     let sub: String = list_get(args, 0);
     if str_starts_with(sub, "-") {
