@@ -2,10 +2,10 @@
 //
 // Logline: Index of the ten hostile probe drivers. A driver that cannot fail is a defect.
 //
-// Setup: Each probe returns Result. Ok(0) only after assertions pass.
+// Setup: Each probe exports probe_*_run. scripts/test.oo is the only main.
 //
 // Beats:
-//   1. probe_initialize.oo — initialize, pre-init refuse, duplicate id, clientName ignored.
+//   1. probe_initialize.oo — initialize, protocolVersion, second init, alias refuse.
 //   2. probe_tools_list.oo — 22 live tools, no ghost names.
 //   3. probe_tool_call.oo — schema, unknown tool, missing FsReadCap.
 //   4. probe_resources_list.oo — list, read, file URI, em/metrics tier.

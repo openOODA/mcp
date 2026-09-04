@@ -18,7 +18,17 @@
 
 ## This repo: mcp
 
-Model Context Protocol server for AI tool use.
+Model Context Protocol server for AI tool use. Protocol `2024-11-05`.
+
+Live stdio is a frame loop (`oo_read_stdin_chunk`). One-shot batch is `--file`.
+
+```sh
+OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda mcp
+OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda mcp --file path/to/request.json
+ooda mcp-merge ~/.config/openooda/agent-config.json
+```
+
+`OODACODEX` is required. Missing or unreadable codex fails closed.
 
 ## Install
 

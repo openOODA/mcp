@@ -1,7 +1,7 @@
 # MCP Server — Setup
 File: mcp/docs/MCP_SETUP.oot
 
-The openOODA MCP server speaks protocol `2024-11-05` over stdio or one-shot file. It is a transport adapter: JSON-RPC in, capability-gated dispatch, framed JSON-RPC out.
+The openOODA MCP server speaks protocol `2024-11-05`. Stdio is a live frame loop. `--file` is one-shot. JSON-RPC in, capability-gated dispatch, Content-Length bytes out.
 
 Version is the git tag. There is no VERSION file.
 
@@ -30,8 +30,8 @@ Board reads join `dirname(OODACODEX)` with the relative board path. If the file 
 
 ## Transports
 
-1. stdio (default). Content-Length framing preferred. Raw JSON objects are accepted.
-2. file. One request body, then exit.
+1. stdio (default). Live frame loop. Content-Length bytes. Raw JSON object or array accepted. Idle hangup 5 minutes. 256 frames and 1MiB fail closed.
+2. file. Bounded buffer of frames. Same caps. Then exit.
 
 ## Methods
 

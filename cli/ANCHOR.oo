@@ -5,7 +5,7 @@
 // Setup: Two commands. --socket is absent. mcp-merge exit 0/1/2 is honest.
 //
 // Beats:
-//   1. cmd_mcp.oo runs mcp_server_run.
+//   1. cmd_mcp.oo runs mcp_stdio_serve or mcp_server_run --file.
 //   2. safe_merge.oo and safe_merge_core.oo write the ooda entry.
 //   3. main.oo dispatches argv, including leading -- flags.
 

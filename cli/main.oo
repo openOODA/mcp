@@ -6,8 +6,8 @@
 //
 // Beats:
 //   1. No args or leading -- → server.
-//   2. mcp | serve | server → server with remaining args.
-//   3. mcp-merge | merge → config merge.
+//   2. mcp → server with remaining args.
+//   3. mcp-merge → config merge.
 //   4. Unknown subcommand → error.
 
 import "cmd_mcp.oo";
@@ -22,10 +22,10 @@ pub fn main(fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[String]) -
         return run_ooda_mcp(fw, fr, env, args);
     }
     let rest: List[String] = list_slice(args, 1, list_len(args));
-    if sub == "mcp" || sub == "serve" || sub == "server" {
+    if sub == "mcp" {
         return run_ooda_mcp(fw, fr, env, rest);
     }
-    if sub == "mcp-merge" || sub == "merge" {
+    if sub == "mcp-merge" {
         return run_ooda_mcp_merge(fr, fw, rest);
     }
     return Err("mcp: unknown subcommand: " + sub);

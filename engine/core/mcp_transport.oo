@@ -1,14 +1,13 @@
 // # MCP Transport
 //
-// Logline: Read bytes from stdio or one file, then take Content-Length or raw JSON frames.
+// Logline: Take Content-Length or raw JSON frames. File reads one path. Live stdio is mcp_stdio.oo.
 //
-// Setup: Two transports. Socket is absent: a file read is not a socket.
+// Setup: Two transports. Socket is absent. Content-Length is a byte count.
 //
 // Beats:
-//   1. Stdio reads stdin once.
-//   2. File reads one path under FsReadCap.
-//   3. Take one frame: Content-Length or a top-level JSON object.
-//   4. Emit Content-Length when the input used it.
+//   1. File reads one path under FsReadCap.
+//   2. Take one frame: Content-Length bytes or a top-level JSON object or array.
+//   3. Emit Content-Length using bytes_len.
 
 import "engine/core/mcp_json.oo";
 
@@ -48,7 +47,7 @@ pub fn mcp_transport_file(path: String) -> McpTransport {
 
 pub fn mcp_transport_read(fs: &FsReadCap, t: &McpTransport) -> Result[String, String] {
     if t.kind == mcp_transport_kind_stdio() {
-        return Ok(oo_read_stdin());
+        return Err("stdio uses mcp_stdio_serve");
     }
     if t.kind == mcp_transport_kind_file() {
         if !path_exists(fs, t.file_path) { return Err("FILE_NOT_FOUND"); }
@@ -67,9 +66,11 @@ fn mcp_skip_ws(s: String) -> Int {
     return i;
 }
 
-fn mcp_take_json_object(s: String) -> McpFrame {
+fn mcp_take_json_value(s: String) -> McpFrame {
     let n: Int = chars_len(s);
-    if n == 0 || char_at(s, 0) != "{" { return mcp_frame_none(); }
+    if n == 0 { return mcp_frame_none(); }
+    let c0: String = char_at(s, 0);
+    if c0 != "{" && c0 != "[" { return mcp_frame_none(); }
     let mut depth: Int = 0;
     let mut in_str: Bool = false;
     let mut esc: Bool = false;
@@ -79,8 +80,8 @@ fn mcp_take_json_object(s: String) -> McpFrame {
         if in_str {
             if esc { esc = false; } else if c == "\\" { esc = true; } else if c == "\"" { in_str = false; }
         } else if c == "\"" { in_str = true; }
-        else if c == "{" { depth = depth + 1; }
-        else if c == "}" {
+        else if c == "{" || c == "[" { depth = depth + 1; }
+        else if c == "}" || c == "]" {
             depth = depth - 1;
             if depth == 0 {
                 return mcp_frame_take(str_slice(s, 0, i + 1), str_slice(s, i + 1, n));
@@ -106,11 +107,11 @@ pub fn mcp_transport_take(buf: String) -> McpFrame {
         if lf >= 0 && (sep < 0 || lf < sep) { sep = lf; sepn = 2; }
         if sep < 0 || clen < 1 { return mcp_frame_none(); }
         let start: Int = sep + sepn;
-        let tlen: Int = chars_len(tail);
+        let tlen: Int = bytes_len(tail);
         if start + clen > tlen { return mcp_frame_none(); }
-        return mcp_frame_take(str_slice(tail, start, start + clen), str_slice(tail, start + clen, tlen));
+        return mcp_frame_take(byte_slice(tail, start, start + clen), byte_slice(tail, start + clen, tlen));
     }
-    return mcp_take_json_object(tail);
+    return mcp_take_json_value(tail);
 }
 
 pub fn mcp_transport_emit(raw_input: String, response: String) -> String {

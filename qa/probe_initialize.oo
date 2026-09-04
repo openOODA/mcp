@@ -1,13 +1,14 @@
 // # MCP Initialize Probe
 //
-// Logline: Hostile test for initialize, pre-init refuse, and duplicate id.
+// Logline: Hostile test for initialize, protocolVersion, pre-init refuse, and duplicate id.
 //
 // Setup: In-memory graph. No disk. Returns Err when a gate fails.
 //
 // Beats:
 //   1. initialize grants FsReadCap and returns protocol 2024-11-05.
 //   2. tools/call before initialize returns -32600.
-//   3. Duplicate id returns -32603.
+//   3. Duplicate id returns -32603. Bad protocolVersion is -32600. Second initialize fails.
+//   4. method initialized without the notifications/ prefix is -32601.
 
 import "../engine/core/mcp_server.oo";
 import "../engine/core/mcp_session.oo";
@@ -36,10 +37,24 @@ pub fn probe_initialize_run(fs: &FsReadCap) -> Result[Int, String] {
     let forged: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientName\":\"forged\"}}";
     let _: String = mcp_server_handle_body(fs, &mut s4, &g, "codex", forged);
     if s4.client_name != "" { return Err("params.clientName must not set session client_name"); }
+
+    let mut s5: McpSession = mcp_session_new();
+    let badv: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"9999-01-01\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let rv: String = mcp_server_handle_body(fs, &mut s5, &g, "codex", badv);
+    if !str_contains(rv, "-32600") { return Err("unsupported protocolVersion must return -32600"); }
+    let good: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let rg: String = mcp_server_handle_body(fs, &mut s5, &g, "codex", good);
+    if !str_contains(rg, "2024-11-05") { return Err("valid initialize after version reject must succeed"); }
+    let twice: String = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let r2b: String = mcp_server_handle_body(fs, &mut s5, &g, "codex", twice);
+    if !str_contains(r2b, "already initialized") { return Err("second initialize must fail"); }
+
+    let mut s6: McpSession = mcp_session_new();
+    let _: String = mcp_server_handle_body(fs, &mut s6, &g, "codex", init);
+    let _: String = mcp_server_handle_body(fs, &mut s6, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let alias: String = mcp_server_handle_body(fs, &mut s6, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialized\"}");
+    if !str_contains(alias, "-32601") { return Err("initialized without notifications/ prefix must return -32601"); }
     return Ok(0);
 }
 
-pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    println("probe: MCP Initialize");
-    return probe_initialize_run(fs_r);
-}
+

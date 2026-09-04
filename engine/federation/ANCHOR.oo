@@ -1,8 +1,8 @@
-// # Mcp Codex Loader
+// # MCP Codex Loader
 //
-// Logline: Load $OODACODEX, hash it, and cache the capability graph.
+// Logline: Load $OODACODEX. Gossip is gone. The directory name is frozen by RFC-0004.
 //
-// Setup: Federation gossip and lineage are absent. This dir holds the codex loader.
+// Setup: This directory holds the codex cache only. It is not a federation mesh.
 //
 // Beats:
 //   1. mcp_codex.oo resolves OODACODEX fail-closed.

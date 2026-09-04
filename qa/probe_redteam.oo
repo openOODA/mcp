@@ -27,7 +27,4 @@ pub fn probe_redteam_run() -> Result[Int, String] {
     return Ok(0);
 }
 
-pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    println("probe: MCP Red Team");
-    return probe_redteam_run();
-}
+

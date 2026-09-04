@@ -1,15 +1,25 @@
 // # Build MCP
 //
-// Logline: Fail closed if a required source file is missing. This package has no VERSION file.
+// Logline: Fail closed if a production source file is missing. oodac compiles cli/main.oo.
 //
-// Setup: FsReadCap. Compilation is oodac on cli/main.oo. This script does not print fake compiles.
+// Setup: FsReadCap. This process does not spawn oodac. It gates the source tree named build per RFC-0005.
 //
 // Beats:
-//   1. Read cli/main.oo, engine ANCHOR, and qa ANCHOR.
-//   2. Err if any read fails.
+//   1. Read every production .oo path.
+//   2. Err if any path is missing or unreadable.
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    let files: List[String] = ["cli/main.oo", "cli/cmd_mcp.oo", "engine/ANCHOR.oo", "engine/core/mcp_server.oo", "engine/core/mcp_json.oo", "engine/state/mcp_roots.oo", "qa/ANCHOR.oo", "qa/probe_ping.oo", "ANCHOR.oo"];
+    let files: List[String] = [
+        "cli/main.oo", "cli/cmd_mcp.oo", "cli/safe_merge.oo", "cli/safe_merge_core.oo",
+        "engine/core/mcp_json.oo", "engine/core/mcp_batch.oo", "engine/core/mcp_dispatch.oo",
+        "engine/core/mcp_server.oo", "engine/core/mcp_session.oo", "engine/core/mcp_stdio.oo",
+        "engine/core/mcp_transport.oo", "engine/federation/mcp_codex.oo",
+        "engine/health/mcp_audit.oo", "engine/health/mcp_redteam.oo",
+        "engine/resource/mcp_context_budget.oo", "engine/resource/mcp_format.oo", "engine/resource/mcp_schema.oo",
+        "engine/state/mcp_cap.oo", "engine/state/mcp_em.oo", "engine/state/mcp_graph.oo",
+        "engine/state/mcp_notification.oo", "engine/state/mcp_ooda_state.oo", "engine/state/mcp_roots.oo",
+        "engine/tool/mcp_tool.oo", "engine/tool/mcp_tool_dispatch.oo", "engine/tool/mcp_tool_token.oo"
+    ];
     let mut i: Int = 0;
     while i < list_len(files) {
         let path: String = list_get(files, i);
@@ -18,6 +28,6 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) 
         if rr.is_err() { return Err("unreadable source: " + path); }
         i = i + 1;
     }
-    println("build: required MCP sources present");
+    println("build: production sources present; compile with oodac cli/main.oo");
     return Ok(0);
 }

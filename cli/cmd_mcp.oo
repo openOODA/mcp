@@ -7,10 +7,11 @@
 // Beats:
 //   1. Parse --stdio, --file, or --help.
 //   2. Reject unknown flags and missing paths.
-//   3. Run mcp_server_run and print framed output.
+//   3. --file runs mcp_server_run and print. Default runs mcp_stdio_serve.
 
 import "engine/core/mcp_server.oo";
 import "engine/core/mcp_transport.oo";
+import "engine/core/mcp_stdio.oo";
 
 fn cmd_mcp_has_flag(args: List[String], flag: String) -> Bool {
     let n: Int = list_len(args);
@@ -60,13 +61,16 @@ pub fn run_ooda_mcp(fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[St
         i = i + 1;
     }
     let file_path: String = cmd_mcp_arg_value(args, "--file");
-    let t: McpTransport = if chars_len(file_path) > 0 { mcp_transport_file(file_path) } else { mcp_transport_stdio() };
-    let out_r: Result[String, String] = mcp_server_run(fw, fr, env, &t);
-    if out_r.is_err() {
-        let e: String = match out_r { Ok(_) => "", Err(m) => m };
-        return Err("mcp: " + e);
+    if chars_len(file_path) > 0 {
+        let t: McpTransport = mcp_transport_file(file_path);
+        let out_r: Result[String, String] = mcp_server_run(fw, fr, env, &t);
+        if out_r.is_err() {
+            let e: String = match out_r { Ok(_) => "", Err(m) => m };
+            return Err("mcp: " + e);
+        }
+        let out: String = match out_r { Ok(s) => s, Err(_) => "" };
+        if chars_len(out) > 0 { print(out); }
+        return Ok(0);
     }
-    let out: String = match out_r { Ok(s) => s, Err(_) => "" };
-    if chars_len(out) > 0 { println(out); }
-    return Ok(0);
+    return mcp_stdio_serve(fw, fr, env);
 }

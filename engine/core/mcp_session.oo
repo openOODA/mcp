@@ -1,6 +1,6 @@
 // # MCP Session State Machine
 //
-// Logline: Track per-host MCP session lifecycle and gate pre-init requests fail-closed.
+// Logline: Track per-host MCP session lifecycle, replay ids, per-id cancel, and rate window.
 //
 // Setup: Zero-ambient state owned by the transport. Every transition is explicit.
 //
@@ -8,7 +8,7 @@
 //   1. Construct a fresh session in AwaitingInitialize with zero cap bits.
 //   2. Advance on initialize to Negotiating, then Ready on notifications/initialized.
 //   3. Fail-closed: pre-init tools/call returns -32600.
-//   4. Replay gate: seen_ids rejects duplicates.
+//   4. seen_ids rejects duplicates. cancelled_ids is per request id, cap 256.
 //   5. Rate window: 100 requests per 1000 seq.
 
 import "engine/health/mcp_audit.oo";
@@ -38,7 +38,9 @@ pub type McpSession = struct {
     seen_ids: List[String],
     client_roots: List[String],
     caps_held: Int,
-    cancelled: Bool,
+    cancelled_ids: List[String],
+    pending_roots_id: String,
+    server_req_seq: Int,
     pending_notifications: List[String],
     rate_window_start: Int,
     rate_window_count: Int,
@@ -64,7 +66,9 @@ pub fn mcp_session_new() -> McpSession {
         seen_ids: list_new(),
         client_roots: list_new(),
         caps_held: 0,
-        cancelled: false,
+        cancelled_ids: list_new(),
+        pending_roots_id: "",
+        server_req_seq: 0,
         pending_notifications: list_new(),
         rate_window_start: 0,
         rate_window_count: 0,
@@ -114,8 +118,42 @@ pub fn mcp_session_add_root(s: &mut McpSession, root: String) {
     s.client_roots = list_push(s.client_roots, root);
 }
 
-pub fn mcp_session_set_cancelled(s: &mut McpSession, value: Bool) {
-    s.cancelled = value;
+fn mcp_session_list_has(xs: List[String], id: String) -> Bool {
+    let n: Int = list_len(xs);
+    let mut i: Int = 0;
+    while i < n {
+        if list_get(xs, i) == id { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
+fn mcp_session_push_capped(xs: List[String], v: String) -> List[String] {
+    let n: Int = list_len(xs);
+    if n < 256 { return list_push(xs, v); }
+    let mut nxt: List[String] = list_new();
+    let mut j: Int = 1;
+    while j < n {
+        nxt = list_push(nxt, list_get(xs, j));
+        j = j + 1;
+    }
+    return list_push(nxt, v);
+}
+
+pub fn mcp_session_cancel_id(s: &mut McpSession, id: String) {
+    if chars_len(id) == 0 { return; }
+    if mcp_session_list_has(s.cancelled_ids, id) { return; }
+    s.cancelled_ids = mcp_session_push_capped(s.cancelled_ids, id);
+}
+
+pub fn mcp_session_id_cancelled(s: &McpSession, id: String) -> Bool {
+    if chars_len(id) == 0 { return false; }
+    return mcp_session_list_has(s.cancelled_ids, id);
+}
+
+pub fn mcp_session_next_server_id(s: &mut McpSession) -> String {
+    s.server_req_seq = s.server_req_seq + 1;
+    return "\"mcp-roots-" + s.server_req_seq.to_string() + "\"";
 }
 
 pub fn mcp_session_allows(s: &McpSession, method: String) -> Bool {
@@ -179,23 +217,8 @@ pub fn mcp_session_accrue_out(s: &mut McpSession, n: Int) -> Int {
 
 pub fn mcp_session_seen_id(s: &mut McpSession, id: String) -> Bool {
     if chars_len(id) == 0 { return false; }
-    let seen: List[String] = s.seen_ids;
-    let n: Int = list_len(seen);
-    let mut i: Int = 0;
-    while i < n {
-        if list_get(seen, i) == id { return true; }
-        i = i + 1;
-    }
-    if n >= 256 {
-        let mut nxt: List[String] = list_new();
-        let mut j: Int = 1;
-        while j < n {
-            nxt = list_push(nxt, list_get(seen, j));
-            j = j + 1;
-        }
-        s.seen_ids = nxt;
-    }
-    s.seen_ids = list_push(s.seen_ids, id);
+    if mcp_session_list_has(s.seen_ids, id) { return true; }
+    s.seen_ids = mcp_session_push_capped(s.seen_ids, id);
     return false;
 }
 

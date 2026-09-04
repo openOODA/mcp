@@ -20,7 +20,7 @@ id may be a string or a number. Duplicate id returns -32603.
 | -32600 | Invalid request or not initialized |
 | -32601 | Method or tool not found |
 | -32602 | Invalid params or schema |
-| -32603 | Refused: cap, cancel, or replay |
+| -32603 | Refused: cap, per-request cancel, or replay |
 | -32604 | Tier denies method |
 | -32605 | URI outside client roots |
 | -32606 | Not modified (ETag) |
@@ -31,6 +31,10 @@ id may be a string or a number. Duplicate id returns -32603.
 Params: protocolVersion, clientInfo `{name, version}`, optional tier `minimal|standard|audit`.
 
 clientName at the params root is not read.
+
+protocolVersion must be `2024-11-05`. Any other value returns -32600.
+
+A second initialize returns -32600 already initialized.
 
 On success the server grants FsReadCap (bit 0) and returns protocolVersion `2024-11-05`.
 
@@ -54,7 +58,7 @@ em/metrics requires audit tier. Registry catalog is not served.
 
 ## roots
 
-`notifications/roots/list_changed` params.uri is appended. `roots/list` returns the declared URIs.
+`notifications/roots/list_changed` has empty params. The server then sends a `roots/list` request to the client. The client's result.roots[].uri list replaces the session roots. Client `roots/list` to the server returns that list.
 
 ## ETag
 
@@ -71,3 +75,17 @@ A JSON array is a batch. Notifications in the array are executed. They produce n
 ## ping
 
 Requires Ready. Returns pong, phase, tier, request_seq, caps_held, bytes_in, bytes_out, protocol.
+
+## Framing
+
+Content-Length is a byte count. Live stdio writes `Content-Length: N` plus CRLF CRLF plus the body via `print` (no extra newline). A raw top-level JSON object or array is one frame.
+
+256 frames or 1MiB input or output fails closed.
+
+## Cancel
+
+`notifications/cancelled` with `params.requestId` cancels that id only. A later request with that id returns -32603. Other ids continue. The cancelled-id list is capped at 256.
+
+## Live stdio
+
+Default command polls stdin every 100ms. Timeout and EOF are the same Err from the runtime helper, so 3000 idle polls (5 minutes) is hangup. `--file` is the one-shot path.

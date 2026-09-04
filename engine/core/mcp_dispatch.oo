@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. Orient extracts uri, tool name, raw arguments object, prompt name.
-//   2. Decide checks session, tier, cancel, and per-tool caps.
+//   2. Decide checks session, tier, and per-tool caps. Cancel is per id in mcp_server.oo.
 //   3. Act builds resource, prompt, and pong envelopes.
 
 import "engine/core/mcp_json.oo";
@@ -65,7 +65,6 @@ pub fn mcp_dispatch_orient(method: String, params: String) -> McpOrient {
 pub fn mcp_dispatch_decide(s: &McpSession, g: &McpGraph, method: String, orient: &McpOrient) -> Int {
     if !mcp_session_allows(s, method) { return 0 - 32600; }
     if !mcp_session_tier_allows(s.tier, method) { return 0 - 32604; }
-    if s.cancelled && method != "exit" && method != "ping" { return 0 - 32603; }
     if method == "resources/read" {
         if chars_len(orient.uri) == 0 { return 0 - 32602; }
         if !mcp_orient_uri_is_canonical(orient.uri) { return 0 - 32602; }

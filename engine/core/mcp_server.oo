@@ -1,13 +1,13 @@
 // # MCP Server Core Loop
 //
-// Logline: Read one transport, load the codex under EnvCap, dispatch framed JSON-RPC until shutdown or EOF.
+// Logline: Dispatch one JSON-RPC body. File transport runs a bounded buffer. Live stdio is mcp_stdio.oo.
 //
-// Setup: OODACODEX is required. Empty input is an error. No gossip, no socket, no registry fallback.
+// Setup: OODACODEX is required. protocolVersion must be 2024-11-05. Cancel is per request id.
 //
 // Beats:
-//   1. Read transport bytes. Fail closed on empty or missing codex.
-//   2. Handle initialize, tools, resources, prompts, ping, shutdown.
-//   3. Persist the audit log under FsWriteCap.
+//   1. Handle initialize, tools, resources, prompts, ping, shutdown, roots.
+//   2. File mode fails closed at 256 frames or 1MiB and persists the audit log.
+//   3. Live stdio is mcp_stdio.oo. Cancel is per request id.
 
 import "engine/core/mcp_json.oo";
 import "engine/core/mcp_session.oo";
@@ -29,27 +29,43 @@ import "engine/state/mcp_cap.oo";
 
 pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, codex_text: String, body: String) -> String {
     let caps_before: Int = s.caps_held;
-    mcp_session_accrue_in(s, chars_len(body));
+    mcp_session_accrue_in(s, bytes_len(body));
     let method: String = mcp_json_extract_method(body);
     let id: String = mcp_json_extract_id(body);
     let params: String = mcp_json_extract_params(body);
     mcp_session_next_seq(s);
-    if method == "" { return mcp_dispatch_err(id, 0 - 32600, "empty method"); }
+    if method == "" {
+        if chars_len(s.pending_roots_id) > 0 && id == s.pending_roots_id {
+            mcp_roots_apply_result(s, mcp_json_extract_raw(body, "result"));
+            s.pending_roots_id = "";
+            return "";
+        }
+        return mcp_dispatch_err(id, 0 - 32600, "empty method");
+    }
     if mcp_session_seen_id(s, id) { return mcp_session_error_duplicate_id(id); }
     let sha: String = g.substrate.gold_master_sha256;
 
     if chars_len(id) > 0 && !mcp_session_check_rate(s, 100, 1000) {
         return mcp_dispatch_err(id, 0 - 32607, "Rate limit: 100 req per 1000 req_seq");
     }
+    if mcp_session_id_cancelled(s, id) {
+        return mcp_dispatch_err(id, 0 - 32603, "Request cancelled: " + id);
+    }
 
     let orient: McpOrient = mcp_dispatch_orient(method, params);
     s.ooda_phase = mcp_ooda_state_orient();
 
     if method == "initialize" {
+        if s.phase != mcp_phase_await() {
+            return mcp_dispatch_err(id, 0 - 32600, "already initialized");
+        }
         let info: String = mcp_json_extract_raw(params, "clientInfo");
         let client_name: String = mcp_json_extract_string(info, "name");
         let client_ver: String = mcp_json_extract_string(info, "version");
         let req_proto: String = mcp_json_extract_string(params, "protocolVersion");
+        if req_proto != mcp_wire_protocol_version() {
+            return mcp_dispatch_err(id, 0 - 32600, "unsupported protocolVersion");
+        }
         let tier_str: String = mcp_json_extract_string(params, "tier");
         let tier: Int = if tier_str == "minimal" { 0 } else if tier_str == "audit" { 2 } else { 1 };
         mcp_session_on_initialize(s, client_name, client_ver, req_proto);
@@ -58,7 +74,7 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
         mcp_session_grant_cap(s, mcp_cap_fs_read_bit());
         return mcp_dispatch_ok(id, mcp_dispatch_act_capabilities(mcp_dispatch_codex_version(sha), g.version));
     }
-    if method == "notifications/initialized" || method == "initialized" {
+    if method == "notifications/initialized" {
         mcp_session_on_initialized(s);
         return "";
     }
@@ -70,10 +86,15 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
         mcp_session_on_close(s);
         return "";
     }
-    if method == "notifications/cancelled" { mcp_session_set_cancelled(s, true); return ""; }
-    if method == "notifications/roots/list_changed" {
-        mcp_session_add_root(s, mcp_json_extract_string(params, "uri"));
+    if method == "notifications/cancelled" {
+        mcp_session_cancel_id(s, orient.cancelled_id);
         return "";
+    }
+    if method == "notifications/roots/list_changed" {
+        if s.phase != mcp_phase_negot() && s.phase != mcp_phase_ready() { return ""; }
+        let rid: String = mcp_session_next_server_id(s);
+        s.pending_roots_id = rid;
+        return mcp_roots_list_request(rid);
     }
 
     let decision: Int = mcp_dispatch_decide(s, g, method, &orient);
@@ -138,9 +159,9 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
     } else {
         response = mcp_dispatch_err(id, 0 - 32601, "Method not found: " + method);
     }
-    mcp_session_accrue_out(s, chars_len(response));
+    mcp_session_accrue_out(s, bytes_len(response));
     response = mcp_drain_into_response(s, body, response);
-    let audit_code: Int = if str_contains(response, "\"error\"") { 0 - 32603 } else { 0 };
+    let audit_code: Int = if mcp_json_has_error(response) { 0 - 32603 } else { 0 };
     let _: String = mcp_audit_record(s, s.request_seq, method, id, 0, audit_code, caps_before, s.caps_held, "");
     return response;
 }
@@ -176,6 +197,7 @@ pub fn mcp_server_handle_batch(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph,
 }
 
 pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTransport) -> Result[String, String] {
+    if t.kind == mcp_transport_kind_stdio() { return Err("stdio uses mcp_stdio_serve"); }
     let raw: String = match mcp_transport_read(fs, t) { Ok(s) => s, Err(e) => return Err(e); };
     if chars_len(raw) == 0 { return Err("empty input"); }
     let mut cache: McpCodexCache = mcp_codex_cache_new();
@@ -194,11 +216,18 @@ pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTran
         buf = rest;
         if chars_len(body) == 0 { continue; }
         frames = frames + 1;
-        if frames > 256 { break; }
+        if frames > 256 {
+            let _: Int = mcp_audit_persist(fw, &session);
+            return Err("frame cap 256");
+        }
         let resp: String = if mcp_batch_is_batch(body) { mcp_server_handle_batch(fs, &mut session, &cache.graph, cache.text, body) } else { mcp_server_handle_body(fs, &mut session, &cache.graph, cache.text, body) };
         if chars_len(resp) > 0 {
-            if chars_len(resp) > 1048576 || chars_len(out) > 1048576 { return Ok(out); }
-            out = out + mcp_transport_emit(raw, resp);
+            let framed: String = mcp_transport_emit(raw, resp);
+            if bytes_len(resp) > 1048576 || bytes_len(out) + bytes_len(framed) > 1048576 {
+                let _: Int = mcp_audit_persist(fw, &session);
+                return Err("response exceeds 1MiB");
+            }
+            out = out + framed;
         }
         if session.phase == mcp_phase_closed() || session.phase == mcp_phase_down() { break; }
     }

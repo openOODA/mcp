@@ -5,7 +5,7 @@
 // Setup: Dispatch facade. Codex load is federation/mcp_codex.oo. No scheduler stub.
 //
 // Beats:
-//   1. core: json, dispatch, server, session, transport, batch.
+//   1. core: json, dispatch, server, stdio, session, transport, batch.
 //   2. tool: catalog and dispatch for 22 tools.
 //   3. health: audit log and 8D redteam fires.
 //   4. federation: OODACODEX loader only.

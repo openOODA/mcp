@@ -7,12 +7,13 @@
 // Beats:
 //   1. Batch initialize + initialized + ping returns pong.
 //   2. prompts/list and prompts/get orientation succeed; unknown prompt is -32601.
-//   3. roots/list_changed then roots/list includes the uri.
+//   3. Transport takes a JSON array. list_changed before initialize is silent. After Ready it requests roots.
 //   4. Matching ifNoneMatch returns -32606.
 //   5. shutdown then tools/call returns -32600. exit then ping returns -32600.
 
 import "../engine/core/mcp_server.oo";
 import "../engine/core/mcp_session.oo";
+import "../engine/core/mcp_transport.oo";
 import "../engine/state/mcp_graph.oo";
 
 fn probe_graph() -> McpGraph {
@@ -25,6 +26,11 @@ fn probe_init_body() -> String {
 
 pub fn probe_protocol_run(fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = probe_graph();
+    let fr: McpFrame = mcp_transport_take("[{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}]");
+    if !mcp_frame_is_ok(&fr) { return Err("transport must take a JSON array batch"); }
+    let mut s0: McpSession = mcp_session_new();
+    let early: String = mcp_server_handle_body(fs, &mut s0, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{}}");
+    if str_contains(early, "roots/list") { return Err("list_changed before initialize must not request roots"); }
     let mut sb: McpSession = mcp_session_new();
     let batch: String = "[" + probe_init_body() + ",{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"},{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\",\"params\":{}}]";
     let br: String = mcp_server_handle_batch(fs, &mut sb, &g, "codex", batch);
@@ -41,9 +47,11 @@ pub fn probe_protocol_run(fs: &FsReadCap) -> Result[Int, String] {
     let pu: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"prompts/get\",\"params\":{\"name\":\"nope\"}}");
     if !str_contains(pu, "-32601") { return Err("unknown prompt must return -32601"); }
 
-    let _: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{\"uri\":\"file:///tmp/ws\"}}");
+    let ch: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/roots/list_changed\",\"params\":{}}");
+    if !str_contains(ch, "\"method\":\"roots/list\"") { return Err("list_changed must request client roots/list"); }
+    let _: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":\"mcp-roots-1\",\"result\":{\"roots\":[{\"uri\":\"file:///tmp/ws\"}]}}");
     let roots: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"roots/list\",\"params\":{}}");
-    if !str_contains(roots, "file:///tmp/ws") { return Err("roots/list missing declared uri"); }
+    if !str_contains(roots, "file:///tmp/ws") { return Err("roots/list missing client-declared uri"); }
 
     let et: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"resources/read\",\"params\":{\"uri\":\"ooda://orientation\",\"ifNoneMatch\":\"01234567\"}}");
     if !str_contains(et, "-32606") { return Err("matching ETag must return -32606"); }
@@ -63,7 +71,4 @@ pub fn probe_protocol_run(fs: &FsReadCap) -> Result[Int, String] {
     return Ok(0);
 }
 
-pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    println("probe: MCP Protocol");
-    return probe_protocol_run(fs_r);
-}
+

@@ -7,7 +7,8 @@
 // Beats:
 //   1. Locate a key at object depth 1 and take its JSON value.
 //   2. Extract string, raw token, int, method, id, and params.
-//   3. Escape, response, and error envelopes.
+//   3. Escape, response, and error envelopes. Content-Length is bytes_len.
+//   4. has_error is the depth-1 error key, not a substring scan.
 
 fn mcp_json_is_ws(c: String) -> Bool {
     return c == " " || c == "\t" || c == "\n" || c == "\r";
@@ -239,6 +240,10 @@ pub fn mcp_json_content_length(header: String) -> Int {
     return mcp_json_parse_int(acc);
 }
 
+pub fn mcp_json_has_error(body: String) -> Bool {
+    return chars_len(mcp_json_extract_raw(body, "error")) > 0;
+}
+
 pub fn mcp_json_frame(body: String) -> String {
-    return "Content-Length: " + chars_len(body).to_string() + "\r\n\r\n" + body;
+    return "Content-Length: " + bytes_len(body).to_string() + "\r\n\r\n" + body;
 }

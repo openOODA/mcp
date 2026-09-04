@@ -1,7 +1,7 @@
 # MCP Client Configuration
 File: mcp/docs/client_config.oot
 
-The server is a stdio binary. The client must keep the process alive and set OODACODEX.
+The server is a live stdio binary. It reads one frame, writes one Content-Length response, and repeats until exit or idle hangup (5 minutes). Set OODACODEX.
 
 ## Direct launch
 
@@ -44,7 +44,8 @@ minimal hides tools/resources. audit unlocks ooda://em/metrics.
 
 ## Failures
 
-- Immediate exit: OODACODEX missing, or empty stdin.
+- Immediate exit: OODACODEX missing.
+- Idle hangup: no complete frame for 5 minutes. Use `--file` for one-shot.
 - -32601: MCP methods only. Not textDocument/*.
 - -32602: arguments object does not match inputSchema.
-- -32603: missing cap or duplicate id.
+- -32603: missing cap, duplicate id, or cancelled request id.

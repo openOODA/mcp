@@ -1,15 +1,17 @@
 // # MCP Roots Scope
 //
-// Logline: Constrain resources/read to canonical ooda:// URIs or a declared client root.
+// Logline: Constrain resources/read and parse client roots/list results.
 //
-// Setup: Sampling is not offered. This file is roots policy only.
+// Setup: Sampling is not offered. list_changed causes a server-to-client roots/list request.
 //
 // Beats:
 //   1. Canonical ooda:// URIs pass.
 //   2. Other URIs pass only with a matching client root prefix.
-//   3. Empty roots reject non-canonical URIs.
+//   3. Parse result.roots[].uri from a roots/list result.
 
 import "engine/core/mcp_session.oo";
+import "engine/core/mcp_json.oo";
+import "engine/core/mcp_batch.oo";
 
 pub fn mcp_root_allows(s: &McpSession, uri: String) -> Bool {
     if str_starts_with(uri, "ooda://") { return true; }
@@ -22,4 +24,23 @@ pub fn mcp_root_allows(s: &McpSession, uri: String) -> Bool {
         i = i + 1;
     }
     return false;
+}
+
+pub fn mcp_roots_apply_result(s: &mut McpSession, result: String) {
+    let raw: String = mcp_json_extract_raw(result, "roots");
+    if chars_len(raw) == 0 { return; }
+    let items: List[String] = mcp_batch_split(raw);
+    let n: Int = list_len(items);
+    let mut next: List[String] = list_new();
+    let mut i: Int = 0;
+    while i < n {
+        let uri: String = mcp_json_extract_string(list_get(items, i), "uri");
+        if chars_len(uri) > 0 { next = list_push(next, uri); }
+        i = i + 1;
+    }
+    s.client_roots = next;
+}
+
+pub fn mcp_roots_list_request(id_raw: String) -> String {
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id_raw + ",\"method\":\"roots/list\",\"params\":{}}";
 }

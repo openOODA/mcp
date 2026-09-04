@@ -46,7 +46,4 @@ pub fn probe_merge_run(fr: &FsReadCap, fw: &FsWriteCap) -> Result[Int, String] {
     return Ok(0);
 }
 
-pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    println("probe: MCP Merge");
-    return probe_merge_run(fs_r, fw);
-}
+

@@ -1,12 +1,12 @@
 // # Mcp Engine Core
 //
-// Logline: JSON-RPC codec, dispatch, server loop, session, transport, and batch.
+// Logline: JSON-RPC codec, dispatch, file buffer, live stdio loop, session, transport, and batch.
 //
-// Setup: MCP engine core. No scheduler. No LSP import.
+// Setup: MCP engine core. No scheduler. No LSP import. Live stdio is mcp_stdio.oo.
 //
 // Beats:
-//   1. mcp_json.oo owns framing and extract.
-//   2. mcp_dispatch.oo and mcp_server.oo run the loop.
+//   1. mcp_json.oo owns framing and extract. Content-Length is bytes.
+//   2. mcp_server.oo dispatches. mcp_stdio.oo is the live pipe.
 //   3. mcp_session.oo, mcp_transport.oo, mcp_batch.oo.
 
 import "mcp_json.oo";
@@ -14,4 +14,5 @@ import "mcp_batch.oo";
 import "mcp_dispatch.oo";
 import "mcp_server.oo";
 import "mcp_session.oo";
+import "mcp_stdio.oo";
 import "mcp_transport.oo";
