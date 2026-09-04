@@ -1,6 +1,5 @@
 # Sample MCP Tools/List Request
-
-File: ooda/mcp/examples/tools_list_request.oot
+File: mcp/examples/tools_list_request.oot
 
 ## Request
 
@@ -8,24 +7,13 @@ File: ooda/mcp/examples/tools_list_request.oot
 {
   "jsonrpc": "2.0",
   "id": 2,
-  "method": "tools/list"
+  "method": "tools/list",
+  "params": {}
 }
 ```
 
-## Expected Response (abbreviated)
+## Expected
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 2,
-  "result": {
-    "tools": [
-      {"name": "ooda.northstar", "description": "Read the project's vision", "inputSchema": {...}},
-      {"name": "ooda.rules", "description": "Read the 23 laws", "inputSchema": {...}},
-      {"name": "ooda.audit", "description": "Run a Red Team gate", "inputSchema": {...}}
-    ]
-  }
-}
-```
+20 tools. Names include get_orientation, get_rules, get_rfc, get_practice.
 
-23 tools total: 5 original + 18 blue-ocean Tiers 1-4.
+Names do not include ooda.northstar or get_milestone_status.

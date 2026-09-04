@@ -1,23 +1,37 @@
-// # Test MCP — Run Self-Tests
+// # Test MCP
 //
-// Logline: Run the 6 probe drivers in ooda/mcp/qa/.
+// Logline: Run the six probe functions and the surface verifier. Any Err fails the package.
 //
-// Setup: Requires oodac on PATH. Returns non-zero if any probe fails.
+// Setup: In-process. No fake passed++. Requires FsReadCap for handle_body.
+//
+// Beats:
+//   1. verify surface.
+//   2. Run six probes.
+//   3. Return the first Err.
 
-import "std/process/sys.oo";
-import "std/fs/path.oo";
+import "../qa/probe_initialize.oo";
+import "../qa/probe_tools_list.oo";
+import "../qa/probe_tool_call.oo";
+import "../qa/probe_resources_list.oo";
+import "../qa/probe_heartbeat.oo";
+import "../qa/probe_double_run.oo";
+import "verify.oo";
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    let probes: List[String] = ["probe_initialize", "probe_tools_list", "probe_tool_call", "probe_resources_list", "probe_heartbeat", "probe_double_run"];
-    let mut passed: Int = 0;
-    let mut failed: Int = 0;
-    let mut i: Int = 0;
-    while i < list_len(probes) {
-        let p: String = list_get(probes, i);
-        println("  Running ooda/mcp/qa/" + p + ".oo");
-        passed = passed + 1;
-        i = i + 1;
-    }
-    if failed > 0 { return Err("probe failures: " + failed); }
+    let v: Result[Int, String] = mcp_verify_surface();
+    if v.is_err() { return v; }
+    let a: Result[Int, String] = probe_initialize_run(fs_r);
+    if a.is_err() { return a; }
+    let b: Result[Int, String] = probe_tools_list_run(fs_r);
+    if b.is_err() { return b; }
+    let c: Result[Int, String] = probe_tool_call_run(fs_r);
+    if c.is_err() { return c; }
+    let d: Result[Int, String] = probe_resources_list_run(fs_r);
+    if d.is_err() { return d; }
+    let e: Result[Int, String] = probe_heartbeat_run(fs_r);
+    if e.is_err() { return e; }
+    let f: Result[Int, String] = probe_double_run_run(fs_r);
+    if f.is_err() { return f; }
+    println("test: 6 probes + verify passed");
     return Ok(0);
 }

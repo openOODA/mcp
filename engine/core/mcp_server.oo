@@ -1,62 +1,62 @@
 // # MCP Server Core Loop
 //
-// Logline: Drive the transport through the Observe/Orient/Decide/Act dispatcher under one session, emitting framed responses until shutdown or EOF.
+// Logline: Read one transport, load the codex under EnvCap, dispatch framed JSON-RPC until shutdown or EOF.
 //
-// Setup: Takes &FsCap and &EnvCap. The transport decides where bytes come from. The loop terminates on shutdown notification, session close, or end of input.
+// Setup: OODACODEX is required. Empty input is an error. No gossip, no socket, no registry fallback.
 //
-// Beats: read, dispatch+accumulate, R5 replay, fail-closed pre-init, emit framed responses.
+// Beats:
+//   1. Read transport bytes. Fail closed on empty or missing codex.
+//   2. Handle initialize, tools, resources, prompts, ping, shutdown.
+//   3. Persist the audit log under FsWriteCap.
 
-import "lsp/types/lsp_types.oo";
-import "lsp/wire/lsp_jsonrpc.oo";
+import "engine/core/mcp_json.oo";
 import "engine/core/mcp_session.oo";
 import "engine/core/mcp_dispatch.oo";
 import "engine/federation/mcp_codex.oo";
 import "engine/core/mcp_transport.oo";
 import "engine/state/mcp_sampling.oo";
-import "engine/state/mcp_graph_dynamic.oo";
-import "engine/federation/mcp_gossip.oo";
-import "engine/health/mcp_redteam.oo";
-import "engine/federation/mcp_federation.oo";
-import "engine/federation/mcp_lineage.oo";
-import "engine/federation/mcp_lineage_chain.oo";
-import "engine/federation/mcp_lineage_compaction.oo";
 import "engine/state/mcp_notification.oo";
 import "engine/core/mcp_batch.oo";
 import "engine/state/mcp_em.oo";
 import "engine/health/mcp_audit.oo";
 import "engine/tool/mcp_tool_dispatch.oo";
+import "engine/tool/mcp_tool.oo";
+import "engine/resource/mcp_schema.oo";
 import "engine/state/mcp_ooda_state.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/state/mcp_cap.oo";
 
 pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, codex_text: String, body: String) -> String {
     let caps_before: Int = s.caps_held;
     mcp_session_accrue_in(s, chars_len(body));
-    let method: String = lsp_jsonrpc_extract_method(body);
-    let id: String = lsp_jsonrpc_extract_id(body);
-    let params: String = lsp_jsonrpc_extract_params(body);
+    let method: String = mcp_json_extract_method(body);
+    let id: String = mcp_json_extract_id(body);
+    let params: String = mcp_json_extract_params(body);
     mcp_session_next_seq(s);
     if method == "" { return mcp_dispatch_err(id, 0 - 32600, "empty method"); }
     if mcp_session_seen_id(s, id) { return mcp_session_error_duplicate_id(id); }
     let sha: String = g.substrate.gold_master_sha256;
 
-    if method != "initialize" && method != "initialized" && method != "notifications/initialized" && method != "shutdown" && method != "exit" && method != "ping" && method != "notifications/cancelled" && method != "notifications/roots/list_changed" && !mcp_session_check_rate(s, 100, 1000) { return mcp_dispatch_err(id, 0 - 32607, "Rate limit: 100 req per 1000 req_seq"); }
+    if method != "initialize" && method != "initialized" && method != "notifications/initialized" && method != "shutdown" && method != "exit" && method != "ping" && method != "notifications/cancelled" && method != "notifications/roots/list_changed" && !mcp_session_check_rate(s, 100, 1000) {
+        return mcp_dispatch_err(id, 0 - 32607, "Rate limit: 100 req per 1000 req_seq");
+    }
 
     let orient: McpOrient = mcp_dispatch_orient(method, params);
     s.ooda_phase = mcp_ooda_state_orient();
 
     if method == "initialize" {
-        let client_name: String = lsp_jsonrpc_extract_string(params, "clientName");
-        let client_ver: String  = lsp_jsonrpc_extract_string(params, "clientVersion");
-        let req_proto: String   = lsp_jsonrpc_extract_string(params, "protocolVersion");
-        let tier_str: String    = lsp_jsonrpc_extract_string(params, "tier");
+        let info: String = mcp_json_extract_raw(params, "clientInfo");
+        let client_name: String = mcp_json_extract_string(info, "name");
+        let client_ver: String = mcp_json_extract_string(info, "version");
+        let req_proto: String = mcp_json_extract_string(params, "protocolVersion");
+        let tier_str: String = mcp_json_extract_string(params, "tier");
         let tier: Int = if tier_str == "minimal" { 0 } else if tier_str == "audit" { 2 } else { 1 };
         mcp_session_on_initialize(s, client_name, client_ver, req_proto);
         let tier_rc: Int = mcp_session_set_tier(s, tier);
-        if tier_rc != 0 { return mcp_dispatch_err(id, tier_rc, "Invalid tier: " + tier.to_string()); }
-        mcp_session_grant_cap(s, 1);
-        let codex_ver: String = mcp_dispatch_codex_version(sha);
-        return mcp_dispatch_ok(id, mcp_dispatch_act_capabilities(codex_ver, g.version));
+        if tier_rc != 0 { return mcp_dispatch_err(id, tier_rc, "Invalid tier"); }
+        mcp_session_grant_cap(s, mcp_cap_fs_read_bit());
+        return mcp_dispatch_ok(id, mcp_dispatch_act_capabilities(mcp_dispatch_codex_version(sha), g.version));
     }
-
     if method == "notifications/initialized" || method == "initialized" {
         mcp_session_on_initialized(s);
         return "";
@@ -71,89 +71,68 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
     }
     if method == "notifications/cancelled" { mcp_session_set_cancelled(s, true); return ""; }
     if method == "notifications/roots/list_changed" {
-        let root: String = lsp_jsonrpc_extract_string(params, "root");
-        mcp_session_add_root(s, root); return "";
+        mcp_session_add_root(s, mcp_json_extract_string(params, "uri"));
+        return "";
     }
 
-    // ----- OODA: Decide (phase + capability) -----
     let decision: Int = mcp_dispatch_decide(s, g, method, &orient);
     if decision != 0 {
-        if decision == 0 - 32600 {
-            return mcp_session_error_not_initialized(id);
-        }
+        if decision == 0 - 32600 { return mcp_session_error_not_initialized(id); }
         if decision == 0 - 32601 {
-            return mcp_dispatch_err(id, 0 - 32601, "Method not found: " + method);
+            let what: String = if method == "tools/call" { orient.tool_name } else { method };
+            return mcp_dispatch_err(id, 0 - 32601, "Method not found: " + what);
         }
-        if decision == 0 - 32602 {
-            return mcp_dispatch_err(id, 0 - 32602, "Invalid params: " + method);
-        }
-        if decision == 0 - 32604 {
-            return mcp_dispatch_err_tier(id, s.tier, method);
-        }
+        if decision == 0 - 32602 { return mcp_dispatch_err(id, 0 - 32602, "Invalid params: " + method); }
+        if decision == 0 - 32604 { return mcp_dispatch_err_tier(id, s.tier, method); }
         return mcp_dispatch_err(id, decision, "Refused: " + method);
     }
-    // R7 cap audit: caller must hold every required cap.
     let cap_check: Int = mcp_dispatch_cap_audit(method, s.caps_held);
     if cap_check == 0 - 32603 {
-        return mcp_dispatch_err(id, 0 - 32603, "R7: missing required capability token for " + method);
+        return mcp_dispatch_err(id, 0 - 32603, "missing required capability token for " + method);
     }
 
     let mut response: String = "";
     if method == "ping" {
         response = mcp_dispatch_pong(id, s);
     } else if method == "resources/list" {
-        response = mcp_dispatch_ok(id, mcp_dispatch_act_resources_list_base());
+        response = mcp_dispatch_ok(id, mcp_dispatch_act_resources_list());
     } else if method == "resources/read" {
         if chars_len(orient.if_none_match) > 0 && mcp_dispatch_etag_matches(orient.if_none_match, sha) {
             response = mcp_dispatch_not_modified(id);
         } else if !mcp_sampling_root_allows(s, orient.uri) {
             response = mcp_dispatch_err(id, 0 - 32605, "URI outside declared client roots: " + orient.uri);
         } else if orient.uri == "ooda://em/metrics" {
-            if !mcp_session_tier_allows(s.tier, "ooda/em/metrics") { response = mcp_dispatch_err(id, 0 - 32604, "Tier denies ooda://em/metrics"); } else { let ps: Int = ((list_len(g.capabilities)+list_len(g.boards)+list_len(g.redteam_gates)-list_len(s.seen_ids))*s.request_seq)/256; response = mcp_dispatch_ok(id, "{\"contents\":[{\"uri\":\"ooda://em/metrics\",\"mimeType\":\"application/vnd.ooda.em+json\",\"text\":\"{\\\"ps\\\":"+ps.to_string()+",\\\"t\\\":"+list_len(g.capabilities).to_string()+",\\\"d\\\":"+list_len(s.seen_ids).to_string()+",\\\"v\\\":"+s.request_seq.to_string()+"}\"}]}"); }
-        } else if orient.uri == "ooda://registry/catalog" {
-            if s.tier == mcp_tier_minimal() { response = mcp_dispatch_err(id, 0 - 32604, "Tier denies ooda://registry/catalog"); } else { response = mcp_em_registry_ok(fs, id); }
-        } else if orient.uri == "ooda://orientation/boards" {
-            response = mcp_dispatch_act_resource_read_stream(orient.uri, id, g);
+            if s.tier != mcp_tier_audit() {
+                response = mcp_dispatch_err(id, 0 - 32604, "Tier denies ooda://em/metrics");
+            } else {
+                response = mcp_dispatch_ok(id, "{\"contents\":[{\"uri\":\"ooda://em/metrics\",\"mimeType\":\"application/vnd.ooda.em+json\",\"text\":\"" + mcp_json_escape(mcp_em_snapshot(s, g)) + "\"}]}");
+            }
         } else {
             let block: String = mcp_dispatch_act_resource_read(orient.uri, codex_text, g);
-            let wrapped: String = "{\"contents\":[" + block + "]}";
-            response = mcp_dispatch_ok(id, wrapped);
+            response = mcp_dispatch_ok(id, "{\"contents\":[" + block + "]}");
         }
-    } else if method == "sampling/createMessage" {
-        response = mcp_sampling_refusal(id);
     } else if method == "roots/list" {
-        let roots: List[String] = s.client_roots;
-        let mut body: String = "{\"roots\":[";
-        let mut i: Int = 0;
-        let n: Int = list_len(roots);
-        while i < n {
-            if i > 0 { body = body + ","; }
-            let r: String = list_get(roots, i);
-            body = body + "{\"uri\":\"" + r + "\"}";
-            i = i + 1;
-        }
-        body = body + "]}";
-        response = mcp_dispatch_ok(id, body);
+        response = mcp_server_roots_json(id, s);
     } else if method == "tools/list" {
-        response = mcp_dispatch_ok(id, mcp_dispatch_act_tools_list(g));
+        response = mcp_dispatch_ok(id, mcp_tool_list_json(g));
     } else if method == "tools/call" {
         s.ooda_phase = mcp_ooda_state_decide();
-        // Z-20: TOCTOU close. Re-check caps immediately before the act. Revocation refuses the call; the notification is queued and drained with this error response.
         let reval: String = mcp_revalidate_and_queue_caps(s, g);
-        if chars_len(reval) > 0 { return mcp_dispatch_err(id, 0 - 32603, "Cap revoked between audit and act: " + reval); }
-        s.ooda_phase = mcp_ooda_state_act();
-        let body_str: String = mcp_tool_dispatch(orient.tool_name, orient.tool_args, codex_text, g, s, fs);
-        s.ooda_phase = mcp_ooda_state_idle();
-        response = mcp_dispatch_ok(id, body_str);
+        if chars_len(reval) > 0 { return mcp_dispatch_err(id, 0 - 32603, "Cap revoked between audit and act"); }
+        if mcp_schema_validate(orient.tool_name, orient.tool_args) != 0 {
+            response = mcp_dispatch_err(id, 0 - 32602, "schema invalid for tool: " + orient.tool_name);
+        } else {
+            s.ooda_phase = mcp_ooda_state_act();
+            let body_str: String = mcp_tool_dispatch(orient.tool_name, orient.tool_args, codex_text, g, s, fs);
+            s.ooda_phase = mcp_ooda_state_idle();
+            response = mcp_dispatch_ok(id, body_str);
+        }
     } else if method == "prompts/list" {
         response = mcp_dispatch_ok(id, mcp_dispatch_act_prompts_list());
     } else if method == "prompts/get" {
         let p: String = mcp_dispatch_act_prompt_get(orient.prompt_name);
-        if chars_len(p) == 0 {
-            response = mcp_dispatch_err(id, 0 - 32601, "Unknown prompt: " + orient.prompt_name);
-        } else {
-            response = mcp_dispatch_ok(id, p);
-        }
+        if chars_len(p) == 0 { response = mcp_dispatch_err(id, 0 - 32601, "Unknown prompt: " + orient.prompt_name); }
+        else { response = mcp_dispatch_ok(id, p); }
     } else {
         response = mcp_dispatch_err(id, 0 - 32601, "Method not found: " + method);
     }
@@ -164,63 +143,62 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
     return response;
 }
 
-// 8-element resources/list (6 orientation + em/metrics + registry/catalog).
-pub fn mcp_dispatch_act_resources_list_base() -> String {
-    return "{\"resources\":[{\"uri\":\"ooda://orientation\",\"name\":\"openOODA Orientation Codex\",\"description\":\"Canonical textual orientation codex (LLMS.oot)\",\"mimeType\":\"text/x-ooda-tree\"},{\"uri\":\"ooda://orientation/graph\",\"name\":\"openOODA Capability Graph\",\"description\":\"Typed 14-cap/13-board/8-gate graph for AI reasoning\",\"mimeType\":\"application/vnd.ooda.graph+json\"},{\"uri\":\"ooda://orientation/header\",\"name\":\"openOODA Header\",\"description\":\"Version,floor,thrust,patch,protocol (5 fields)\",\"mimeType\":\"application/vnd.ooda.header+json\"},{\"uri\":\"ooda://orientation/boards\",\"name\":\"openOODA Boards\",\"description\":\"13 canonical process boards\",\"mimeType\":\"application/vnd.ooda.boards+json\"},{\"uri\":\"ooda://orientation/capabilities\",\"name\":\"openOODA Capabilities\",\"description\":\"14 unforgeable capability tokens\",\"mimeType\":\"application/vnd.ooda.caps+json\"},{\"uri\":\"ooda://orientation/redteam\",\"name\":\"openOODA Redteam Gates\",\"description\":\"8 redteam Hilbert-space axes\",\"mimeType\":\"application/vnd.ooda.redteam+json\"},{\"uri\":\"ooda://em/metrics\",\"name\":\"E-M Metrics\",\"description\":\"Ps=((T-D)/W)*V observe/orient/decide/act telemetry (audit tier)\",\"mimeType\":\"application/vnd.ooda.em+json\"},{\"uri\":\"ooda://registry/catalog\",\"name\":\"Registry Catalog\",\"description\":\"Signed package registry index (full/audit tier) via MCP\",\"mimeType\":\"application/vnd.ooda.registry+json\"}]}";
+fn mcp_server_roots_json(id: String, s: &McpSession) -> String {
+    let roots: List[String] = s.client_roots;
+    let mut body: String = "{\"roots\":[";
+    let n: Int = list_len(roots);
+    let mut i: Int = 0;
+    while i < n {
+        if i > 0 { body = body + ","; }
+        body = body + "{\"uri\":\"" + mcp_json_escape(list_get(roots, i)) + "\"}";
+        i = i + 1;
+    }
+    body = body + "]}";
+    return mcp_dispatch_ok(id, body);
 }
+
 pub fn mcp_server_handle_batch(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, codex_text: String, body: String) -> String {
     let items: List[String] = mcp_batch_split(body);
     let mut responses: List[String] = list_new();
     let n: Int = list_len(items);
     let mut i: Int = 0;
-    while i < n { let item: String = list_get(items, i); if !mcp_batch_is_notification(item) { responses = list_push(responses, mcp_server_handle_body(fs, s, g, codex_text, item)); } i = i + 1; }
+    while i < n {
+        let item: String = list_get(items, i);
+        if !mcp_batch_is_notification(item) {
+            responses = list_push(responses, mcp_server_handle_body(fs, s, g, codex_text, item));
+        }
+        i = i + 1;
+    }
     return mcp_batch_collect(responses);
 }
 
-pub fn mcp_server_run(bind: &BindCap, fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTransport) -> String {
-    let raw: String = match mcp_transport_read(fs, t) { Ok(s) => s, Err(_) => "" };
-    if chars_len(raw) == 0 { return ""; }
-
-    let mut session: McpSession = mcp_session_new();
+pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTransport) -> Result[String, String] {
+    let raw: String = match mcp_transport_read(fs, t) { Ok(s) => s, Err(e) => return Err(e); };
+    if chars_len(raw) == 0 { return Err("empty input"); }
     let mut cache: McpCodexCache = mcp_codex_cache_new();
-    let att0: Int = mcp_reattest_if_due(fs, env, &mut cache, session.request_seq);
     let cached: Int = mcp_codex_resolve_cached(fs, env, &mut cache);
-    if cached == 0 { return ""; }
-    let sha: String = cache.sha;
-    let mut dynamic: McpDynamicGraph = mcp_dynamic_load(fs, "openOODA/mcp-graph-state.json");
-    let mut gossip: McpGossipState = mcp_gossip_new(instance_id);
-    let instance_id: String = str_slice(sha, 0, 8) + "-" + session.request_seq.to_string();
-
+    if cached == 0 { return Err("OODACODEX missing or unreadable"); }
+    let mut session: McpSession = mcp_session_new();
     let mut buf: String = raw;
     let mut out: String = "";
     let mut frames: Int = 0;
     while true {
-        let fr: LspFrame = mcp_transport_take(buf);
-        if !lsp_frame_is_ok(&fr) { break; }
-        let rest: String = lsp_frame_rest(&fr);
-        let body: String = lsp_frame_body(&fr);
+        let fr: McpFrame = mcp_transport_take(buf);
+        if !mcp_frame_is_ok(&fr) { break; }
+        let rest: String = mcp_frame_rest(&fr);
+        let body: String = mcp_frame_body(&fr);
         if rest == buf { break; }
         buf = rest;
         if chars_len(body) == 0 { continue; }
         frames = frames + 1;
         if frames > 256 { break; }
-        let observed_method: String = lsp_jsonrpc_extract_method(body);
-        mcp_dynamic_record(&mut dynamic, dynamic_kind_method(), observed_method, session.request_seq);
         let resp: String = if mcp_batch_is_batch(body) { mcp_server_handle_batch(fs, &mut session, &cache.graph, cache.text, body) } else { mcp_server_handle_body(fs, &mut session, &cache.graph, cache.text, body) };
         if chars_len(resp) > 0 {
-            if chars_len(resp) > 1048576 || chars_len(out) > 1048576 { return out; }
+            if chars_len(resp) > 1048576 || chars_len(out) > 1048576 { return Ok(out); }
             out = out + mcp_transport_emit(raw, resp);
         }
         if session.phase == mcp_phase_closed() || session.phase == mcp_phase_down() { break; }
     }
-    mcp_dynamic_fold(&mut dynamic, session.request_seq);
-    mcp_gossip_merge(&mut dynamic, &mut gossip, session.request_seq);
-    let _r1: String = mcp_redteam_run_all(&mut dynamic, session.request_seq);
-    let _r2: String = mcp_redteam_run_all_recovers(&mut dynamic, session.request_seq);
-    let _ex: Int = mcp_g12_local_export(bind, fw, fs, "instance-" + instance_id, &cache.graph);
-    let _li: String = mcp_lineage_record(fw, fs, &mut cache, &mut dynamic, cache.sha, mcp_lineage_latest_sha(fs), 13, session.request_seq);
-    let _dp: Int = mcp_dynamic_persist(fw, &dynamic, "openOODA/mcp-graph-state.json");
-    let _ap: Int = mcp_audit_persist(fw, &session);
-    mcp_redteam_ps_check(&mut dynamic, 0, mcp_em_ps(&dynamic, &cache.graph), session.request_seq);
-    return out;
+    let _: Int = mcp_audit_persist(fw, &session);
+    return Ok(out);
 }

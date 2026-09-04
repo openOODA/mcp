@@ -1,237 +1,53 @@
 # MCP Wire Protocol
+File: mcp/docs/protocol.oot
 
-File: ooda/mcp/docs/protocol.oot
+JSON-RPC 2.0 over Content-Length or a raw JSON object. Protocol version `2024-11-05`.
 
-The MCP server speaks JSON-RPC 2.0 over a Content-Length-framed stream transport (stdio, file, or Unix socket). The wire protocol is identical to LSP at the framing level, but the method namespace is MCP.
+## Envelope
 
-## 1. Framing
+Request: `{"jsonrpc":"2.0","id":1,"method":"<name>","params":{...}}`
 
-Each message is one HTTP-style header followed by a JSON body:
+Success: `{"jsonrpc":"2.0","id":1,"result":<value>}`
 
-```
-Content-Length: 87\r\n
-\r\n
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}
-```
+Error: `{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"..."}}`
 
-The Content-Length is the byte count of the JSON body. The header is mandatory on stdio and socket; the file transport also accepts raw JSON without the header.
+id may be a string or a number. Duplicate id returns -32603.
 
-A single stream may carry multiple messages. The receiver reads bytes until the header is complete, then reads exactly `Content-Length` more bytes for the body.
-
-## 2. Envelope
-
-Standard JSON-RPC 2.0 envelope for every request, response, and notification.
-
-Request:
-
-```json
-{"jsonrpc":"2.0","id":1,"method":"<name>","params":{...}}
-```
-
-Response (success):
-
-```json
-{"jsonrpc":"2.0","id":1,"result":<value>}
-```
-
-Response (error):
-
-```json
-{"jsonrpc":"2.0","id":1,"error":{"code":-32601,"message":"Method not found: <name>"}}
-```
-
-Notification (no response expected):
-
-```json
-{"jsonrpc":"2.0","method":"<name>","params":{...}}
-```
-
-`id` may be a string or an integer. The server tracks seen `id` values to detect duplicates and rejects them with error `-32600`.
-
-## 3. Standard error codes
+## Error codes
 
 | Code | Meaning |
 |------|---------|
-| `-32600` | Invalid request (empty method, duplicate id) |
-| `-32601` | Method not found |
-| `-32602` | Invalid params (schema mismatch, missing required arg) |
-| `-32603` | Refused (cap revoked, session cancelled, URI outside roots) |
-| `-32604` | Tier denies method |
-| `-32605` | URI outside declared client roots |
-| `-32606` | Not modified (ETag match on resources/read) |
-| `-32607` | Rate limit (100 req per 1000 req_seq) |
+| -32600 | Invalid request or not initialized |
+| -32601 | Method or tool not found |
+| -32602 | Invalid params or schema |
+| -32603 | Refused: cap, cancel, or replay |
+| -32604 | Tier denies method |
+| -32605 | URI outside client roots |
+| -32606 | Not modified (ETag) |
+| -32607 | Rate limit 100 per 1000 seq |
 
-## 4. Lifecycle methods
+## initialize
 
-### `initialize`
+Params: protocolVersion, clientInfo `{name, version}`, optional tier `minimal|standard|audit`.
 
-First call on every session. Establishes the protocol version, the client identity, and the server capabilities.
+clientName at the params root is not read.
 
-Request:
+On success the server grants FsReadCap (bit 0) and returns protocolVersion `2024-11-05`.
 
-```json
-{"jsonrpc":"2.0","id":1,"method":"initialize","params":{
-  "protocolVersion":"2024-11-05",
-  "capabilities":{},
-  "clientInfo":{"name":"openooda-mcp-client","version":"0.1.0"},
-  "tier":"standard"
-}}
-```
+Sampling is not advertised.
 
-`tier` is one of `minimal` (tier 0, no `ooda://em/metrics` or `ooda://registry/catalog`), `standard` (tier 1, default), or `audit` (tier 2, full read). The server grants the caller cap `1` on success.
+## tools/call
 
-Response:
+params.name is the tool. params.arguments is a JSON object, not a string.
 
-```json
-{"jsonrpc":"2.0","id":1,"result":{
-  "protocolVersion":"2024-11-05",
-  "capabilities":{"tools":{},"resources":{},"prompts":{}},
-  "serverInfo":{"name":"openOODA Sovereign MCP Server","version":"0.5.0","codexVersion":"<8-char-sha-prefix>"}
-}}
-```
+Unknown tool: -32601. Schema miss: -32602. Missing cap: -32603.
 
-### `notifications/initialized`
+## resources
 
-Client ack. Notification (no response).
+Seven URIs: ooda://orientation, /graph, /header, /boards, /capabilities, /redteam, ooda://em/metrics.
 
-```json
-{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}
-```
+em/metrics requires audit tier. Registry catalog is not served.
 
-### `shutdown`
+## ping
 
-Graceful shutdown. Returns `null`.
-
-```json
-{"jsonrpc":"2.0","id":99,"method":"shutdown","params":{}}
-```
-
-Response: `{"jsonrpc":"2.0","id":99,"result":null}`
-
-### `exit`
-
-Terminate the server. Notification (no response). The server closes the transport and the process exits.
-
-```json
-{"jsonrpc":"2.0","method":"exit","params":{}}
-```
-
-## 5. Tools methods
-
-### `tools/list`
-
-Enumerate the 23 typed tools. No params.
-
-Request:
-
-```json
-{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}
-```
-
-Response: each tool carries `name`, `description`, `inputSchema` (JSON Schema fragment), and `requiresCap` (bitmask). See `TOOLS.oot` for the full catalog.
-
-### `tools/call`
-
-Dispatch to a single tool. The server validates the arguments against the tool's `inputSchema` (closes the V6 schema-theater gap; error `-32602` on mismatch), audits the per-tool capability, re-validates caps at act-time (TOCTOU close), and wraps the result in the content envelope.
-
-Request:
-
-```json
-{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{
-  "name":"get_orientation",
-  "arguments":{}
-}}
-```
-
-Response:
-
-```json
-{"jsonrpc":"2.0","id":3,"result":{"content":[{"type":"text","text":"<payload>"}]}}
-```
-
-Unknown tool returns `{"error":"unknown tool: <name>"}` wrapped in the standard envelope.
-
-## 6. Resources methods
-
-### `resources/list`
-
-Enumerate the 8 knowledge resources. No params.
-
-Response: array of 8 resources — `ooda://orientation`, `ooda://orientation/graph`, `ooda://orientation/header`, `ooda://orientation/boards`, `ooda://orientation/capabilities`, `ooda://orientation/redteam`, `ooda://em/metrics`, `ooda://registry/catalog`. Each carries `uri`, `name`, `description`, and `mimeType`.
-
-### `resources/read`
-
-Read a single resource. Required param: `uri`. Optional param: `ifNoneMatch` (ETag, 8-char SHA prefix).
-
-Request:
-
-```json
-{"jsonrpc":"2.0","id":4,"method":"resources/read","params":{
-  "uri":"ooda://orientation/graph",
-  "ifNoneMatch":"abc12345"
-}}
-```
-
-Response on ETag match: error `-32606` (`Not modified`).
-
-Response on success:
-
-```json
-{"jsonrpc":"2.0","id":4,"result":{"contents":[
-  {"uri":"ooda://orientation/graph","mimeType":"application/vnd.ooda.graph+json","text":"<json-string>"}
-]}}
-```
-
-URIs outside the canonical 8 are rejected with error `-32602`. URIs outside the declared client roots are rejected with error `-32605`.
-
-## 7. Prompts methods
-
-### `prompts/list`
-
-Enumerate the 1 prompt template (`orientation`). No params.
-
-Response: `{"prompts":[{"name":"orientation","description":"...","arguments":[]}]}`
-
-### `prompts/get`
-
-Read a prompt template by name. Required param: `name`. The only supported name is `orientation`. Unknown names return error `-32601`.
-
-Request:
-
-```json
-{"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"orientation"}}
-```
-
-## 8. Health and meta methods
-
-### `ping`
-
-Heartbeat. Returns 7 server-wide health fields: `pong`, `phase`, `tier`, `request_seq`, `caps_held`, `bytes_in`, `bytes_out`, `protocol`. The substantive pong is the F-08 fix; clients see a real handshake, not a no-op `{}`.
-
-### `roots/list`
-
-Read the client-declared root URIs. Returns `{"roots":[{"uri":"<uri>"},...]}`. URIs added via `notifications/roots/list_changed` appear here.
-
-### `sampling/createMessage`
-
-Refused. The server does not call back to the client for sampling; it returns a refusal envelope. Agents that need model output must call a real model directly, not through MCP.
-
-## 9. Notifications
-
-### `notifications/cancelled`
-
-Client marks a request as cancelled. Sets the session's `cancelled` flag; subsequent non-ping/non-exit methods return error `-32603`.
-
-### `notifications/roots/list_changed`
-
-Client added a new root URI. Server adds the URI to the session's root list.
-
-### `notifications/progress`
-
-Server-to-client progress frames (e.g. during `tools/call refresh_dynamic_graph`). Emitted as JSON-RPC notifications with `tool`, `status`, and `detail` fields.
-
-## See also
-
-- `MCP_SETUP.oot` — installation and transport
-- `client_config.oot` — wiring into MCP clients
-- `TOOLS.oot` — the 23-tool catalog
+Requires Ready. Returns pong, phase, tier, request_seq, caps_held, bytes_in, bytes_out, protocol.

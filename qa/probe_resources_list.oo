@@ -1,16 +1,39 @@
-// # MCP Resources List — MCP Self-Test Probe
+// # MCP Resources List Probe
 //
-// Logline: Hostile test for resources/list enumeration.
+// Logline: Hostile test for resources/list: seven live URIs, no registry catalog.
 //
-// Setup: Pure compute. Imports the relevant MCP files. Returns Result[Int, String]; Ok(0) on pass.
+// Setup: Ready session. Registry and 13-board claims are dead.
 //
 // Beats:
-//   1. Set up and run: resources/list enumeration.
-//   2. Assert: output matches expected.
+//   1. List contains ooda://orientation and ooda://em/metrics.
+//   2. List does not contain registry/catalog.
+//   3. Non-canonical file URI is not advertised.
 
-import "../engine/resource/mcp_context_budget.oo";
+import "../engine/core/mcp_server.oo";
+import "../engine/core/mcp_session.oo";
+import "../engine/state/mcp_graph.oo";
+import "../engine/core/mcp_dispatch.oo";
+
+fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let _: String = mcp_server_handle_body(fs, s, g, "codex", init);
+    return mcp_server_handle_body(fs, s, g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+}
+
+pub fn probe_resources_list_run(fs: &FsReadCap) -> Result[Int, String] {
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
+    let mut s: McpSession = mcp_session_new();
+    let _: String = probe_ready(fs, &mut s, &g);
+    let r: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/list\",\"params\":{}}");
+    if !str_contains(r, "ooda://orientation") { return Err("resources/list missing orientation"); }
+    if !str_contains(r, "ooda://em/metrics") { return Err("resources/list missing em/metrics"); }
+    if str_contains(r, "ooda://registry/catalog") { return Err("ghost registry catalog still listed"); }
+    if mcp_orient_uri_is_canonical("file:///etc/passwd") { return Err("file URI must not be canonical"); }
+    if mcp_orient_uri_is_canonical("ooda://registry/catalog") { return Err("registry URI must not be canonical"); }
+    return Ok(0);
+}
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
     println("probe: MCP Resources List");
-    return Ok(0);
+    return probe_resources_list_run(fs_r);
 }

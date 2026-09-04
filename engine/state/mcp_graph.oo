@@ -1,17 +1,17 @@
 // # MCP Typed Capability Graph
 //
-// Logline: Build the structured sovereign capability graph (14 caps, 13 boards, 8 redteam gates, substrate) for AI reasoning.
+// Logline: Build the capability graph: 14 NORTHSTAR tokens, 12 live governance boards, 8 redteam gates.
 //
-// Setup: Pure constants and string assembly. The graph is the G5 primary codex payload; LLMS.oot text is the textual mirror.
+// Setup: Pure constants. Board paths are relative to the codex directory. Ghost boards are absent.
 //
 // Beats:
-//   1. Declare McpCapability, McpBoard, McpRedteamGate, McpSubstrate, McpGraph records.
-//   2. Emit canonical 14 caps from the 14 unforgeable tokens.
-//   3. Emit canonical 13 boards from START.oot routing table.
-//   4. Emit canonical 8 redteam gates from REDTEAM.oot Hilbert-space axes.
-//   5. Serialize the full graph to JSON for ooda://orientation/graph.
+//   1. Declare graph records.
+//   2. Emit 14 NORTHSTAR tokens.
+//   3. Emit 12 boards that exist in openOODA governance.
+//   4. Emit 8 redteam gates.
+//   5. Emit per-tool cap bits and serialize JSON.
 
-type McpCapability = struct {
+pub type McpCapability = struct {
     token: String,
     kind: String,
     layer: String,
@@ -20,43 +20,38 @@ type McpCapability = struct {
     description: String
 };
 
-type McpBoard = struct {
+pub type McpBoard = struct {
     name: String,
     path: String,
     summary: String,
     read_priority: Int
 };
 
-type McpRedteamGate = struct {
+pub type McpRedteamGate = struct {
     axis: String,
     dimension: Int,
     probe: String,
     weight: Int
 };
 
-// F-04: per-tool cap requirement. required_caps is a bitmask over the 14-bit encoding.
-type McpToolCap = struct { tool: String, required_caps: Int };
+pub type McpToolCap = struct { tool: String, required_caps: Int };
 
-type McpSubstrate = struct {
-    simd_lane: String,
-    simd_width: Int,
-    rasp_enabled: Bool,
-    mtd_enabled: Bool,
+pub type McpSubstrate = struct {
     gold_master_sha256: String
 };
 
-type McpGraph = struct {
+pub type McpGraph = struct {
     version: String,
-    floor: Int,
-    thrust: Int,
-    patch: Int,
     protocol: String,
+    board_root: String,
     capabilities: List[McpCapability],
     boards: List[McpBoard],
     redteam_gates: List[McpRedteamGate],
     tool_caps: List[McpToolCap],
     substrate: McpSubstrate
 };
+
+pub fn mcp_wire_protocol_version() -> String { return "2024-11-05"; }
 
 pub fn mcp_cap_new(token: String, kind: String, layer: String, params: Int, init_req: Bool, desc: String) -> McpCapability {
     return McpCapability { token: token, kind: kind, layer: layer, param_count: params, init_required: init_req, description: desc };
@@ -70,126 +65,100 @@ pub fn mcp_gate_new(axis: String, dim: Int, probe: String, weight: Int) -> McpRe
     return McpRedteamGate { axis: axis, dimension: dim, probe: probe, weight: weight };
 }
 
-pub fn mcp_substrate_new(simd: String, width: Int, rasp: Bool, mtd: Bool, sha: String) -> McpSubstrate {
-    return McpSubstrate { simd_lane: simd, simd_width: width, rasp_enabled: rasp, mtd_enabled: mtd, gold_master_sha256: sha };
-}
-
-pub fn mcp_graph_new(version: String, floor: Int, thrust: Int, patch: Int, gold_sha: String) -> McpGraph {
-    let caps: List[McpCapability] = list_new();
-    let brds: List[McpBoard] = list_new();
-    let gts: List[McpRedteamGate] = list_new();
-    let tcs: List[McpToolCap] = list_new();
+pub fn mcp_graph_new(gold_sha: String, board_root: String) -> McpGraph {
     return McpGraph {
-        version: version, floor: floor, thrust: thrust, patch: patch,
+        version: mcp_wire_protocol_version(),
         protocol: mcp_wire_protocol_version(),
-        capabilities: caps, boards: brds, redteam_gates: gts,
-        tool_caps: tcs,
-        substrate: mcp_substrate_new("f32x8", 256, true, true, gold_sha)
+        board_root: board_root,
+        capabilities: list_new(),
+        boards: list_new(),
+        redteam_gates: list_new(),
+        tool_caps: list_new(),
+        substrate: McpSubstrate { gold_master_sha256: gold_sha }
     };
 }
 
-pub fn mcp_graph_push_cap(g: &mut McpGraph, c: McpCapability) {
-    g.capabilities = list_push(g.capabilities, c);
-}
-
-pub fn mcp_graph_push_board(g: &mut McpGraph, b: McpBoard) {
-    g.boards = list_push(g.boards, b);
-}
-
-pub fn mcp_graph_push_gate(g: &mut McpGraph, r: McpRedteamGate) {
-    g.redteam_gates = list_push(g.redteam_gates, r);
-}
+pub fn mcp_graph_push_cap(g: &mut McpGraph, c: McpCapability) { g.capabilities = list_push(g.capabilities, c); }
+pub fn mcp_graph_push_board(g: &mut McpGraph, b: McpBoard) { g.boards = list_push(g.boards, b); }
+pub fn mcp_graph_push_gate(g: &mut McpGraph, r: McpRedteamGate) { g.redteam_gates = list_push(g.redteam_gates, r); }
+pub fn mcp_graph_push_tool_cap(g: &mut McpGraph, t: McpToolCap) { g.tool_caps = list_push(g.tool_caps, t); }
 
 pub fn mcp_graph_canonical_caps() -> List[McpCapability] {
     let mut out: List[McpCapability] = list_new();
-    out = list_push(out, mcp_cap_new("FsReadCap",  "fs",     "core",  1, true,  "Read-only filesystem probe"));
-    out = list_push(out, mcp_cap_new("FsWriteCap", "fs",     "core",  1, true,  "Filesystem mutation"));
-    out = list_push(out, mcp_cap_new("FsCap",      "fs",     "core",  1, true,  "Full filesystem authority"));
-    out = list_push(out, mcp_cap_new("ProcessCap", "process","core",  0, true,  "Spawn child process"));
-    out = list_push(out, mcp_cap_new("SysCap",     "sys",    "core",  0, true,  "Execute system command"));
-    out = list_push(out, mcp_cap_new("NetCap",     "net",    "core",  0, true,  "Raw socket / DNS"));
-    out = list_push(out, mcp_cap_new("HttpCap",    "http",   "net",   1, true,  "HTTP request"));
-    out = list_push(out, mcp_cap_new("TcpCap",     "tcp",    "net",   2, true,  "TCP connect"));
-    out = list_push(out, mcp_cap_new("UdpCap",     "udp",    "net",   1, true,  "UDP bind/send"));
-    out = list_push(out, mcp_cap_new("BindCap",    "tcp",    "net",   1, true,  "Bind a listening port or unix socket"));
-    out = list_push(out, mcp_cap_new("EnvCap",     "env",    "core",  0, true,  "Read environment variables"));
-    out = list_push(out, mcp_cap_new("TimeCap",    "time",   "core",  0, true,  "Monotonic clock access"));
-    out = list_push(out, mcp_cap_new("RandCap",    "rand",   "core",  0, true,  "Cryptographic randomness"));
-    out = list_push(out, mcp_cap_new("AllocCap",   "mem",    "core",  0, true,  "Heap allocation"));
+    out = list_push(out, mcp_cap_new("FsReadCap",  "fs",   "core", 1, true, "Read filesystem"));
+    out = list_push(out, mcp_cap_new("FsWriteCap", "fs",   "core", 1, true, "Write filesystem"));
+    out = list_push(out, mcp_cap_new("NetCap",     "net",  "core", 0, true, "Raw network"));
+    out = list_push(out, mcp_cap_new("TcpCap",     "net",  "core", 2, true, "TCP"));
+    out = list_push(out, mcp_cap_new("UdpCap",     "net",  "core", 1, true, "UDP"));
+    out = list_push(out, mcp_cap_new("SysCap",     "sys",  "core", 0, true, "System command"));
+    out = list_push(out, mcp_cap_new("ProcessCap", "proc", "core", 0, true, "Spawn process"));
+    out = list_push(out, mcp_cap_new("EnvCap",     "env",  "core", 0, true, "Environment"));
+    out = list_push(out, mcp_cap_new("TimeCap",    "time", "core", 0, true, "Clock"));
+    out = list_push(out, mcp_cap_new("RandCap",    "rand", "core", 0, true, "Randomness"));
+    out = list_push(out, mcp_cap_new("AllocCap",   "mem",  "core", 0, true, "Heap"));
+    out = list_push(out, mcp_cap_new("ThreadCap",  "thr",  "core", 0, true, "Threads"));
+    out = list_push(out, mcp_cap_new("GpuCap",     "gpu",  "hw",   0, true, "GPU"));
+    out = list_push(out, mcp_cap_new("FfiCap",     "ffi",  "core", 0, true, "Foreign function"));
     return out;
 }
 
 pub fn mcp_graph_canonical_boards() -> List[McpBoard] {
     let mut out: List[McpBoard] = list_new();
-    out = list_push(out, mcp_board_new("START",       "openOODA/START.oot",       "Quick start, bootstrap, and developer workflow", 1));
-    out = list_push(out, mcp_board_new("RULES",       "openOODA/RULES.oot",       "Zero-trust axioms, non-negotiable invariant rules", 2));
-    out = list_push(out, mcp_board_new("NORTHSTAR",   "openOODA/NORTHSTAR.oot",   "Long-term mission, design principles, sovereign ethos", 3));
-    out = list_push(out, mcp_board_new("MOONSHOTS",   "openOODA/MOONSHOTS.oot",   "Next-generation aspirations and moonshot initiatives", 4));
-    out = list_push(out, mcp_board_new("ROADMAP",     "openOODA/ROADMAP.oot",     "Prioritized milestones and timeline", 5));
-    out = list_push(out, mcp_board_new("SHIPPED",     "openOODA/SHIPPED.oot",     "Verified delivered milestones", 6));
-    out = list_push(out, mcp_board_new("FORMAT",      "openOODA/FORMAT.oot",      "Syntactic styles, 256-line limits, header specs", 7));
-    out = list_push(out, mcp_board_new("SECURITY",    "openOODA/SECURITY.oot",    "Threat models, constant-time guarantees, fail-closed ops", 8));
-    out = list_push(out, mcp_board_new("WORKFLOW",    "openOODA/WORKFLOW.oot",    "Branching, merge protocol, release sealing", 9));
-    out = list_push(out, mcp_board_new("QUICKREF",    "openOODA/QUICKREF.oot",    "Developer cheat sheet and CLI flags", 10));
-    out = list_push(out, mcp_board_new("CONSTRAINTS", "openOODA/CONSTRAINTS.oot", "Memory budgets, runtime bounds, banned imports", 11));
-    out = list_push(out, mcp_board_new("STRUCTURE_EM","openOODA/STRUCTURE_EM.oot","EM multi-agent swarm architecture", 12));
-    out = list_push(out, mcp_board_new("REDTEAM",     "openOODA/REDTEAM.oot",     "Adversarial falsification and fuzz harnesses", 13));
+    out = list_push(out, mcp_board_new("ANCHOR",    "ANCHOR.oo",                                  "Agent front door", 1));
+    out = list_push(out, mcp_board_new("RULES",     "RULES.oot",                                   "23 laws", 2));
+    out = list_push(out, mcp_board_new("NORTHSTAR", "NORTHSTAR.oot",                               "Architecture north star", 3));
+    out = list_push(out, mcp_board_new("RFC-0001",  "rfcs/0001-capability-security.oot",           "Capability security", 4));
+    out = list_push(out, mcp_board_new("RFC-0002",  "rfcs/0002-design-by-contract.oot",            "Design by contract", 5));
+    out = list_push(out, mcp_board_new("RFC-0003",  "rfcs/0003-file-format.oot",                   "File format", 6));
+    out = list_push(out, mcp_board_new("RFC-0004",  "rfcs/0004-engineering-model.oot",             "Engineering model", 7));
+    out = list_push(out, mcp_board_new("RFC-0005",  "rfcs/0005-tactical-subsystem-template.oot",   "Subsystem template", 8));
+    out = list_push(out, mcp_board_new("RFC-0006",  "rfcs/0006-versioning-and-release-protocol.oot","Auto-release", 9));
+    out = list_push(out, mcp_board_new("REDTEAM",   "practices/8d-red-team.oot",                   "8D red team", 10));
+    out = list_push(out, mcp_board_new("WORKFLOW",  "practices/ooda-workflow.oot",                 "OODA workflow", 11));
+    out = list_push(out, mcp_board_new("RELEASE",   "practices/release.oot",                       "Release practice", 12));
     return out;
 }
-// F-04: per-tool cap table. Each tool declares its required cap bitmask
-// against the 14-bit surface. Tools not listed here are unknown.
 
-// N-01: was 6 axes (datapath/hermetic/temporal/drag/semantic/integrity) — these were
-// architectural concepts, NOT the redteam gates. The 8D redteam fires subversion/
-// exhaustion/obfuscation/injection/replay/traversal/escalation/integrity. The graph
-// must show the 8 redteam gates the client will see, not a different vocabulary.
-// Names and dimensions now match mcp_redteam.oo redteam_gate_*() exactly.
 pub fn mcp_graph_canonical_gates() -> List[McpRedteamGate] {
     let mut out: List[McpRedteamGate] = list_new();
-    out = list_push(out, mcp_gate_new("subversion",   1, "capability forgery rejected",       20));
-    out = list_push(out, mcp_gate_new("exhaustion",   2, "bounded resource state",            20));
-    out = list_push(out, mcp_gate_new("obfuscation",  3, "unicode/canonical-name exact match", 15));
-    out = list_push(out, mcp_gate_new("injection",    4, "regex-special method rejected",     15));
-    out = list_push(out, mcp_gate_new("replay",       5, "duplicate id rejected with -32603", 15));
-    out = list_push(out, mcp_gate_new("traversal",    6, "out-of-canonical-URI rejected",     15));
-    out = list_push(out, mcp_gate_new("escalation",   7, "missing cap rejected with -32603",  15));
-    out = list_push(out, mcp_gate_new("integrity",    8, "tampered SHA rejected",             15));
+    out = list_push(out, mcp_gate_new("subversion",  1, "forged cap bit rejected", 20));
+    out = list_push(out, mcp_gate_new("exhaustion",  2, "rate window blocks overflow", 20));
+    out = list_push(out, mcp_gate_new("obfuscation", 3, "unknown tool name rejected", 15));
+    out = list_push(out, mcp_gate_new("injection",   4, "method is exact, not a pattern", 15));
+    out = list_push(out, mcp_gate_new("replay",      5, "duplicate id rejected", 15));
+    out = list_push(out, mcp_gate_new("traversal",   6, "non-canonical URI rejected", 15));
+    out = list_push(out, mcp_gate_new("escalation",  7, "missing FsReadCap rejected", 15));
+    out = list_push(out, mcp_gate_new("integrity",   8, "unknown token returns -1", 15));
     return out;
 }
 
-// F-04: per-tool cap table. Each tool declares its required cap bitmask.
-// Tiers 1-4 (blue ocean): 18 additional tools. Most are 0-cap (in-memory / substrate). summarize_board and audit_compact need FsReadCap / FsWriteCap respectively.
 pub fn mcp_graph_canonical_tool_caps() -> List[McpToolCap] {
     let mut out: List[McpToolCap] = list_new();
-    out = list_push(out, McpToolCap { tool: "get_capability_graph",         required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "get_orientation",              required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "read_board",                   required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "refresh_dynamic_graph",        required_caps: 2 });
-    out = list_push(out, McpToolCap { tool: "get_audit_log",                required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "get_board_index",              required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "summarize_board",              required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "compress_orient",              required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "get_context_budget",           required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "estimate_chars",               required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "get_ooda_phase",               required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "get_decision_journal",         required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "get_redteam_realtime",         required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "get_session_diagnostics",      required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "get_format_constraints",       required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "validate_codex_format",        required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "get_northstar",                required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "get_security_threat_model",    required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "get_redteam_methodology",      required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "get_workflow_protocol",        required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "get_em_swarm",                 required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "get_milestone_status",         required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "audit_compact",                required_caps: 2 });
+    out = list_push(out, McpToolCap { tool: "get_capability_graph",    required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "get_orientation",         required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "read_board",              required_caps: 1 });
+    out = list_push(out, McpToolCap { tool: "get_audit_log",           required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "get_board_index",         required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "summarize_board",         required_caps: 1 });
+    out = list_push(out, McpToolCap { tool: "compress_orient",         required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "get_context_budget",      required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "estimate_chars",          required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "get_ooda_phase",          required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "get_decision_journal",    required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "get_redteam_realtime",    required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "get_session_diagnostics", required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "get_format_constraints",  required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "validate_codex_format",   required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "get_northstar",           required_caps: 1 });
+    out = list_push(out, McpToolCap { tool: "get_rules",               required_caps: 1 });
+    out = list_push(out, McpToolCap { tool: "get_rfc",                 required_caps: 1 });
+    out = list_push(out, McpToolCap { tool: "get_practice",            required_caps: 1 });
+    out = list_push(out, McpToolCap { tool: "audit_compact",           required_caps: 0 });
     return out;
 }
-pub fn mcp_graph_push_tool_cap(g: &mut McpGraph, t: McpToolCap) { g.tool_caps = list_push(g.tool_caps, t); }
 
-pub fn mcp_graph_canonical(version: String, floor: Int, thrust: Int, patch: Int, gold_sha: String) -> McpGraph {
-    let mut g: McpGraph = mcp_graph_new(version, floor, thrust, patch, gold_sha);
+pub fn mcp_graph_canonical(gold_sha: String, board_root: String) -> McpGraph {
+    let mut g: McpGraph = mcp_graph_new(gold_sha, board_root);
     let caps: List[McpCapability] = mcp_graph_canonical_caps();
     let mut i: Int = 0;
     while i < list_len(caps) { mcp_graph_push_cap(&mut g, list_get(caps, i)); i = i + 1; }
@@ -205,45 +174,40 @@ pub fn mcp_graph_canonical(version: String, floor: Int, thrust: Int, patch: Int,
     return g;
 }
 
-fn mcp_graph_cap_to_json(c: &McpCapability) -> String { let init_str: String = if c.init_required { "true" } else { "false" }; return "{\"token\":\"" + c.token + "\",\"kind\":\"" + c.kind + "\",\"layer\":\"" + c.layer + "\",\"params\":" + c.param_count.to_string() + ",\"initRequired\":" + init_str + ",\"description\":\"" + c.description + "\"}"; }
-fn mcp_graph_board_to_json(b: &McpBoard) -> String { return "{\"name\":\"" + b.name + "\",\"path\":\"" + b.path + "\",\"summary\":\"" + b.summary + "\",\"readPriority\":" + b.read_priority.to_string() + "}"; }
-fn mcp_graph_gate_to_json(r: &McpRedteamGate) -> String { return "{\"axis\":\"" + r.axis + "\",\"dimension\":" + r.dimension.to_string() + ",\"probe\":\"" + r.probe + "\",\"weight\":" + r.weight.to_string() + "}"; }
-fn mcp_graph_substrate_to_json(s: &McpSubstrate) -> String { let ras: String = if s.rasp_enabled { "true" } else { "false" }; let mtd: String = if s.mtd_enabled { "true" } else { "false" }; return "{\"simdLane\":\"" + s.simd_lane + "\",\"simdWidth\":" + s.simd_width.to_string() + ",\"rasp\":" + ras + ",\"mtd\":" + mtd + ",\"goldMasterSha256\":\"" + s.gold_master_sha256 + "\"}"; }
+fn mcp_graph_cap_to_json(c: &McpCapability) -> String {
+    let init_str: String = if c.init_required { "true" } else { "false" };
+    return "{\"token\":\"" + c.token + "\",\"kind\":\"" + c.kind + "\",\"layer\":\"" + c.layer + "\",\"params\":" + c.param_count.to_string() + ",\"initRequired\":" + init_str + ",\"description\":\"" + c.description + "\"}";
+}
+
+fn mcp_graph_board_to_json(b: &McpBoard) -> String {
+    return "{\"name\":\"" + b.name + "\",\"path\":\"" + b.path + "\",\"summary\":\"" + b.summary + "\",\"readPriority\":" + b.read_priority.to_string() + "}";
+}
+
+fn mcp_graph_gate_to_json(r: &McpRedteamGate) -> String {
+    return "{\"axis\":\"" + r.axis + "\",\"dimension\":" + r.dimension.to_string() + ",\"probe\":\"" + r.probe + "\",\"weight\":" + r.weight.to_string() + "}";
+}
 
 pub fn mcp_graph_to_json(g: &McpGraph) -> String {
     let mut caps_json: String = "";
     let mut i: Int = 0;
-    let cn: Int = list_len(g.capabilities);
-    while i < cn {
+    while i < list_len(g.capabilities) {
         if i > 0 { caps_json = caps_json + ","; }
-        let cap: McpCapability = list_get(g.capabilities, i);
-        caps_json = caps_json + mcp_graph_cap_to_json(&cap);
+        caps_json = caps_json + mcp_graph_cap_to_json(&list_get(g.capabilities, i));
         i = i + 1;
     }
     let mut brds_json: String = "";
     let mut j: Int = 0;
-    let bn: Int = list_len(g.boards);
-    while j < bn {
+    while j < list_len(g.boards) {
         if j > 0 { brds_json = brds_json + ","; }
-        let brd: McpBoard = list_get(g.boards, j);
-        brds_json = brds_json + mcp_graph_board_to_json(&brd);
+        brds_json = brds_json + mcp_graph_board_to_json(&list_get(g.boards, j));
         j = j + 1;
     }
     let mut gts_json: String = "";
     let mut k: Int = 0;
-    let gn: Int = list_len(g.redteam_gates);
-    while k < gn {
+    while k < list_len(g.redteam_gates) {
         if k > 0 { gts_json = gts_json + ","; }
-        let gt: McpRedteamGate = list_get(g.redteam_gates, k);
-        gts_json = gts_json + mcp_graph_gate_to_json(&gt);
+        gts_json = gts_json + mcp_graph_gate_to_json(&list_get(g.redteam_gates, k));
         k = k + 1;
     }
-    let sub_json: String = mcp_graph_substrate_to_json(&g.substrate);
-    let gf: Int = g.floor;
-    let gt: Int = g.thrust;
-    let gp: Int = g.patch;
-    let f: String = gf.to_string();
-    let t: String = gt.to_string();
-    let p: String = gp.to_string();
-    return "{\"version\":\"" + g.version + "\",\"floor\":" + f + ",\"thrust\":" + t + ",\"patch\":" + p + ",\"protocol\":\"" + g.protocol + "\",\"capabilities\":[" + caps_json + "],\"boards\":[" + brds_json + "],\"redteamGates\":[" + gts_json + "],\"substrate\":" + sub_json + "}";
+    return "{\"version\":\"" + g.version + "\",\"protocol\":\"" + g.protocol + "\",\"boardRoot\":\"" + g.board_root + "\",\"capabilities\":[" + caps_json + "],\"boards\":[" + brds_json + "],\"redteamGates\":[" + gts_json + "],\"goldMasterSha256\":\"" + g.substrate.gold_master_sha256 + "\"}";
 }

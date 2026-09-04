@@ -1,38 +1,97 @@
-// # MCP Tool Descriptor and Dispatch ◈ ZERO-DRAG
+// # MCP Tool Catalog
 //
-// Logline: Canonical home for the McpTool type and its dispatch. Pure data — no caps.
+// Logline: Name, schema, cap bitmask, list JSON, wrap envelope, and board read for the 20 tools.
 //
-// Setup: Imported by mcp_dispatch.oo and mcp/ANCHOR.oo. No side effects.
+// Setup: One catalog. Dispatch calls required_caps and wrap. Board paths join graph.board_root.
 //
 // Beats:
-//   1. mcp_tool_new: build a tool descriptor.
-//   2. mcp_tool_dispatch: match by tool name, return Ok or Err, no fallback.
+//   1. mcp_tool_required_caps reads the graph table; unknown is -1.
+//   2. mcp_tool_list_json advertises the 20 tools.
+//   3. mcp_tool_wrap builds the MCP content envelope.
+//   4. mcp_tool_read_board reads one board under FsReadCap.
 
-pub type McpTool = struct {
-  name: String,
-  argc: Int
-};
+import "engine/core/mcp_json.oo";
+import "engine/state/mcp_graph.oo";
 
-pub fn mcp_tool_new(name: String, argc: Int) -> McpTool {
-  return McpTool {
-    name: name,
-    argc: argc
-  };
+pub fn mcp_tool_required_caps(g: &McpGraph, tool_name: String) -> Int {
+    let tcs: List[McpToolCap] = g.tool_caps;
+    let n: Int = list_len(tcs);
+    let mut i: Int = 0;
+    while i < n {
+        let t: McpToolCap = list_get(tcs, i);
+        if t.tool == tool_name { return t.required_caps; }
+        i = i + 1;
+    }
+    return 0 - 1;
 }
 
-pub fn mcp_tool_dispatch(
-  t: McpTool,
-  args: List[String]
-) -> Result[String, String] {
-  let n: Int = list_len(args);
-  if n != t.argc {
-    return Err("argc mismatch");
-  }
-  if t.name == "ping" {
-    return Ok("pong");
-  }
-  if t.name == "echo" {
-    return Ok(list_get(args, 0));
-  }
-  return Err("unknown tool");
+pub fn mcp_tool_count() -> Int { return 20; }
+
+fn mcp_tool_entry(g: &McpGraph, name: String, desc: String, props: String, req: String) -> String {
+    let cap: Int = mcp_tool_required_caps(g, name);
+    return "{\"name\":\"" + mcp_json_escape(name) + "\",\"description\":\"" + mcp_json_escape(desc) + "\",\"inputSchema\":{\"type\":\"object\",\"properties\":" + props + ",\"required\":" + req + "},\"requiresCap\":" + cap.to_string() + "}";
+}
+
+pub fn mcp_tool_list_json(g: &McpGraph) -> String {
+    let a: String = mcp_tool_entry(g, "get_capability_graph", "Typed 14-cap graph", "{}", "[]");
+    let b: String = mcp_tool_entry(g, "get_orientation", "Orientation codex text", "{}", "[]");
+    let c: String = mcp_tool_entry(g, "read_board", "Read one governance board", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]");
+    let d: String = mcp_tool_entry(g, "get_audit_log", "Last N hash-chained audit entries", "{\"tail\":{\"type\":\"integer\"}}", "[]");
+    let e: String = mcp_tool_entry(g, "get_board_index", "List 12 governance boards", "{}", "[]");
+    let f: String = mcp_tool_entry(g, "summarize_board", "Read and truncate one board", "{\"name\":{\"type\":\"string\"},\"max_chars\":{\"type\":\"integer\"}}", "[\"name\"]");
+    let h: String = mcp_tool_entry(g, "compress_orient", "Truncate the codex", "{\"max_chars\":{\"type\":\"integer\"}}", "[]");
+    let i: String = mcp_tool_entry(g, "get_context_budget", "Session byte and cap snapshot", "{}", "[]");
+    let j: String = mcp_tool_entry(g, "estimate_chars", "Character count", "{\"text\":{\"type\":\"string\"}}", "[\"text\"]");
+    let k: String = mcp_tool_entry(g, "get_ooda_phase", "Current OODA phase", "{}", "[]");
+    let l: String = mcp_tool_entry(g, "get_decision_journal", "Last N substantive decisions", "{\"n\":{\"type\":\"integer\"}}", "[]");
+    let m: String = mcp_tool_entry(g, "get_redteam_realtime", "Live fire of 8 redteam gates", "{}", "[]");
+    let n: String = mcp_tool_entry(g, "get_session_diagnostics", "Session health snapshot", "{}", "[]");
+    let o: String = mcp_tool_entry(g, "get_format_constraints", "RFC-0003 file format rules", "{}", "[]");
+    let p: String = mcp_tool_entry(g, "validate_codex_format", "Check Academy header and line cap", "{\"text\":{\"type\":\"string\"}}", "[\"text\"]");
+    let q: String = mcp_tool_entry(g, "get_northstar", "Read NORTHSTAR.oot", "{}", "[]");
+    let r: String = mcp_tool_entry(g, "get_rules", "Read RULES.oot", "{}", "[]");
+    let s: String = mcp_tool_entry(g, "get_rfc", "Read one RFC by board name", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]");
+    let t: String = mcp_tool_entry(g, "get_practice", "Read one practice by board name", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]");
+    let u: String = mcp_tool_entry(g, "audit_compact", "Keep last N audit entries", "{\"keep_last_n\":{\"type\":\"integer\"}}", "[]");
+    return "{\"tools\":[" + a + "," + b + "," + c + "," + d + "," + e + "," + f + "," + h + "," + i + "," + j + "," + k + "," + l + "," + m + "," + n + "," + o + "," + p + "," + q + "," + r + "," + s + "," + t + "," + u + "]}";
+}
+
+pub fn mcp_tool_wrap(text: String) -> String {
+    return "{\"content\":[{\"type\":\"text\",\"text\":\"" + mcp_json_escape(text) + "\"}]}";
+}
+
+pub fn mcp_tool_board_path(g: &McpGraph, rel: String) -> String {
+    if chars_len(g.board_root) == 0 { return rel; }
+    return g.board_root + "/" + rel;
+}
+
+pub fn mcp_tool_read_board(fs: &FsReadCap, g: &McpGraph, board_name: String) -> String {
+    let brds: List[McpBoard] = g.boards;
+    let n: Int = list_len(brds);
+    let mut i: Int = 0;
+    while i < n {
+        let b: McpBoard = list_get(brds, i);
+        if b.name == board_name {
+            let path: String = mcp_tool_board_path(g, b.path);
+            let rr: Result[String, String] = read_file(fs, path);
+            if rr.is_err() { return mcp_tool_wrap("{\"error\":\"cannot read\",\"path\":\"" + path + "\"}"); }
+            let text: String = match rr { Ok(s) => s, Err(_) => "" };
+            return mcp_tool_wrap("# " + b.name + "\nPath: " + path + "\nSummary: " + b.summary + "\n\n" + text);
+        }
+        i = i + 1;
+    }
+    return mcp_tool_wrap("{\"error\":\"board not found\",\"name\":\"" + board_name + "\"}");
+}
+
+pub fn mcp_tool_arg_string(args: String, key: String, default: String) -> String {
+    let v: String = mcp_json_extract_string(args, key);
+    if chars_len(v) == 0 { return default; }
+    return v;
+}
+
+pub fn mcp_tool_arg_int(args: String, key: String, default: Int) -> Int {
+    let raw: String = mcp_json_extract_raw(args, key);
+    if chars_len(raw) == 0 { return default; }
+    if !mcp_json_is_nonneg_int_token(raw) { return default; }
+    return mcp_json_extract_int(args, key);
 }

@@ -1,17 +1,24 @@
-// # G10 Active Redteam Probes + G11 Self-Certification
+// # MCP 8D Red Team Fires
 //
-// Logline: Fire each of the 8 redteam gates; then self-certify the 14 capability tokens against actual use.
+// Logline: Fire eight hostile probes against dispatch, session, and the cap map. Each fire can fail.
 //
-// Setup: 8 fire_* functions return a JSON result string; mcp_redteam_run_all fires them all and records each in the dynamic graph. mcp_g11_self_certify actually exercises the caps.
+// Setup: No skip. No BindCap. No dynamic-graph quarantine. Probes call the real functions.
 //
-// Beats: G10 fires 8 gates; G11 certifies 14 caps under FsRead/Write/Env/Bind.
+// Beats:
+//   1. e1 forged cap bit.
+//   2. e2 rate-window exhaustion.
+//   3. e3 unknown tool name.
+//   4. e4 method is exact.
+//   5. e5 duplicate id.
+//   6. e6 non-canonical URI.
+//   7. e7 missing FsReadCap.
+//   8. e8 unknown token.
 
 import "engine/core/mcp_session.oo";
-import "engine/state/mcp_graph_dynamic.oo";
-import "engine/tool/mcp_dynamic_ops.oo";
-import "engine/state/mcp_real_caps.oo";
-import "std/net/unix_socket.oo";
+import "engine/core/mcp_dispatch.oo";
 import "engine/state/mcp_cap.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/tool/mcp_tool.oo";
 
 pub fn redteam_gate_subversion()  -> Int { return 1; }
 pub fn redteam_gate_exhaustion()  -> Int { return 2; }
@@ -27,61 +34,65 @@ fn mcp_redteam_result(gate: Int, name: String, pass: Bool, detail: String) -> St
     return "{\"gate\":" + gate.to_string() + ",\"name\":\"" + name + "\",\"result\":\"" + s + "\",\"detail\":\"" + detail + "\"}";
 }
 
-// e1 subversion: forged cap bit (bit 20, past the 14-bit surface) must be rejected.
 pub fn mcp_redteam_fire_subversion() -> String {
     let r: Int = mcp_dispatch_cap_audit("resources/read", 1 << 20);
     let ok: Bool = r < 0;
     return mcp_redteam_result(redteam_gate_subversion(), "subversion", ok, if ok { "forged bit 20 rejected" } else { "forged bit 20 accepted" });
 }
 
-// e2 exhaustion: redteam gate surface is bounded at 8. Drift = fail.
 pub fn mcp_redteam_fire_exhaustion() -> String {
-    let n: Int = redteam_gate_integrity();
-    let ok: Bool = n == 8;
-    return mcp_redteam_result(redteam_gate_exhaustion(), "exhaustion", ok, if ok { "8 gates bounded" } else { "gate count drift" });
+    let mut s: McpSession = mcp_session_new();
+    s.request_seq = 1;
+    let mut i: Int = 0;
+    let mut blocked: Bool = false;
+    while i < 101 {
+        if !mcp_session_check_rate(&mut s, 100, 1000) { blocked = true; }
+        i = i + 1;
+    }
+    return mcp_redteam_result(redteam_gate_exhaustion(), "exhaustion", blocked, if blocked { "101st request blocked" } else { "rate window did not block" });
 }
 
-// e3 obfuscation: unicode method must not match a canonical method.
 pub fn mcp_redteam_fire_obfuscation() -> String {
-    let o: McpOrient = mcp_dispatch_orient("Méthode", "{}");
-    let ok: Bool = o.extracted == false;
-    return mcp_redteam_result(redteam_gate_obfuscation(), "obfuscation", ok, if ok { "unicode method ignored" } else { "unicode method accepted" });
+    let g: McpGraph = mcp_graph_canonical("", "");
+    let bad: Int = mcp_tool_required_caps(&g, "get_orientation_forged");
+    let good: Int = mcp_tool_required_caps(&g, "get_orientation");
+    let ok: Bool = bad == 0 - 1 && good == 0;
+    return mcp_redteam_result(redteam_gate_obfuscation(), "obfuscation", ok, if ok { "unknown name rejected" } else { "unknown name accepted" });
 }
 
-// e4 injection: regex-special method must be treated as literal.
 pub fn mcp_redteam_fire_injection() -> String {
     let o: McpOrient = mcp_dispatch_orient("tools/call.*", "{}");
     let ok: Bool = o.extracted == false;
-    return mcp_redteam_result(redteam_gate_injection(), "injection", ok, if ok { "regex-special method ignored" } else { "regex-special method accepted" });
+    return mcp_redteam_result(redteam_gate_injection(), "injection", ok, if ok { "pattern method ignored" } else { "pattern method accepted" });
 }
 
-// e5 replay: redteam/probe method must be denied at every tier.
 pub fn mcp_redteam_fire_replay() -> String {
-    let ok: Bool = mcp_session_tier_allows(0, "redteam/probe") == false && mcp_session_tier_allows(1, "redteam/probe") == false;
-    return mcp_redteam_result(redteam_gate_replay(), "replay", ok, if ok { "redteam/probe denied all tiers" } else { "redteam/probe admitted" });
+    let mut s: McpSession = mcp_session_new();
+    let first: Bool = mcp_session_seen_id(&mut s, "1");
+    let second: Bool = mcp_session_seen_id(&mut s, "1");
+    let ok: Bool = first == false && second == true;
+    return mcp_redteam_result(redteam_gate_replay(), "replay", ok, if ok { "duplicate id blocked" } else { "duplicate id accepted" });
 }
 
-// e6 traversal: file:// URI must not be admitted as canonical.
 pub fn mcp_redteam_fire_traversal() -> String {
     let ok: Bool = mcp_orient_uri_is_canonical("file:///etc/passwd") == false;
     return mcp_redteam_result(redteam_gate_traversal(), "traversal", ok, if ok { "file:// rejected" } else { "file:// accepted" });
 }
 
-// e7 escalation: missing FsReadCap bit must be denied with -32603.
 pub fn mcp_redteam_fire_escalation() -> String {
     let r: Int = mcp_dispatch_cap_audit("resources/read", 0);
     let ok: Bool = r == 0 - 32603;
     return mcp_redteam_result(redteam_gate_escalation(), "escalation", ok, if ok { "missing FsReadCap rejected" } else { "missing cap accepted" });
 }
 
-// e8 integrity: unknown cap token must return -1 from the 14-bit map.
 pub fn mcp_redteam_fire_integrity() -> String {
     let b: Int = mcp_token_to_bit("NotACap");
-    let ok: Bool = b == 0 - 1;
-    return mcp_redteam_result(redteam_gate_integrity(), "integrity", ok, if ok { "unknown token rejected" } else { "unknown token accepted" });
+    let fs: Int = mcp_token_to_bit("FsCap");
+    let ffi: Int = mcp_token_to_bit("FfiCap");
+    let ok: Bool = b == 0 - 1 && fs == 0 - 1 && ffi == 13;
+    return mcp_redteam_result(redteam_gate_integrity(), "integrity", ok, if ok { "unknown and ghost tokens rejected" } else { "token map drifted" });
 }
 
-// Fire a single gate by id; returns the result string.
 pub fn mcp_redteam_fire(gate: Int) -> String {
     if gate == redteam_gate_subversion()  { return mcp_redteam_fire_subversion(); }
     if gate == redteam_gate_exhaustion()  { return mcp_redteam_fire_exhaustion(); }
@@ -94,161 +105,13 @@ pub fn mcp_redteam_fire(gate: Int) -> String {
     return mcp_redteam_result(gate, "unknown", false, "gate id not recognised");
 }
 
-// Fire all 8 gates in order, return concatenated JSON results, and record each in the dynamic graph.
-pub fn mcp_redteam_run_all(g: &mut McpDynamicGraph, epoch: Int) -> String {
-    let mut out: String = "";
-    let mut gate: Int = 1;
-    while gate <= 8 {
-        let r: String = mcp_redteam_fire(gate);
-        out = out + r + "\n";
-        let name: String = "gate-" + gate.to_string();
-        mcp_dynamic_record(g, dynamic_kind_method(), name, epoch);
-        gate = gate + 1;
-    }
-    return out;
-}
-
-fn mcp_g11_cert_line(token: String, pass: Bool, detail: String) -> String {
-    let s: String = if pass { "pass" } else { "fail" };
-    return "{\"token\":\"" + token + "\",\"result\":\"" + s + "\",\"detail\":\"" + detail + "\"}";
-}
-
-pub fn mcp_g11_certify_fsread(fr: &FsReadCap, probe: String) -> String {
-    if chars_len(probe) == 0 { return mcp_g11_cert_line("FsReadCap", false, "no probe path supplied"); }
-    if !path_exists(fr, probe) { return mcp_g11_cert_line("FsReadCap", false, "probe file missing: " + probe); }
-    let rr: Result[String, String] = read_file(fr, probe);
-    if rr.is_err() { return mcp_g11_cert_line("FsReadCap", false, "read_file errored on " + probe); }
-    return mcp_g11_cert_line("FsReadCap", true, "real read of " + probe);
-}
-
-pub fn mcp_g11_certify_fswrite(fw: &FsWriteCap, fr: &FsReadCap) -> String {
-    let probe: String = ".ooda-cache/g11-probe.txt";
-    let wr: Result[Void, String] = write_file(fw, probe, "g11-probe");
-    if wr.is_err() { return mcp_g11_cert_line("FsWriteCap", false, "write_file errored"); }
-    let rr: Result[String, String] = read_file(fr, probe);
-    if rr.is_err() { return mcp_g11_cert_line("FsWriteCap", false, "readback errored"); }
-    return mcp_g11_cert_line("FsWriteCap", true, "write+readback of probe file");
-}
-
-pub fn mcp_g11_certify_env(env: &EnvCap) -> String {
-    let r: Result[String, String] = env_get(env, "HOME");
-    if r.is_ok() {
-        let v: String = match r { Ok(s) => s, Err(_) => "" };
-        if chars_len(v) > 0 { return mcp_g11_cert_line("EnvCap", true, "HOME env var present"); }
-    }
-    return mcp_g11_cert_line("EnvCap", false, "HOME env var empty");
-}
-
-// S-06: real bind cert. We actually call unix_socket_bind under &BindCap
-// against a tmp path under .ooda-cache/. If the runtime lacks the builtin
-// the call returns Err and the cert reports honest fail rather than fake-pass.
-pub fn mcp_g11_certify_bind(bind: &BindCap, fw: &FsWriteCap) -> String {
-    let tmp_path: String = ".ooda-cache/g11-bind.sock";
-    let _: Result[Void, String] = oo_fs_mkdir(fw, ".ooda-cache");
-    let r: Result[UnixSocketHandle, String] = unix_socket_bind(bind, fw, tmp_path);
-    if r.is_err() {
-        let e: String = match r { Ok(_) => "", Err(m) => m };
-        return mcp_g11_cert_line("BindCap", false, "unix_socket_bind errored: " + e);
-    }
-    return mcp_g11_cert_line("BindCap", true, "real unix_socket_bind to " + tmp_path);
-}
-
-pub fn mcp_g11_certify_sys(proc: &ProcessCap) -> String {
-    let r: Result[String, String] = sys_exec(proc, "true", "");
-    if r.is_ok() { return mcp_g11_cert_line("ProcessCap", true, "sys_exec('true') returned ok"); }
-    return mcp_g11_cert_line("ProcessCap", false, "sys_exec('true') errored");
-}
-
-pub fn mcp_g11_certify_skip(token: String) -> String {
-    return mcp_g11_cert_line(token, true, "no real test path; cap declared");
-}
-
-// G11 self-certify all 14 caps. Returns a JSON array of per-cap results.
-// Each cap is exercised against the real runtime; caps without a test path
-// are reported as skip=true (the cap is *declared*, just not exercised here).
-// codex_path is the resolved LLMS.oot path the server already has; it is the
-// real FsReadCap probe so the cert is bound to the live substrate, not a
-// hardcoded dev-machine path.
-pub fn mcp_g11_self_certify(fr: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, bind: &BindCap, codex_path: String) -> String {
+pub fn mcp_redteam_run_all_json() -> String {
     let mut out: String = "[";
-    out = out + mcp_g11_certify_fsread(fr, codex_path) + ",";
-    out = out + mcp_g11_certify_fswrite(fw, fr) + ",";
-    out = out + mcp_g11_certify_env(env) + ",";
-    out = out + mcp_g11_certify_bind(bind, fw) + ",";
-    out = out + mcp_certify_real("SysCap", runtime_sys_probe()) + ",";
-    out = out + mcp_certify_real("ProcessCap", runtime_process_probe()) + ",";
-    out = out + mcp_certify_real("NetCap", runtime_net_probe()) + ",";
-    out = out + mcp_certify_real("HttpCap", runtime_http_probe()) + ",";
-    out = out + mcp_certify_real("TcpCap", runtime_tcp_probe()) + ",";
-    out = out + mcp_certify_real("UdpCap", runtime_udp_probe()) + ",";
-    out = out + mcp_certify_real("TimeCap", runtime_time_probe()) + ",";
-    out = out + mcp_certify_real("RandCap", runtime_rand_probe()) + ",";
-    out = out + mcp_certify_real("AllocCap", runtime_alloc_probe()) + ",";
-    out = out + mcp_certify_real("FsCap", runtime_fs_probe()) + "]";
-    return out;
-}
-
-// G15: redteam auto-recovery. Parse the fire result, and on failure:
-//   1. Remove all dynamic-graph entries for the failing gate (clear from graph).
-//   2. Record a "g15-recovered-<gate>" marker so the system remembers it quarantined the failure.
-//   3. Emit a JSON notification describing the recovery action.
-// On a passing result, return "" (no recovery needed).
-pub fn mcp_redteam_recover(g: &mut McpDynamicGraph, result_str: String) -> String {
-    if str_contains(result_str, "\"result\":\"pass\"") { return ""; }
-    if !str_contains(result_str, "\"result\":\"fail\"") { return ""; }
-    let name_pos: Int = str_index_of(result_str, "\"name\":\"");
-    if name_pos < 0 { return ""; }
-    let start: Int = name_pos + 8;
-    let tail: String = str_slice(result_str, start, chars_len(result_str));
-    let name_end: Int = str_index_of(tail, "\"");
-    if name_end < 0 { return ""; }
-    let gate_name: String = str_slice(tail, 0, name_end);
-    // Clear all entries whose name matches the failing gate.
-    let entries: List[McpUsageEntry] = g.entries;
-    let n: Int = list_len(entries);
-    let mut kept: List[McpUsageEntry] = list_new();
-    let mut i: Int = 0;
-    while i < n {
-        let e: McpUsageEntry = list_get(entries, i);
-        if e.name != gate_name { kept = list_push(kept, e); }
-        i = i + 1;
-    }
-    g.entries = kept;
-    // Quarantine marker so the dynamic graph records that G15 quarantined the gate.
-    mcp_dynamic_record(g, dynamic_kind_unknown(), "g15-recovered-" + gate_name, 0);
-    return "{\"g15\":\"recovered\",\"gate\":\"" + gate_name + "\",\"action\":\"quarantined\",\"notification\":\"message\"}";
-}
-
-// S-09: E-M Ps regress veto. This is NOT a gate (the 8D redteam has only
-// e1-e8; gate id 10 was a numeric lie). It is a generation-level veto on
-// Ps regression. Returns a plain JSON string with no mcp_redteam_result shape.
-pub fn mcp_redteam_ps_regress_veto(ps_old: Int, ps_new: Int) -> String {
-    if ps_old == 0 { return "{\"veto\":\"ps\",\"result\":\"ok\",\"detail\":\"ps_old zero no veto\"}"; }
-    let thr: Int = (ps_old * 95) / 100;
-    if ps_new < thr { return "{\"veto\":\"ps\",\"result\":\"veto\",\"detail\":\"ps regressed " + ps_old.to_string() + "->" + ps_new.to_string() + "\"}"; }
-    return "{\"veto\":\"ps\",\"result\":\"ok\",\"detail\":\"ps ok " + ps_old.to_string() + "->" + ps_new.to_string() + "\"}";
-}
-
-pub fn mcp_redteam_ps_check(g: &mut McpDynamicGraph, ps_old: Int, ps_new: Int, epoch: Int) -> String {
-    let r: String = mcp_redteam_ps_regress_veto(ps_old, ps_new);
-    if str_contains(r, "\"result\":\"veto\"") { mcp_dynamic_record(g, dynamic_kind_method(), "ps-veto", epoch); }
-    return r;
-}
-
-// G15: run recovery across all 8 gates. Concatenates the JSON notifications for
-// every gate that failed; on an all-pass run, returns "". If any gate was
-// quarantined, G17 C re-folds the dynamic graph at `epoch` so the fold output
-// stops mentioning the quarantined name.
-pub fn mcp_redteam_run_all_recovers(g: &mut McpDynamicGraph, epoch: Int) -> String {
-    let mut out: String = "";
     let mut gate: Int = 1;
-    let mut recovered: Int = 0;
     while gate <= 8 {
-        let r: String = mcp_redteam_fire(gate);
-        let rec: String = mcp_redteam_recover(g, r);
-        if chars_len(rec) > 0 { out = out + rec + "\n"; recovered = 1; }
+        if gate > 1 { out = out + ","; }
+        out = out + mcp_redteam_fire(gate);
         gate = gate + 1;
     }
-    if recovered == 1 { let _ = mcp_refold_after_quarantine(g, epoch); }
-    return out;
+    return out + "]";
 }

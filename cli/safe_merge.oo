@@ -1,13 +1,13 @@
-// # Sovereign ooda mcp-merge CLI command
+// # MCP mcp-merge CLI
 //
-// Logline: Idempotently inject the ooda MCP server entry into an agent-tool JSON config under FsReadCap+FsWriteCap.
+// Logline: Inject the ooda MCP entry into an agent-tool JSON config under FsReadCap+FsWriteCap.
 //
-// Setup: The shell install scripts call `ooda mcp-merge <file>` and read the exit code. 0 = no-op, 1 = written, 2 = error.
+// Setup: Exit 0 = already present. Exit 1 = written. Exit 2 = error. No silent remap of 1 to 0.
 //
 // Beats:
-//   1. Parse argv for the target file path.
-//   2. Call safe_mcp_merge_file under FsReadCap+FsWriteCap.
-//   3. Print a one-line status and exit with the matching code.
+//   1. Require a path.
+//   2. Call safe_mcp_merge_file.
+//   3. Exit with the file-level code.
 
 import "safe_merge_core.oo";
 
@@ -22,21 +22,19 @@ fn cmd_safe_mcp_merge_arg_positional(args: List[String]) -> String {
     return "";
 }
 
-pub fn run_ooda_mcp_merge(fr: &FsReadCap, fw: &FsWriteCap, args: List[String]) {
+pub fn run_ooda_mcp_merge(fr: &FsReadCap, fw: &FsWriteCap, args: List[String]) -> Result[Int, String] {
     let path: String = cmd_safe_mcp_merge_arg_positional(args);
     if chars_len(path) == 0 {
-        println("usage: ooda mcp-merge <config.json>");
-        process_exit(2);
+        return Err("usage: mcp mcp-merge <config.json>");
     }
     let rc: Int = safe_mcp_merge_file(fr, fw, path);
     if rc == 0 {
         println("noop\t" + path);
-        process_exit(0);
+        return Ok(0);
     }
     if rc == 1 {
         println("merged\t" + path);
-        process_exit(0);
+        return Ok(1);
     }
-    println("error\t" + path);
-    process_exit(2);
+    return Err("mcp-merge failed: " + path);
 }

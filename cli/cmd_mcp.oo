@@ -1,21 +1,16 @@
 // # MCP Server CLI Command
 //
-// Logline: Routes `mcp [--stdio | --file <path> | --socket <path>]` into the transport-driven dispatcher under &BindCap+&FsWriteCap+&FsReadCap+&EnvCap.
+// Logline: Route `mcp [--stdio | --file <path>]` into the transport dispatcher under FsWriteCap+FsReadCap+EnvCap.
 //
-// Setup: &BindCap+&FsWriteCap+&FsReadCap+&EnvCap drive transport. Defaults to stdio when no flag is given.
+// Setup: Defaults to stdio. --socket is absent. OODACODEX is required by the server.
 //
 // Beats:
-//   1. Parse argv for --stdio, --file, --socket, or --help.
-//   2. Construct the matching McpTransport (stdio, file, or socket).
-//   3. Run engine_server_run and emit the framed output to stdout.
-//
-// ## CAPs
-//   &BindCap:       Gossip peer transport export.
-//   &FsWriteCap:    Persist dynamic graph state and lineage records.
-//   &FsReadCap:     Read codex and dynamic graph state.
-//   &EnvCap:        Resolve $OODACODEX override.
+//   1. Parse --stdio, --file, or --help.
+//   2. Reject unknown flags and missing paths.
+//   3. Run mcp_server_run and print framed output.
 
-import "engine/ANCHOR.oo";
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_transport.oo";
 
 fn cmd_mcp_has_flag(args: List[String], flag: String) -> Bool {
     let n: Int = list_len(args);
@@ -37,45 +32,41 @@ fn cmd_mcp_arg_value(args: List[String], flag: String) -> String {
     return "";
 }
 
-pub fn run_ooda_mcp(bind: &BindCap, fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[String]) {
+pub fn run_ooda_mcp(fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
     if cmd_mcp_has_flag(args, "--help") || cmd_mcp_has_flag(args, "-h") {
-        println("mcp — sovereign MCP stdio|file|socket server");
-        println("usage: mcp [--stdio | --file <path> | --socket <path>]");
-        return;
+        println("mcp — openOODA MCP stdio|file server");
+        println("usage: mcp [--stdio | --file <path>]");
+        println("requires: OODACODEX=<path-to-codex>");
+        return Ok(0);
     }
     let has_stdio: Bool = cmd_mcp_has_flag(args, "--stdio");
     let has_file: Bool = cmd_mcp_has_flag(args, "--file");
-    let has_sock: Bool = cmd_mcp_has_flag(args, "--socket");
-    let cnt: Int = (if has_stdio {1} else {0}) + (if has_file {1} else {0}) + (if has_sock {1} else {0});
-    if cnt > 1 {
-        println("ERR\tcli\tmcp: --stdio/--file/--socket are mutually exclusive");
-        process_exit(1);
+    if has_stdio && has_file {
+        return Err("mcp: --stdio and --file are mutually exclusive");
     }
     let n: Int = list_len(args);
     let mut i: Int = 0;
     while i < n {
         let a: String = list_get(args, i);
-        if a == "--stdio" || a == "--file" || a == "--socket" {
-            if a == "--file" || a == "--socket" {
-                if i + 1 >= n || str_starts_with(list_get(args, i + 1), "--") {
-                    println("ERR\tcli\tmcp: " + a + " requires <path>");
-                    process_exit(1);
-                }
-                i = i + 2;
-                continue;
+        if a == "--stdio" { i = i + 1; continue; }
+        if a == "--file" {
+            if i + 1 >= n || str_starts_with(list_get(args, i + 1), "--") {
+                return Err("mcp: --file requires <path>");
             }
-        } else if str_starts_with(a, "--") {
-            println("ERR\tcli\tmcp: unknown flag " + a);
-            process_exit(1);
+            i = i + 2;
+            continue;
         }
+        if str_starts_with(a, "--") { return Err("mcp: unknown flag " + a); }
         i = i + 1;
     }
     let file_path: String = cmd_mcp_arg_value(args, "--file");
-    let sock_path: String = cmd_mcp_arg_value(args, "--socket");
-    let mut t: McpTransport = engine_transport_stdio();
-    if chars_len(file_path) > 0 { t = engine_transport_file(file_path); }
-    else if chars_len(sock_path) > 0 { t = engine_transport_socket(sock_path); }
-    else if has_stdio { t = engine_transport_stdio(); }
-    let out: String = engine_server_run(bind, fw, fr, env, &t);
+    let t: McpTransport = if chars_len(file_path) > 0 { mcp_transport_file(file_path) } else { mcp_transport_stdio() };
+    let out_r: Result[String, String] = mcp_server_run(fw, fr, env, &t);
+    if out_r.is_err() {
+        let e: String = match out_r { Ok(_) => "", Err(m) => m };
+        return Err("mcp: " + e);
+    }
+    let out: String = match out_r { Ok(s) => s, Err(_) => "" };
     if chars_len(out) > 0 { println(out); }
+    return Ok(0);
 }

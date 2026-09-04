@@ -1,16 +1,40 @@
-// # MCP Initialize — MCP Self-Test Probe
+// # MCP Initialize Probe
 //
-// Logline: Hostile test for the initialize request/response.
+// Logline: Hostile test for initialize, pre-init refuse, and duplicate id.
 //
-// Setup: Pure compute. Imports the relevant MCP files. Returns Result[Int, String]; Ok(0) on pass.
+// Setup: In-memory graph. No disk. Returns Err when a gate fails.
 //
 // Beats:
-//   1. Set up and run: the initialize request/response.
-//   2. Assert: output matches expected.
+//   1. initialize grants FsReadCap and returns protocol 2024-11-05.
+//   2. tools/call before initialize returns -32600.
+//   3. Duplicate id returns -32603.
 
-import "../engine/core/mcp_dispatch.oo";
+import "../engine/core/mcp_server.oo";
+import "../engine/core/mcp_session.oo";
+import "../engine/state/mcp_graph.oo";
+
+pub fn probe_initialize_run(fs: &FsReadCap) -> Result[Int, String] {
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let mut s: McpSession = mcp_session_new();
+    let r: String = mcp_server_handle_body(fs, &mut s, &g, "codex", init);
+    if !str_contains(r, "2024-11-05") { return Err("initialize missing protocol"); }
+    if !str_contains(r, "openOODA MCP Server") { return Err("initialize missing serverInfo"); }
+    if s.caps_held != 1 { return Err("initialize did not grant FsReadCap bit 0"); }
+
+    let mut s2: McpSession = mcp_session_new();
+    let call: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}";
+    let r2: String = mcp_server_handle_body(fs, &mut s2, &g, "codex", call);
+    if !str_contains(r2, "-32600") { return Err("pre-init tools/call must return -32600"); }
+
+    let mut s3: McpSession = mcp_session_new();
+    let _: String = mcp_server_handle_body(fs, &mut s3, &g, "codex", init);
+    let r3: String = mcp_server_handle_body(fs, &mut s3, &g, "codex", init);
+    if !str_contains(r3, "-32603") { return Err("duplicate id must return -32603"); }
+    return Ok(0);
+}
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
     println("probe: MCP Initialize");
-    return Ok(0);
+    return probe_initialize_run(fs_r);
 }

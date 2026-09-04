@@ -1,8 +1,8 @@
-// # MCP Scripts Index — Anchor for Agents
+// # MCP Scripts Index
 //
-// Logline: Index of the 4 build entry points for the MCP server.
+// Logline: Index of the four entry points. Each fails closed. None print fake success.
 //
-// Setup: build -> test -> verify -> release.
+// Setup: build -> test -> verify -> release. Version is the git tag.
 
 import "build.oo";
 import "test.oo";

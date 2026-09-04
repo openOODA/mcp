@@ -1,16 +1,16 @@
-// # MCP QA Index — Anchor for Agents
+// # MCP QA Index
 //
-// Logline: Index of the 6 self-test probe drivers for the MCP server.
+// Logline: Index of the six hostile probe drivers. A driver that cannot fail is a defect.
 //
-// Setup: Each probe is a hostile test for one MCP method or behavior. If a driver fails, the mcp/ package fails to release.
+// Setup: Each probe returns Result. Ok(0) only after assertions pass.
 //
 // Beats:
-//   1. probe_initialize.oo — server lifecycle, capabilities, session state.
-//   2. probe_tools_list.oo — tool enumeration and metadata.
-//   3. probe_tool_call.oo — tool dispatch and result wrapping.
-//   4. probe_resources_list.oo — resource enumeration.
-//   5. probe_heartbeat.oo — health probe response.
-//   6. probe_double_run.oo — byte-identical determinism across 2 fresh runs.
+//   1. probe_initialize.oo — initialize, pre-init refuse, duplicate id.
+//   2. probe_tools_list.oo — 20 live tools, no ghost names.
+//   3. probe_tool_call.oo — schema and unknown tool.
+//   4. probe_resources_list.oo — seven URIs, no registry.
+//   5. probe_heartbeat.oo — ping before and after Ready.
+//   6. probe_double_run.oo — identical initialize on two sessions.
 
 import "probe_initialize.oo";
 import "probe_tools_list.oo";

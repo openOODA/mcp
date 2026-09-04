@@ -1,17 +1,10 @@
-// # Mcp Federation and Lineage
+// # Mcp Codex Loader
 //
-// Logline: Federated multi-instance MCP: gossip, lineage chain, lineage compaction, codex cache.
+// Logline: Load $OODACODEX, hash it, and cache the capability graph.
 //
-// Setup: MCP federation, gossip, lineage tracking and compaction, and the codex cache.
+// Setup: Federation gossip and lineage are absent. This dir holds the codex loader.
 //
 // Beats:
-//   1. mcp_codex.oo, mcp_federation.oo.
-//   2. mcp_gossip.oo, mcp_lineage.oo.
-//   3. mcp_lineage_chain.oo, mcp_lineage_compaction.oo.
+//   1. mcp_codex.oo resolves OODACODEX fail-closed.
 
 import "mcp_codex.oo";
-import "mcp_federation.oo";
-import "mcp_gossip.oo";
-import "mcp_lineage.oo";
-import "mcp_lineage_chain.oo";
-import "mcp_lineage_compaction.oo";

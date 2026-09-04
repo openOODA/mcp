@@ -1,16 +1,41 @@
-// # MCP Tools List — MCP Self-Test Probe
+// # MCP Tools List Probe
 //
-// Logline: Hostile test for tools/list enumeration.
+// Logline: Hostile test that tools/list advertises the live 20 tools and not deleted names.
 //
-// Setup: Pure compute. Imports the relevant MCP files. Returns Result[Int, String]; Ok(0) on pass.
+// Setup: Session must reach Ready. Ghost tools must be absent.
 //
 // Beats:
-//   1. Set up and run: tools/list enumeration.
-//   2. Assert: output matches expected.
+//   1. initialize + initialized.
+//   2. tools/list contains get_rules and get_rfc.
+//   3. tools/list rejects get_milestone_status and ooda.northstar.
 
-import "../engine/tool/mcp_tool_dispatch.oo";
+import "../engine/core/mcp_server.oo";
+import "../engine/core/mcp_session.oo";
+import "../engine/state/mcp_graph.oo";
+import "../engine/tool/mcp_tool.oo";
+
+fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let _: String = mcp_server_handle_body(fs, s, g, "codex", init);
+    return mcp_server_handle_body(fs, s, g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+}
+
+pub fn probe_tools_list_run(fs: &FsReadCap) -> Result[Int, String] {
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
+    let mut s: McpSession = mcp_session_new();
+    let _: String = probe_ready(fs, &mut s, &g);
+    let r: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}");
+    if !str_contains(r, "get_rules") { return Err("tools/list missing get_rules"); }
+    if !str_contains(r, "get_rfc") { return Err("tools/list missing get_rfc"); }
+    if !str_contains(r, "get_practice") { return Err("tools/list missing get_practice"); }
+    if str_contains(r, "get_milestone_status") { return Err("ghost tool get_milestone_status still listed"); }
+    if str_contains(r, "ooda.northstar") { return Err("ghost tool ooda.northstar still listed"); }
+    if str_contains(r, "get_em_swarm") { return Err("ghost tool get_em_swarm still listed"); }
+    if mcp_tool_count() != 20 { return Err("tool count drifted from 20"); }
+    return Ok(0);
+}
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
     println("probe: MCP Tools List");
-    return Ok(0);
+    return probe_tools_list_run(fs_r);
 }

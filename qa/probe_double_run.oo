@@ -1,16 +1,31 @@
-// # MCP Double-Run — MCP Self-Test Probe
+// # MCP Double-Run Probe
 //
-// Logline: Hostile test for byte-identical determinism across 2 fresh runs.
+// Logline: Two fresh sessions must emit byte-identical initialize responses.
 //
-// Setup: Pure compute. Imports the relevant MCP files. Returns Result[Int, String]; Ok(0) on pass.
+// Setup: Same graph, same body, two sessions. Any drift is a fail.
 //
 // Beats:
-//   1. Set up and run: byte-identical determinism across 2 fresh runs.
-//   2. Assert: output matches expected.
+//   1. Run initialize on session A.
+//   2. Run initialize on session B.
+//   3. Compare the two response strings.
 
 import "../engine/core/mcp_server.oo";
+import "../engine/core/mcp_session.oo";
+import "../engine/state/mcp_graph.oo";
+
+pub fn probe_double_run_run(fs: &FsReadCap) -> Result[Int, String] {
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let mut a: McpSession = mcp_session_new();
+    let mut b: McpSession = mcp_session_new();
+    let ra: String = mcp_server_handle_body(fs, &mut a, &g, "codex", init);
+    let rb: String = mcp_server_handle_body(fs, &mut b, &g, "codex", init);
+    if ra != rb { return Err("double-run drift on initialize"); }
+    if chars_len(ra) == 0 { return Err("initialize produced empty response"); }
+    return Ok(0);
+}
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
     println("probe: MCP Double-Run");
-    return Ok(0);
+    return probe_double_run_run(fs_r);
 }

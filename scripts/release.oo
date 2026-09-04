@@ -1,11 +1,16 @@
-// # Release MCP — Build, Test, Verify, Tarball
+// # Release MCP
+//
+// Logline: Fail closed unless verify_surface passes. Push to main is the release (RFC-0006).
+//
+// Setup: No tarball. No VERSION bump. No fake four-step print.
+//
+// Beats:
+//   1. Run mcp_verify_surface.
+//   2. Return its Result.
 
-import "std/process/sys.oo";
+import "verify.oo";
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    println("Release: step 1/4 build");
-    println("Release: step 2/4 test");
-    println("Release: step 3/4 verify");
-    println("Release: step 4/4 tarball -> mcp-0.5.0.tar.gz");
-    return Ok(0);
+    println("release: verify surface; git push to main ships the tag");
+    return mcp_verify_surface();
 }

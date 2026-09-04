@@ -1,15 +1,12 @@
 // # Mcp Health and Audit
 //
-// Logline: Health probes, heartbeat, audit log, and red-team harness for MCP.
+// Logline: Hash-chained audit log and 8D redteam fires.
 //
-// Setup: MCP health, heartbeat, audit log, and 8D red-team probes.
+// Setup: Ping is the protocol heartbeat. Gossip heartbeat sockets are absent.
 //
 // Beats:
 //   1. mcp_audit.oo.
-//   2. mcp_health.oo.
-//   3. mcp_heartbeat.oo, mcp_redteam.oo.
+//   2. mcp_redteam.oo.
 
 import "mcp_audit.oo";
-import "mcp_health.oo";
-import "mcp_heartbeat.oo";
 import "mcp_redteam.oo";

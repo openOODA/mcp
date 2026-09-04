@@ -1,0 +1,244 @@
+// # MCP JSON-RPC 2.0 Codec
+//
+// Logline: Extract fields, escape strings, and build JSON-RPC envelopes for this server.
+//
+// Setup: Pure string scan. No regex. No LSP import. Top-level object keys only.
+//
+// Beats:
+//   1. Locate a key at object depth 1 and take its JSON value.
+//   2. Extract string, raw token, int, method, id, and params.
+//   3. Escape, response, and error envelopes.
+
+fn mcp_json_is_ws(c: String) -> Bool {
+    return c == " " || c == "\t" || c == "\n" || c == "\r";
+}
+
+fn mcp_json_skip_ws(s: String, i: Int) -> Int {
+    let n: Int = chars_len(s);
+    let mut j: Int = i;
+    while j < n {
+        if !mcp_json_is_ws(char_at(s, j)) { return j; }
+        j = j + 1;
+    }
+    return j;
+}
+
+fn mcp_json_value_start(json: String, key: String) -> Int {
+    let pat: String = "\"" + key + "\"";
+    let n: Int = chars_len(json);
+    let plen: Int = chars_len(pat);
+    let mut i: Int = 0;
+    let mut depth: Int = 0;
+    let mut in_str: Bool = false;
+    let mut esc: Bool = false;
+    while i < n {
+        let c: String = char_at(json, i);
+        if in_str {
+            if esc { esc = false; } else if c == "\\" { esc = true; } else if c == "\"" { in_str = false; }
+            i = i + 1;
+            continue;
+        }
+        if c == "\"" {
+            if depth == 1 && i + plen <= n && str_slice(json, i, i + plen) == pat {
+                let mut j: Int = mcp_json_skip_ws(json, i + plen);
+                if j < n && char_at(json, j) == ":" {
+                    return mcp_json_skip_ws(json, j + 1);
+                }
+            }
+            in_str = true;
+            i = i + 1;
+            continue;
+        }
+        if c == "{" || c == "[" { depth = depth + 1; }
+        if c == "}" || c == "]" { depth = depth - 1; }
+        i = i + 1;
+    }
+    return 0 - 1;
+}
+
+fn mcp_json_take_value(json: String, start: Int) -> String {
+    if start < 0 { return ""; }
+    let n: Int = chars_len(json);
+    if start >= n { return ""; }
+    let c0: String = char_at(json, start);
+    if c0 == "\"" {
+        let mut i: Int = start + 1;
+        let mut esc: Bool = false;
+        while i < n {
+            let c: String = char_at(json, i);
+            if esc { esc = false; } else if c == "\\" { esc = true; } else if c == "\"" {
+                return str_slice(json, start, i + 1);
+            }
+            i = i + 1;
+        }
+        return "";
+    }
+    if c0 == "{" || c0 == "[" {
+        let open: String = c0;
+        let close: String = if c0 == "{" { "}" } else { "]"; };
+        let mut depth: Int = 0;
+        let mut in_str: Bool = false;
+        let mut esc: Bool = false;
+        let mut i: Int = start;
+        while i < n {
+            let c: String = char_at(json, i);
+            if in_str {
+                if esc { esc = false; } else if c == "\\" { esc = true; } else if c == "\"" { in_str = false; }
+            } else if c == "\"" { in_str = true; }
+            else if c == open { depth = depth + 1; }
+            else if c == close {
+                depth = depth - 1;
+                if depth == 0 { return str_slice(json, start, i + 1); }
+            }
+            i = i + 1;
+        }
+        return "";
+    }
+    let mut i: Int = start;
+    while i < n {
+        let c: String = char_at(json, i);
+        if c == "," || c == "}" || c == "]" || mcp_json_is_ws(c) { break; }
+        i = i + 1;
+    }
+    return str_slice(json, start, i);
+}
+
+pub fn mcp_json_extract_raw(json: String, key: String) -> String {
+    return mcp_json_take_value(json, mcp_json_value_start(json, key));
+}
+
+pub fn mcp_json_extract_string(json: String, key: String) -> String {
+    let raw: String = mcp_json_extract_raw(json, key);
+    let n: Int = chars_len(raw);
+    if n < 2 { return ""; }
+    if char_at(raw, 0) != "\"" { return ""; }
+    if char_at(raw, n - 1) != "\"" { return ""; }
+    return mcp_json_unescape(str_slice(raw, 1, n - 1));
+}
+
+fn mcp_json_unescape(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "\\" && i + 1 < n {
+            let n2: String = char_at(s, i + 1);
+            if n2 == "n" { out = out + "\n"; } else if n2 == "t" { out = out + "\t"; } else { out = out + n2; }
+            i = i + 2;
+            continue;
+        }
+        out = out + c;
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn mcp_json_extract_int(json: String, key: String) -> Int {
+    let raw: String = mcp_json_extract_raw(json, key);
+    let n: Int = chars_len(raw);
+    if n == 0 { return 0; }
+    if char_at(raw, 0) == "\"" { return mcp_json_parse_int(mcp_json_extract_string(json, key)); }
+    return mcp_json_parse_int(raw);
+}
+
+pub fn mcp_json_parse_int(s: String) -> Int {
+    let n: Int = chars_len(s);
+    if n == 0 { return 0; }
+    let mut i: Int = 0;
+    let mut sign: Int = 1;
+    if char_at(s, 0) == "-" { sign = 0 - 1; i = 1; }
+    let mut acc: Int = 0;
+    let mut any: Bool = false;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c < "0" || c > "9" { return 0; }
+        acc = acc * 10 + (byte_at(c, 0) - 48);
+        any = true;
+        i = i + 1;
+    }
+    if !any { return 0; }
+    return acc * sign;
+}
+
+pub fn mcp_json_is_nonneg_int_token(raw: String) -> Bool {
+    let n: Int = chars_len(raw);
+    if n == 0 { return false; }
+    let mut i: Int = 0;
+    if char_at(raw, 0) == "\"" {
+        if n < 3 { return false; }
+        if char_at(raw, n - 1) != "\"" { return false; }
+        i = 1;
+        let end: Int = n - 1;
+        if i >= end { return false; }
+        while i < end {
+            let c: String = char_at(raw, i);
+            if c < "0" || c > "9" { return false; }
+            i = i + 1;
+        }
+        return true;
+    }
+    while i < n {
+        let c: String = char_at(raw, i);
+        if c < "0" || c > "9" { return false; }
+        i = i + 1;
+    }
+    return true;
+}
+
+pub fn mcp_json_extract_method(body: String) -> String {
+    return mcp_json_extract_string(body, "method");
+}
+
+pub fn mcp_json_extract_id(body: String) -> String {
+    return mcp_json_extract_raw(body, "id");
+}
+
+pub fn mcp_json_extract_params(body: String) -> String {
+    let raw: String = mcp_json_extract_raw(body, "params");
+    if chars_len(raw) == 0 { return "{}"; }
+    return raw;
+}
+
+pub fn mcp_json_escape(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "\\" { out = out + "\\\\"; } else if c == "\"" { out = out + "\\\""; } else if c == "\n" { out = out + "\\n"; } else if c == "\r" { out = out + "\\r"; } else if c == "\t" { out = out + "\\t"; } else { out = out + c; }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn mcp_json_ok(id_raw: String, result: String) -> String {
+    let idj: String = if chars_len(id_raw) == 0 { "null" } else { id_raw };
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + idj + ",\"result\":" + result + "}";
+}
+
+pub fn mcp_json_err(id_raw: String, code: Int, msg: String) -> String {
+    let idj: String = if chars_len(id_raw) == 0 { "null" } else { id_raw };
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + idj + ",\"error\":{\"code\":" + code.to_string() + ",\"message\":\"" + mcp_json_escape(msg) + "\"}}";
+}
+
+pub fn mcp_json_content_length(header: String) -> Int {
+    let key: String = "Content-Length:";
+    if !str_starts_with(header, key) { return 0; }
+    let rest: String = str_slice(header, chars_len(key), chars_len(header));
+    let mut i: Int = 0;
+    let n: Int = chars_len(rest);
+    while i < n && mcp_json_is_ws(char_at(rest, i)) { i = i + 1; }
+    let mut acc: String = "";
+    while i < n {
+        let c: String = char_at(rest, i);
+        if c < "0" || c > "9" { break; }
+        acc = acc + c;
+        i = i + 1;
+    }
+    return mcp_json_parse_int(acc);
+}
+
+pub fn mcp_json_frame(body: String) -> String {
+    return "Content-Length: " + chars_len(body).to_string() + "\r\n\r\n" + body;
+}

@@ -1,14 +1,12 @@
 // # Mcp Tool Interface
 //
-// Logline: Tool trait, tool dispatch, and dynamic ops surface for the MCP tool layer.
+// Logline: Tool catalog and tools/call dispatch for 20 typed tools.
 //
-// Setup: MCP tool layer: tool trait, dispatch, dynamic operation surface.
+// Setup: One catalog in mcp_tool.oo. Dispatch in mcp_tool_dispatch.oo. No ping/echo stub.
 //
 // Beats:
-//   1. mcp_dynamic_ops.oo.
-//   2. mcp_tool.oo.
-//   3. mcp_tool_dispatch.oo.
+//   1. mcp_tool.oo is the catalog, wrap, and board read.
+//   2. mcp_tool_dispatch.oo routes by name.
 
-import "mcp_dynamic_ops.oo";
 import "mcp_tool.oo";
 import "mcp_tool_dispatch.oo";

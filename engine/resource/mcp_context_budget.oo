@@ -1,19 +1,19 @@
-// # MCP Context Budget — Token-Economy Tools
+// # MCP Context Budget
 //
-// Logline: Expose 5 token-management primitives so the LLM client can pull just what fits its context window instead of the full board / codex / registry each time.
+// Logline: Index boards, truncate board text, truncate the codex, and snapshot session counters.
 //
-// Setup: Tier 1 of the blue-ocean MCP expansion. Every tool answers a single question about cost. No tool reads from disk implicitly; reads are explicit (FsReadCap on summarize_board). Compress is plain-text truncation with a JSON envelope; no tokenizer builtin is required.
+// Setup: summarize_board reads under FsReadCap using graph.board_root. Compress is truncation.
 //
 // Beats:
-//   1. mcp_context_budget_get_board_index — list 13 boards with name, path, priority, summary char count.
-//   2. mcp_context_budget_summarize_board — read + truncate one board to max_chars (FsReadCap).
-//   3. mcp_context_budget_compress_orient — truncate the codex text the client already has.
-//   4. mcp_context_budget_get_context — session bytes/seq/caps/audit/notifs snapshot.
-//   5. mcp_context_budget_estimate_chars — cheap char count proxy for token count.
+//   1. Board index from the graph.
+//   2. Summarize one board.
+//   3. Compress orientation text.
+//   4. Session context snapshot.
 
-import "lsp/wire/lsp_jsonrpc.oo";
+import "engine/core/mcp_json.oo";
 import "engine/core/mcp_session.oo";
 import "engine/state/mcp_graph.oo";
+import "engine/tool/mcp_tool.oo";
 
 pub fn mcp_context_budget_estimate_chars(text: String) -> Int {
     return chars_len(text);
@@ -34,25 +34,26 @@ pub fn mcp_context_budget_get_board_index(g: &McpGraph) -> String {
 }
 
 pub fn mcp_context_budget_summarize_board(fs: &FsReadCap, g: &McpGraph, name: String, max_chars: Int) -> String {
-    if max_chars <= 0 { return mcp_context_budget_envelope("board:" + name, true, 0, 0, ""); }
+    if max_chars <= 0 { return "{\"error\":\"max_chars must be > 0\"}"; }
     let brds: List[McpBoard] = g.boards;
     let n: Int = list_len(brds);
-    let mut found: Bool = false;
-    let mut path: String = "";
     let mut i: Int = 0;
     while i < n {
         let b: McpBoard = list_get(brds, i);
-        if b.name == name { path = b.path; found = true; i = n; } else { i = i + 1; }
+        if b.name == name {
+            let path: String = mcp_tool_board_path(g, b.path);
+            let rr: Result[String, String] = read_file(fs, path);
+            if rr.is_err() { return "{\"error\":\"cannot read\",\"path\":\"" + path + "\"}"; }
+            let text: String = match rr { Ok(s) => s, Err(_) => "" };
+            return mcp_context_budget_truncate(text, max_chars, "board:" + name);
+        }
+        i = i + 1;
     }
-    if !found { return "{\"error\":\"board not found\",\"name\":\"" + name + "\"}"; }
-    let rr: Result[String, String] = read_file(fs, path);
-    if rr.is_err() { return "{\"error\":\"cannot read\",\"path\":\"" + path + "\"}"; }
-    let text: String = match rr { Ok(s) => s, Err(_) => "" };
-    return mcp_context_budget_truncate(text, max_chars, "board:" + name);
+    return "{\"error\":\"board not found\",\"name\":\"" + name + "\"}";
 }
 
 pub fn mcp_context_budget_compress_orient(codex_text: String, max_chars: Int) -> String {
-    if max_chars <= 0 { return mcp_context_budget_envelope("orient", true, 0, 0, ""); }
+    if max_chars <= 0 { return "{\"error\":\"max_chars must be > 0\"}"; }
     return mcp_context_budget_truncate(codex_text, max_chars, "orient");
 }
 
@@ -62,11 +63,8 @@ pub fn mcp_context_budget_get_context(s: &McpSession) -> String {
 
 fn mcp_context_budget_truncate(text: String, max_chars: Int, kind: String) -> String {
     let n: Int = chars_len(text);
-    if n <= max_chars { return mcp_context_budget_envelope(kind, false, n, n, text); }
-    let cut: String = str_slice(text, 0, max_chars);
-    return mcp_context_budget_envelope(kind, true, n, max_chars, cut);
-}
-
-fn mcp_context_budget_envelope(kind: String, truncated: Bool, orig: Int, returned: Int, text: String) -> String {
-    return "{\"kind\":\"" + kind + "\",\"truncated\":" + (if truncated { "true" } else { "false" }) + ",\"orig_chars\":" + orig.to_string() + ",\"returned_chars\":" + returned.to_string() + ",\"text\":\"" + lsp_jsonrpc_escape(text) + "\"}";
+    if n <= max_chars {
+        return "{\"kind\":\"" + kind + "\",\"truncated\":false,\"orig_chars\":" + n.to_string() + ",\"returned_chars\":" + n.to_string() + ",\"text\":\"" + mcp_json_escape(text) + "\"}";
+    }
+    return "{\"kind\":\"" + kind + "\",\"truncated\":true,\"orig_chars\":" + n.to_string() + ",\"returned_chars\":" + max_chars.to_string() + ",\"text\":\"" + mcp_json_escape(str_slice(text, 0, max_chars)) + "\"}";
 }

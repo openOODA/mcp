@@ -1,16 +1,16 @@
 // # MCP Engine
 //
-// Logline: Front door for the MCP engine. Re-exports the six functional sub-modules: core, tool, health, federation, state, resource.
+// Logline: Front door for the MCP engine. Re-exports six subdirs: core, tool, health, federation, state, resource.
 //
-// Setup: Pure dispatch facade. Per-cap effects via the sub-module facades. No direct file IO here.
+// Setup: Dispatch facade. Codex load is federation/mcp_codex.oo. No scheduler stub.
 //
 // Beats:
-//   1. core: dispatch, server, session, transport, batch, workspace, scheduler.
-//   2. tool: tool, tool_dispatch, dynamic_ops.
-//   3. health: health, heartbeat, audit, redteam.
-//   4. federation: federation, gossip, lineage, lineage_chain, lineage_compaction, codex.
-//   5. state: graph, graph_dynamic, cap, real_caps, stream, ooda_state, notification, sampling, em.
-//   6. resource: format, schema, context_budget.
+//   1. core: json, dispatch, server, session, transport, batch.
+//   2. tool: catalog and dispatch for 20 tools.
+//   3. health: audit log and 8D redteam fires.
+//   4. federation: OODACODEX loader only.
+//   5. state: graph, caps, session-adjacent telemetry.
+//   6. resource: schema, format, context budget.
 
 import "core/ANCHOR.oo";
 import "tool/ANCHOR.oo";

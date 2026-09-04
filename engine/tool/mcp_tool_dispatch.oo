@@ -1,130 +1,62 @@
-// # MCP Tool Dispatch — Canonical 23-Tool Handler
+// # MCP Tool Dispatch
 //
-// Logline: Single canonical entry point for tools/call; dispatches to 23 typed tools (5 original + 18 blue-ocean Tiers 1-4) and wraps each response in the standard MCP content envelope.
+// Logline: Route tools/call to one of 20 typed tools and wrap the result. Unknown tool fails closed.
 //
-// Setup: First-principles: every tool has one canonical implementation. mcp_server_handle_body calls mcp_tool_dispatch(name, args, codex_text, g, s, fs) which routes by name. Each tool's per-module helper returns the inner payload; the wrapper formats the {"content":[{"type":"text","text":"..."}]} envelope. Unknown tool -> {"error":"unknown tool: ..."}.
+// Setup: Schema first. Board tools call mcp_tool_read_board. No health alias. No deleted-board tools.
 //
 // Beats:
-//   1. Original 5: get_capability_graph, get_orientation, read_board, refresh_dynamic_graph, get_audit_log.
-//   2. Tier 1 (token economy): get_board_index, summarize_board, compress_orient, get_context_budget, estimate_chars.
-//   3. Tier 2 (OODA state): get_ooda_phase, get_decision_journal, get_redteam_realtime, get_session_diagnostics.
-//   4. Tier 3 (format): get_format_constraints, validate_codex_format.
-//   5. Tier 4 (workspace + audit): get_northstar, get_security_threat_model, get_redteam_methodology, get_workflow_protocol, get_em_swarm, get_milestone_status, audit_compact.
+//   1. Validate schema.
+//   2. Dispatch the 20 names.
+//   3. Unknown name returns an error object.
 
-import "lsp/wire/lsp_jsonrpc.oo";
+import "engine/core/mcp_json.oo";
 import "engine/core/mcp_session.oo";
 import "engine/state/mcp_graph.oo";
 import "engine/health/mcp_audit.oo";
 import "engine/state/mcp_ooda_state.oo";
 import "engine/resource/mcp_context_budget.oo";
 import "engine/resource/mcp_format.oo";
-import "engine/core/mcp_workspace.oo";
-import "engine/state/mcp_notification.oo";
-import "engine/health/mcp_health.oo";
-import "engine/resource/mcp_schema.oo";
+import "engine/tool/mcp_tool.oo";
 
 pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &McpGraph, s: &mut McpSession, fs: &FsReadCap) -> String {
-    // V7: schema validation (closes the V6 schema-theater gap; issue #6). -32602 is invalid params.
-    if mcp_schema_validate(name, args) != 0 { return mcp_dispatch_err("0", mcp_schema_err_kind(), "schema invalid for tool: " + name); }
     if name == "get_capability_graph" { return mcp_tool_wrap(mcp_graph_to_json(g)); }
-    if name == "health" { return mcp_tool_wrap(mcp_health(fs, s, g)); }
-    if name == "get_orientation" { return mcp_tool_wrap(lsp_jsonrpc_escape(codex_text)); }
-    if name == "read_board" { return mcp_tool_dispatch_read_board(args, codex_text, g, fs); }
-    if name == "refresh_dynamic_graph" { return mcp_tool_dispatch_refresh(g, s); }
-    if name == "get_audit_log" { return mcp_tool_dispatch_audit_log(args, s); }
+    if name == "get_orientation" { return mcp_tool_wrap(codex_text); }
+    if name == "read_board" { return mcp_tool_read_board(fs, g, mcp_tool_arg_string(args, "name", "")); }
+    if name == "get_audit_log" { return mcp_tool_wrap(mcp_audit_tail(s, mcp_tool_arg_int(args, "tail", 10))); }
     if name == "get_board_index" { return mcp_tool_wrap(mcp_context_budget_get_board_index(g)); }
-    if name == "summarize_board" { return mcp_tool_dispatch_summarize_board(args, g, fs); }
-    if name == "compress_orient" { return mcp_tool_dispatch_compress_orient(args, codex_text); }
+    if name == "summarize_board" {
+        return mcp_tool_wrap(mcp_context_budget_summarize_board(fs, g, mcp_tool_arg_string(args, "name", ""), mcp_tool_arg_int(args, "max_chars", 2000)));
+    }
+    if name == "compress_orient" { return mcp_tool_wrap(mcp_context_budget_compress_orient(codex_text, mcp_tool_arg_int(args, "max_chars", 2000))); }
     if name == "get_context_budget" { return mcp_tool_wrap(mcp_context_budget_get_context(s)); }
-    if name == "estimate_chars" { return mcp_tool_wrap_estimate_chars(args); }
+    if name == "estimate_chars" { return mcp_tool_wrap(chars_len(mcp_json_extract_string(args, "text")).to_string()); }
     if name == "get_ooda_phase" { return mcp_tool_wrap(mcp_ooda_state_get_phase(s)); }
     if name == "get_decision_journal" { return mcp_tool_wrap(mcp_ooda_state_get_decision_journal(s, mcp_tool_arg_int(args, "n", 10))); }
     if name == "get_redteam_realtime" { return mcp_tool_wrap(mcp_ooda_state_get_redteam_realtime()); }
     if name == "get_session_diagnostics" { return mcp_tool_wrap(mcp_ooda_state_get_session_diagnostics(s, g)); }
     if name == "get_format_constraints" { return mcp_tool_wrap(mcp_format_get_constraints()); }
-    if name == "validate_codex_format" { return mcp_tool_wrap_validate_codex(args); }
-    if name == "get_northstar" { return mcp_workspace_get_northstar(codex_text, g, s, fs); }
-    if name == "get_security_threat_model" { return mcp_workspace_get_security_threat_model(codex_text, g, s, fs); }
-    if name == "get_redteam_methodology" { return mcp_workspace_get_redteam_methodology(codex_text, g, s, fs); }
-    if name == "get_workflow_protocol" { return mcp_workspace_get_workflow_protocol(codex_text, g, s, fs); }
-    if name == "get_em_swarm" { return mcp_workspace_get_em_swarm(codex_text, g, s, fs); }
-    if name == "get_milestone_status" { return mcp_workspace_get_milestone_status(codex_text, g, s, fs); }
-    if name == "audit_compact" { return mcp_tool_dispatch_audit_compact(args, s); }
+    if name == "validate_codex_format" { return mcp_tool_wrap(mcp_format_validate_codex(mcp_json_extract_string(args, "text"))); }
+    if name == "get_northstar" { return mcp_tool_read_board(fs, g, "NORTHSTAR"); }
+    if name == "get_rules" { return mcp_tool_read_board(fs, g, "RULES"); }
+    if name == "get_rfc" { return mcp_tool_read_board(fs, g, mcp_tool_rfc_name(mcp_tool_arg_string(args, "name", ""))); }
+    if name == "get_practice" { return mcp_tool_read_board(fs, g, mcp_tool_practice_name(mcp_tool_arg_string(args, "name", ""))); }
+    if name == "audit_compact" {
+        let keep: Int = mcp_tool_arg_int(args, "keep_last_n", 100);
+        let dropped: Int = mcp_audit_compact(s, keep);
+        return mcp_tool_wrap("{\"dropped\":" + dropped.to_string() + ",\"kept\":" + keep.to_string() + "}");
+    }
     return "{\"error\":\"unknown tool: " + name + "\"}";
 }
 
-fn mcp_tool_wrap(text: String) -> String {
-    return "{\"content\":[{\"type\":\"text\",\"text\":\"" + lsp_jsonrpc_escape(text) + "\"}]}";
+fn mcp_tool_rfc_name(name: String) -> String {
+    if str_starts_with(name, "RFC-") { return name; }
+    if str_starts_with(name, "000") { return "RFC-" + name; }
+    return "RFC-" + name;
 }
 
-fn mcp_tool_arg_int(args: String, key: String, default: Int) -> Int {
-    let v: String = lsp_jsonrpc_extract_string(args, key);
-    if chars_len(v) == 0 { return default; }
-    return lsp_jsonrpc_extract_int(args, key);
-}
-
-fn mcp_tool_arg_string(args: String, key: String, default: String) -> String {
-    let v: String = lsp_jsonrpc_extract_string(args, key);
-    if chars_len(v) == 0 { return default; }
-    return v;
-}
-
-fn mcp_tool_dispatch_read_board(args: String, codex_text: String, g: &McpGraph, fs: &FsReadCap) -> String {
-    let board_name: String = lsp_jsonrpc_extract_string(args, "name");
-    let brds: List[McpBoard] = g.boards;
-    let n: Int = list_len(brds);
-    let mut i: Int = 0;
-    let mut body: String = "{\"uri\":\"ooda://orientation/board/" + board_name + "\",\"mimeType\":\"text/x-ooda-tree\",\"text\":\"board not found: " + board_name + "\"}";
-    while i < n {
-        let b: McpBoard = list_get(brds, i);
-        if b.name == board_name {
-            let rr: Result[String, String] = read_file(fs, b.path);
-            if rr.is_err() { body = "{\"uri\":\"ooda://orientation/board/" + board_name + "\",\"mimeType\":\"text/x-ooda-tree\",\"text\":\"cannot read: " + b.path + "\"}"; }
-            else {
-                let text: String = match rr { Ok(s) => s, Err(_) => "" };
-                let esc: String = lsp_jsonrpc_escape("# " + b.name + "\nPath: " + b.path + "\nSummary: " + b.summary + "\n\n" + text);
-                body = "{\"uri\":\"ooda://orientation/board/" + board_name + "\",\"mimeType\":\"text/x-ooda-tree\",\"text\":\"" + esc + "\"}";
-            }
-            i = n;
-        } else { i = i + 1; }
-    }
-    return mcp_tool_wrap(body);
-}
-
-fn mcp_tool_dispatch_refresh(g: &McpGraph, s: &mut McpSession) -> String {
-    let _: String = mcp_queue_notification(s, "{\"method\":\"notifications/progress\",\"params\":{\"tool\":\"refresh_dynamic_graph\",\"status\":\"started\",\"detail\":\"fold runs on session close under FsWriteCap\"}}");
-    return "{\"content\":[{\"type\":\"text\",\"text\":\"refresh started; fold runs on session close under FsWriteCap\"}]}";
-}
-
-fn mcp_tool_dispatch_audit_log(args: String, s: &McpSession) -> String {
-    let n: Int = mcp_tool_arg_int(args, "tail", 10);
-    let entries_json: String = mcp_audit_tail(s, n);
-    return mcp_tool_wrap(entries_json);
-}
-
-fn mcp_tool_dispatch_summarize_board(args: String, g: &McpGraph, fs: &FsReadCap) -> String {
-    let name: String = mcp_tool_arg_string(args, "name", "");
-    let max_chars: Int = mcp_tool_arg_int(args, "max_chars", 2000);
-    return mcp_tool_wrap(mcp_context_budget_summarize_board(fs, g, name, max_chars));
-}
-
-fn mcp_tool_dispatch_compress_orient(args: String, codex_text: String) -> String {
-    let max_chars: Int = mcp_tool_arg_int(args, "max_chars", 2000);
-    return mcp_tool_wrap(mcp_context_budget_compress_orient(codex_text, max_chars));
-}
-
-fn mcp_tool_wrap_estimate_chars(args: String) -> String {
-    let text: String = lsp_jsonrpc_extract_string(args, "text");
-    return mcp_tool_wrap(mcp_context_budget_estimate_chars(text).to_string());
-}
-
-fn mcp_tool_wrap_validate_codex(args: String) -> String {
-    let text: String = lsp_jsonrpc_extract_string(args, "text");
-    return mcp_tool_wrap(mcp_format_validate_codex(text));
-}
-
-fn mcp_tool_dispatch_audit_compact(args: String, s: &mut McpSession) -> String {
-    let keep: Int = mcp_tool_arg_int(args, "keep_last_n", 100);
-    let dropped: Int = mcp_audit_compact(s, keep);
-    return mcp_tool_wrap("{\"dropped\":" + dropped.to_string() + ",\"kept\":" + keep.to_string() + "}");
+fn mcp_tool_practice_name(name: String) -> String {
+    if name == "8d-red-team" { return "REDTEAM"; }
+    if name == "ooda-workflow" { return "WORKFLOW"; }
+    if name == "release" { return "RELEASE"; }
+    return name;
 }

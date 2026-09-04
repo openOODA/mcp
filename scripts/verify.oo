@@ -1,14 +1,49 @@
-// # Verify MCP — Assert Version and Surface
+// # Verify MCP Surface
 //
-// Logline: Parse ooda/mcp/VERSION, assert the api_surface field matches the 6-subdir count.
+// Logline: Fail closed if the 14 NORTHSTAR tokens, 12 boards, or 20 tools drift.
+//
+// Setup: Pure graph constructors. No VERSION file. Ghost names are defects.
+//
+// Beats:
+//   1. 14 caps; FfiCap present; FsCap absent.
+//   2. 12 boards; NORTHSTAR present; ROADMAP absent.
+//   3. 20 tools.
 
-import "std/fs/path.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/state/mcp_cap.oo";
+import "engine/tool/mcp_tool.oo";
+
+pub fn mcp_verify_surface() -> Result[Int, String] {
+    let caps: List[McpCapability] = mcp_graph_canonical_caps();
+    if list_len(caps) != 14 { return Err("cap count drifted"); }
+    if mcp_token_to_bit("FfiCap") != 13 { return Err("FfiCap must be bit 13"); }
+    if mcp_token_to_bit("ThreadCap") != 11 { return Err("ThreadCap must be bit 11"); }
+    if mcp_token_to_bit("FsCap") != 0 - 1 { return Err("FsCap must be unknown"); }
+    if mcp_token_to_bit("HttpCap") != 0 - 1 { return Err("HttpCap must be unknown"); }
+    if mcp_token_to_bit("BindCap") != 0 - 1 { return Err("BindCap must be unknown"); }
+    let brds: List[McpBoard] = mcp_graph_canonical_boards();
+    if list_len(brds) != 12 { return Err("board count drifted"); }
+    let mut has_ns: Bool = false;
+    let mut i: Int = 0;
+    while i < list_len(brds) {
+        let b: McpBoard = list_get(brds, i);
+        let n: String = b.name;
+        if n == "NORTHSTAR" { has_ns = true; }
+        if n == "ROADMAP" || n == "SHIPPED" || n == "START" || n == "FORMAT" || n == "MOONSHOTS" {
+            return Err("ghost board still present: " + n);
+        }
+        i = i + 1;
+    }
+    if !has_ns { return Err("NORTHSTAR board missing"); }
+    if mcp_tool_count() != 20 { return Err("tool count drifted"); }
+    let g: McpGraph = mcp_graph_canonical("", "");
+    if mcp_tool_required_caps(&g, "read_board") != 1 { return Err("read_board must require FsReadCap"); }
+    if mcp_tool_required_caps(&g, "get_orientation") != 0 { return Err("get_orientation must require 0"); }
+    if mcp_tool_required_caps(&g, "get_milestone_status") != 0 - 1 { return Err("get_milestone_status must be unknown"); }
+    return Ok(0);
+}
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, args: List[String]) -> Result[Int, String] {
-    let declared: Int = 6;
-    let actual: Int = 6;
-    if declared != actual {
-        return Err("api_surface drift: declared " + declared + " but found " + actual);
-    }
-    return Ok(0);
+    println("verify: MCP surface");
+    return mcp_verify_surface();
 }

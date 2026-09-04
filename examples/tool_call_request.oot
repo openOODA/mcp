@@ -1,6 +1,5 @@
 # Sample MCP Tool Call Request
-
-File: ooda/mcp/examples/tool_call_request.oot
+File: mcp/examples/tool_call_request.oot
 
 ## Request
 
@@ -10,20 +9,16 @@ File: ooda/mcp/examples/tool_call_request.oot
   "id": 3,
   "method": "tools/call",
   "params": {
-    "name": "ooda.northstar",
+    "name": "get_orientation",
     "arguments": {}
   }
 }
 ```
 
-## Expected Response (abbreviated)
+arguments is a JSON object.
 
-```json
-{
-  "jsonrpc": "2.0",
-  "id": 3,
-  "result": {
-    "content": [{"type": "text", "text": "openOODA is a systems programming language..."}]
-  }
-}
-```
+## Expected
+
+result.content[0].type = text
+
+result.content[0].text = the OODACODEX body

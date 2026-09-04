@@ -1,18 +1,17 @@
 // # Mcp Engine Core
 //
-// Logline: Dispatch, server, session, transport, batch, workspace, and runtime scheduler facade.
+// Logline: JSON-RPC codec, dispatch, server loop, session, transport, and batch.
 //
-// Setup: MCP engine core: request dispatch, server loop, session state, transport, batch ops, workspace, scheduler.
+// Setup: MCP engine core. No scheduler. No LSP import.
 //
 // Beats:
-//   1. mcp_batch.oo, mcp_dispatch.oo.
-//   2. mcp_scheduler.oo, mcp_server.oo.
-//   3. mcp_session.oo, mcp_transport.oo, mcp_workspace.oo.
+//   1. mcp_json.oo owns framing and extract.
+//   2. mcp_dispatch.oo and mcp_server.oo run the loop.
+//   3. mcp_session.oo, mcp_transport.oo, mcp_batch.oo.
 
+import "mcp_json.oo";
 import "mcp_batch.oo";
 import "mcp_dispatch.oo";
-import "mcp_scheduler.oo";
 import "mcp_server.oo";
 import "mcp_session.oo";
 import "mcp_transport.oo";
-import "mcp_workspace.oo";

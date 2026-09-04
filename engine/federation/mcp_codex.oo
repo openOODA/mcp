@@ -1,20 +1,17 @@
-// # MCP Codex Loader with E-M Cache (FsCap + EnvCap, fail-closed)
+// # MCP Codex Loader
 //
-// Logline: Resolve LLMS.oot, read it, compute the real Gold-Master SHA-256, build the canonical graph, and cache all four by (path, size_bytes).
+// Logline: Resolve $OODACODEX, read it, SHA-256 it, and cache the graph keyed by path and size.
 //
-// Setup: The path is resolved from $OODACODEX env only. If unset or unreadable, return "" and the caller maps to -32603. No canonical-path fallback (removed S-03).
+// Setup: EnvCap for OODACODEX. No path fallback. Missing file fails closed with return 0.
 //
 // Beats:
-//   1. Honour $OODACODEX env override.
-//   2. Read under FsReadCap; return raw text on success.
-//   3. Compute real SHA-256 via crypto_sha256_internal for the Gold-Master digest.
-//   4. Cache (path, size) so per-request dispatch is a 1-cycle stat lookup, not a re-hash.
-//   5. Cache hit returns sha+graph_json+text from the previous read; miss repopulates.
+//   1. Honour $OODACODEX only.
+//   2. Read under FsReadCap and hash.
+//   3. Cache hit skips re-hash when path and size match.
 
 import "engine/state/mcp_graph.oo";
-import "engine/federation/mcp_federation.oo";
 
-fn mcp_codex_path_env(env: &EnvCap) -> String {
+pub fn mcp_codex_path_env(env: &EnvCap) -> String {
     let r: Result[String, String] = env_get(env, "OODACODEX");
     if r.is_ok() {
         let v: String = match r { Ok(s) => s, Err(_) => "" };
@@ -23,13 +20,15 @@ fn mcp_codex_path_env(env: &EnvCap) -> String {
     return "";
 }
 
-// S-12: single source of truth for the MCP protocol version. Matches ooda.pkg.
-// The 4-tuple (major, minor, patch) is exposed for callers that need the integers.
-pub fn mcp_protocol_version()  -> String { return "2.12.0"; }
-pub fn mcp_protocol_major()     -> Int    { return 2; }
-pub fn mcp_protocol_minor()     -> Int    { return 12; }
-pub fn mcp_protocol_patch()     -> Int    { return 0; }
-pub fn mcp_wire_protocol_version() -> String { return "2024-11-05"; }
+pub fn mcp_codex_dirname(path: String) -> String {
+    let n: Int = chars_len(path);
+    let mut i: Int = n - 1;
+    while i >= 0 {
+        if char_at(path, i) == "/" { return str_slice(path, 0, i); }
+        i = i - 1;
+    }
+    return "";
+}
 
 pub fn mcp_codex_resolve_path(fs: &FsReadCap, env: &EnvCap) -> String {
     let p: String = mcp_codex_path_env(env);
@@ -38,43 +37,12 @@ pub fn mcp_codex_resolve_path(fs: &FsReadCap, env: &EnvCap) -> String {
     return p;
 }
 
-pub fn mcp_codex_read_text(fs: &FsReadCap, env: &EnvCap) -> String {
-    let p: String = mcp_codex_resolve_path(fs, env);
-    if chars_len(p) == 0 { return ""; }
-    let rr: Result[String, String] = read_file(fs, p);
-    if rr.is_err() { return ""; }
-    let s: String = match rr { Ok(v) => v, Err(_) => "" };
-    return s;
-}
-
-// R8 real probe. Returns the live SHA-256 of the LLMS.oot file under FsCap.
-// Returns "" when the file cannot be read (caller treats "" as fail-closed).
-// Note: the live SHA is also computed inside mcp_codex_resolve_cached; this
-// function is the fail-closed standalone probe for callers that don't cache.
-
-pub fn mcp_codex_gold_master_sha(fs: &FsReadCap, env: &EnvCap) -> String {
-    let text: String = mcp_codex_read_text(fs, env);
-    if chars_len(text) == 0 { return ""; }
-    let h: String = crypto_sha256_internal(text);
-    if chars_len(h) == 64 { return h; }
-    return "";
-}
-
-// E-M cache. Holds the resolved path, observed size, codex text, real SHA,
-// the typed McpGraph, a pre-serialized JSON string of the graph, the
-// federated-graph JSON (G12) cached alongside, and the G17-B last-attested
-// epoch so periodic re-attest is a 1-cycle comparison. The server holds
-// one of these per process and reuses it across the loop.
-type McpCodexCache = struct {
+pub type McpCodexCache = struct {
     path: String,
     size_bytes: Int,
     text: String,
     sha: String,
-    graph: McpGraph,
-    graph_json: String,
-    federated_graph_json: String,
-    federated_stale: Bool,
-    last_attested_epoch: Int
+    graph: McpGraph
 };
 
 pub fn mcp_codex_cache_new() -> McpCodexCache {
@@ -83,97 +51,27 @@ pub fn mcp_codex_cache_new() -> McpCodexCache {
         size_bytes: 0,
         text: "",
         sha: "",
-        graph: mcp_graph_canonical(mcp_protocol_version(), mcp_protocol_major(), mcp_protocol_minor(), mcp_protocol_patch(), ""),
-        graph_json: "",
-        federated_graph_json: "",
-        federated_stale: true,
-        last_attested_epoch: 0
+        graph: mcp_graph_canonical("", "")
     };
 }
 
-// E-M cache resolve. Returns 0 on fail-closed, 1 on cache hit, 2 on cache miss (now populated).
-// Keyed by (path, size_bytes) — if both match the previous read, the SHA, graph, and JSON are reused.
 pub fn mcp_codex_resolve_cached(fs: &FsReadCap, env: &EnvCap, cache: &mut McpCodexCache) -> Int {
     let p: String = mcp_codex_resolve_path(fs, env);
     if chars_len(p) == 0 { return 0; }
-    if !path_exists(fs, p) { return 0; }
     let sz: Int = file_size(fs, p);
     if p == cache.path && sz == cache.size_bytes && chars_len(cache.sha) == 64 {
         return 1;
     }
     let rr: Result[String, String] = read_file(fs, p);
     if rr.is_err() { return 0; }
-    let text: String = match rr { Ok(s) => s, Err(_) => "" };
+    let text: String = match rr { Ok(v) => v, Err(_) => "" };
     if chars_len(text) == 0 { return 0; }
     let sha: String = crypto_sha256_internal(text);
     if chars_len(sha) != 64 { return 0; }
-    let g: McpGraph = mcp_graph_canonical(mcp_protocol_version(), mcp_protocol_major(), mcp_protocol_minor(), mcp_protocol_patch(), sha);
-    let gj: String = mcp_graph_to_json(&g);
     cache.path = p;
     cache.size_bytes = sz;
     cache.text = text;
     cache.sha = sha;
-    cache.graph = g;
-    cache.graph_json = gj;
-    cache.federated_stale = true;
+    cache.graph = mcp_graph_canonical(sha, mcp_codex_dirname(p));
     return 2;
-}
-
-// G16: continuous substrate attestation. Re-hashes the codex from disk
-// without touching the cache; returns the current 64-char SHA or "" on miss.
-// Call this on every session close (or periodically) to confirm the substrate
-// is honest. Distinct from mcp_codex_gold_master_sha which is fail-closed
-// and returns "" on any failure; this function returns the live value.
-pub fn mcp_codex_substrate_attest(fs: &FsReadCap, env: &EnvCap) -> String {
-    let p: String = mcp_codex_resolve_path(fs, env);
-    if chars_len(p) == 0 { return ""; }
-    if !path_exists(fs, p) { return ""; }
-    let rr: Result[String, String] = read_file(fs, p);
-    if rr.is_err() { return ""; }
-    let text: String = match rr { Ok(s) => s, Err(_) => "" };
-    if chars_len(text) == 0 { return ""; }
-    let h: String = crypto_sha256_internal(text);
-    if chars_len(h) == 64 { return h; }
-    return "";
-}
-
-// G16: re-attest the cache's substrate. If the live SHA differs from cache.sha,
-// the cache is stale and must be re-resolved.
-pub fn mcp_codex_re_attest(fs: &FsReadCap, env: &EnvCap, cache: &mut McpCodexCache) -> Int {
-    let live: String = mcp_codex_substrate_attest(fs, env);
-    if chars_len(live) == 0 { return 0; }
-    if live == cache.sha { return 1; }
-    cache.sha = live;
-    cache.graph = mcp_graph_canonical(mcp_protocol_version(), mcp_protocol_major(), mcp_protocol_minor(), mcp_protocol_patch(), live);
-    cache.graph_json = mcp_graph_to_json(&cache.graph);
-    cache.federated_stale = true;
-    return 2;
-}
-
-// Federated cache: build and cache the federated graph JSON. Returns the JSON.
-pub fn mcp_codex_resolve_federated(fs: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, cache: &mut McpCodexCache, peer_count: Int) -> String {
-    if !cache.federated_stale && chars_len(cache.federated_graph_json) > 0 {
-        return cache.federated_graph_json;
-    }
-    if chars_len(cache.sha) == 0 { return ""; }
-    let local: McpGraph = mcp_graph_canonical(mcp_protocol_version(), mcp_protocol_major(), mcp_protocol_minor(), mcp_protocol_patch(), cache.sha);
-    let mut out: String = mcp_graph_to_json(&local);
-    let mut i: Int = 0;
-    while i < peer_count {
-        let peer_id: String = "peer-" + i.to_string();
-        let peer_json: String = mcp_g12_peer_load(fs, fw, peer_id);
-        if chars_len(peer_json) > 0 {
-            out = out + ",\"peer-" + i.to_string() + "\":" + peer_json;
-        }
-        i = i + 1;
-    }
-    cache.federated_graph_json = "{\"local\":" + out + "}";
-    cache.federated_stale = false;
-    return cache.federated_graph_json;
-}
-
-// Federated cache: invalidate. Called from G14 lineage-coherence.
-pub fn mcp_codex_invalidate_federated(cache: &mut McpCodexCache) {
-    cache.federated_stale = true;
-    cache.federated_graph_json = "";
 }

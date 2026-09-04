@@ -1,44 +1,68 @@
-// # MCP Codex Format Compliance
+// # MCP File-Format Constraints
 //
-// Logline: Expose 2 FORMAT.oot primitives so the LLM client can self-load the format rules and self-check a candidate codex before submission.
+// Logline: Expose RFC-0003 rules as JSON and check a text against Academy header plus 256-line cap.
 //
-// Setup: Tier 3 of the blue-ocean MCP expansion. The 4-element Academy header (Title/Logline/Setup/Beats) and 5-component WO (Observation/Logic Chain/Caveats/Conclusion/Verification) are codified as JSON. validate_codex_format inspects a string and reports a violation list (never a free-text pass/fail — first-principles: compliance is a property of the rules, not the caller's opinion).
+// Setup: Structural checks on the first 16 lines. No FORMAT.oot. No substring theater on the whole file.
 //
 // Beats:
-//   1. mcp_format_get_constraints — return the FORMAT.oot rules as JSON (4-element header, 5-component WO, 256-line cap).
-//   2. mcp_format_validate_codex — check a codex text; return per-rule pass/fail with detail.
+//   1. mcp_format_get_constraints returns RFC-0003 invariants.
+//   2. mcp_format_validate_codex reports missing header fields and line-cap breach.
 
 pub fn mcp_format_get_constraints() -> String {
-    return "{\"line_cap\":256,\"academy_header\":{\"title\":{\"pattern\":\"// # \",\"required\":true},\"logline\":{\"pattern\":\"Logline:\",\"required\":true},\"setup\":{\"pattern\":\"Setup:\",\"required\":true},\"beats\":{\"pattern\":\"Beats:\",\"required\":true}},\"wo_components\":[\"Observation\",\"Logic Chain\",\"Caveats\",\"Conclusion\",\"Verification\"],\"stratified_separation\":[\"strategic_openOODA\",\"operational_ooda\",\"tactical_ooda_mcp\"],\"ocap_tokens\":14,\"redteam_gates\":8}";
+    return "{\"line_cap\":256,\"academy_header\":[\"title\",\"logline\",\"setup\",\"beats\"],\"oot_header\":[\"title\",\"file\"],\"anchor\":\"ANCHOR.oo\",\"banned_names\":[\"util.oo\",\"common.oo\",\"helpers.oo\",\"misc.oo\",\"shared.oo\",\"lib.oo\"],\"rfc\":\"0003\"}";
 }
 
 pub fn mcp_format_validate_codex(text: String) -> String {
+    let lines: Int = mcp_format_line_count(text);
+    let head: String = mcp_format_head(text, 16);
     let mut violations: String = "[";
     let mut first: Bool = true;
-    if !mcp_format_contains(text, "// # ") {
-        violations = mcp_format_add_violation(violations, first, "title", "missing // # Title header");
+    if !mcp_format_has_title(head) {
+        violations = mcp_format_add(violations, first, "title", "first 16 lines lack // # or # title");
         first = false;
     }
-    if !mcp_format_contains(text, "Logline:") {
-        violations = mcp_format_add_violation(violations, first, "logline", "missing Logline:");
+    if !str_contains(head, "Logline:") && !str_contains(head, "File:") {
+        violations = mcp_format_add(violations, first, "header", "first 16 lines lack Logline: or File:");
         first = false;
     }
-    if !mcp_format_contains(text, "Setup:") {
-        violations = mcp_format_add_violation(violations, first, "setup", "missing Setup:");
+    if lines > 256 {
+        violations = mcp_format_add(violations, first, "line_cap", "line count " + lines.to_string() + " exceeds 256");
         first = false;
     }
-    if !mcp_format_contains(text, "Beats:") {
-        violations = mcp_format_add_violation(violations, first, "beats", "missing Beats:");
-        first = false;
-    }
-    return "{\"violations\":" + violations + "],\"compliant\":" + (if first { "true" } else { "false" }) + ",\"char_count\":" + chars_len(text).to_string() + "}";
+    return "{\"violations\":" + violations + "],\"compliant\":" + (if first { "true" } else { "false" }) + ",\"line_count\":" + lines.to_string() + "}";
 }
 
-fn mcp_format_contains(haystack: String, needle: String) -> Bool {
-    return str_contains(haystack, needle);
+fn mcp_format_line_count(text: String) -> Int {
+    let n: Int = chars_len(text);
+    if n == 0 { return 0; }
+    let mut lines: Int = 1;
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(text, i) == "\n" { lines = lines + 1; }
+        i = i + 1;
+    }
+    return lines;
 }
 
-fn mcp_format_add_violation(acc: String, first: Bool, rule: String, detail: String) -> String {
+fn mcp_format_head(text: String, max_lines: Int) -> String {
+    let n: Int = chars_len(text);
+    let mut lines: Int = 0;
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(text, i) == "\n" {
+            lines = lines + 1;
+            if lines >= max_lines { return str_slice(text, 0, i + 1); }
+        }
+        i = i + 1;
+    }
+    return text;
+}
+
+fn mcp_format_has_title(head: String) -> Bool {
+    return str_starts_with(head, "// # ") || str_starts_with(head, "# ") || str_contains(head, "\n// # ") || str_contains(head, "\n# ");
+}
+
+fn mcp_format_add(acc: String, first: Bool, rule: String, detail: String) -> String {
     let sep: String = if first { "" } else { "," };
     return acc + sep + "{\"rule\":\"" + rule + "\",\"ok\":false,\"detail\":\"" + detail + "\"}";
 }

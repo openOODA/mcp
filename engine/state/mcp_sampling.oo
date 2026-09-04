@@ -1,36 +1,24 @@
-// # MCP Sampling and Roots Subsystem
+// # MCP Roots Scope
 //
-// Logline: Bidirectional sampling (server requests LLM sample from client) and roots scope enforcement (resources/read constrained to declared roots).
+// Logline: Constrain resources/read to canonical ooda:// URIs or a declared client root.
 //
-// Setup: Pure functional, no state. Session state lives in mcp_session.oo; this file provides the policy and dispatcher helpers.
+// Setup: Sampling is not offered. This file is roots policy only.
 //
 // Beats:
-//   1. sampling/createMessage: server-side handler returns the canonical refusal (-32605 Capability not offered).
-//   2. Roots scope: mcp_sampling_root_allows(session, uri) gates resources/read on declared client roots.
-//   3. Roots list: build JSON envelope for roots/list response.
+//   1. Canonical ooda:// URIs pass.
+//   2. Other URIs pass only with a matching client root prefix.
+//   3. Empty roots reject non-canonical URIs.
 
 import "engine/core/mcp_session.oo";
 
-// sampling/createMessage acts as a capability-offered-but-not-implemented response.
-// We advertise sampling in the initialize result so the client knows the server
-// speaks the protocol, but we return -32605 when invoked (fail-closed).
-pub fn mcp_sampling_refusal(id: String) -> String {
-    return "{\"jsonrpc\":\"2.0\",\"id\":" + id + ",\"error\":{\"code\":-32605,\"message\":\"Sampling capability offered but not implemented by this server\"}}";
-}
-
-// Roots scope check. URIs must be either canonical ooda:// or within a declared client root.
-// file:// URIs require the exact root prefix; http:// URIs require an http: root.
-// An empty roots list (default) rejects all non-canonical URIs.
 pub fn mcp_sampling_root_allows(s: &McpSession, uri: String) -> Bool {
     if str_starts_with(uri, "ooda://") { return true; }
-    if str_starts_with(uri, "ooda:") { return true; }
     let roots: List[String] = s.client_roots;
     let n: Int = list_len(roots);
     if n == 0 { return false; }
     let mut i: Int = 0;
     while i < n {
-        let r: String = list_get(roots, i);
-        if str_starts_with(uri, r) { return true; }
+        if str_starts_with(uri, list_get(roots, i)) { return true; }
         i = i + 1;
     }
     return false;

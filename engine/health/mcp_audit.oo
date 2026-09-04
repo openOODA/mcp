@@ -1,22 +1,20 @@
 // # MCP Append-Only Audit Log
 //
-// Logline: Every dispatch decision is appended to a per-session, in-memory, hash-chained audit log; the log is persisted to FsWriteCap at session close; get_audit_log serves the last N entries.
+// Logline: Hash-chain every dispatch on the session, persist under FsWriteCap, serve the last N entries.
 //
-// Setup: McpSession holds a List[McpAuditEntry] that grows on every dispatch. Each entry is hash-chained: sha = SHA-256(prev_sha || canonical_body). The chain head is stored in s.audit_chain_head. On session close, mcp_server_run calls mcp_audit_persist(fw, s) to write the log to .ooda-cache/mcp-audit.jsonl. mcp_audit_verify(fs) reads the file and confirms the chain.
+// Setup: SHA-256 over a canonical body. Missing persist file is not a pass of verify.
 //
 // Beats:
-//   1. mcp_audit_log_path() — canonical path under .ooda-cache/.
-//   2. mcp_audit_record(s, epoch, method, id, decision, code, caps_before, caps_after, revoked) -> new sha, appends to s.audit_log.
-//   3. mcp_audit_tail(s, n) -> JSON array of last N entries from s.audit_log.
-//   4. mcp_audit_persist(fw, s) -> writes the session log to FsWriteCap at mcp_audit_log_path().
-//   5. mcp_audit_load(fs) -> String (full file JSONL).
-//   6. mcp_audit_verify(fs) -> Bool (chain integrity check, every entry's prev_sha matches the prior entry's sha).
+//   1. Record one chained entry.
+//   2. Tail the in-memory log.
+//   3. Persist JSONL under .ooda-cache/.
+//   4. Verify the on-disk chain fail-closed.
 
-import "lsp/wire/lsp_jsonrpc.oo";
+import "engine/core/mcp_json.oo";
 import "std/fs/file_writer.oo";
 import "std/fs/file_reader.oo";
 
-type McpAuditEntry = struct {
+pub type McpAuditEntry = struct {
     epoch: Int,
     method: String,
     id: String,
@@ -37,31 +35,14 @@ pub fn mcp_audit_entry_new(epoch: Int, method: String, id: String, decision: Int
     return McpAuditEntry { epoch: epoch, method: method, id: id, decision: decision, code: code, caps_before: caps_before, caps_after: caps_after, revoked: revoked, prev_sha: prev_sha, sha: sha };
 }
 
-// Canonical body for hashing: pipe-joined fields in fixed order, sha appended last.
 pub fn mcp_audit_entry_body(entry: &McpAuditEntry) -> String {
     return entry.epoch.to_string() + "|" + entry.method + "|" + entry.id + "|" + entry.decision.to_string() + "|" + entry.code.to_string() + "|" + entry.caps_before.to_string() + "|" + entry.caps_after.to_string() + "|" + entry.revoked + "|" + entry.prev_sha + "|" + entry.sha;
 }
 
 pub fn mcp_audit_entry_to_json(entry: &McpAuditEntry) -> String {
-    return "{\"epoch\":" + entry.epoch.to_string() + ",\"method\":\"" + lsp_jsonrpc_escape(entry.method) + "\",\"id\":\"" + lsp_jsonrpc_escape(entry.id) + "\",\"decision\":" + entry.decision.to_string() + ",\"code\":" + entry.code.to_string() + ",\"caps_before\":" + entry.caps_before.to_string() + ",\"caps_after\":" + entry.caps_after.to_string() + ",\"revoked\":\"" + lsp_jsonrpc_escape(entry.revoked) + "\",\"prev_sha\":\"" + entry.prev_sha + "\",\"sha\":\"" + entry.sha + "\"}";
+    return "{\"epoch\":" + entry.epoch.to_string() + ",\"method\":\"" + mcp_json_escape(entry.method) + "\",\"id\":\"" + mcp_json_escape(entry.id) + "\",\"decision\":" + entry.decision.to_string() + ",\"code\":" + entry.code.to_string() + ",\"caps_before\":" + entry.caps_before.to_string() + ",\"caps_after\":" + entry.caps_after.to_string() + ",\"revoked\":\"" + mcp_json_escape(entry.revoked) + "\",\"prev_sha\":\"" + entry.prev_sha + "\",\"sha\":\"" + entry.sha + "\"}";
 }
 
-fn mcp_audit_entry_from_json(line: String) -> McpAuditEntry {
-    return McpAuditEntry {
-        epoch: lsp_jsonrpc_extract_int(line, "epoch"),
-        method: lsp_jsonrpc_extract_string(line, "method"),
-        id: lsp_jsonrpc_extract_string(line, "id"),
-        decision: lsp_jsonrpc_extract_int(line, "decision"),
-        code: lsp_jsonrpc_extract_int(line, "code"),
-        caps_before: lsp_jsonrpc_extract_int(line, "caps_before"),
-        caps_after: lsp_jsonrpc_extract_int(line, "caps_after"),
-        revoked: lsp_jsonrpc_extract_string(line, "revoked"),
-        prev_sha: lsp_jsonrpc_extract_string(line, "prev_sha"),
-        sha: lsp_jsonrpc_extract_string(line, "sha")
-    };
-}
-
-// Append one entry to s.audit_log, chaining the SHA. Returns the new chain-head SHA.
 pub fn mcp_audit_record(s: &mut McpSession, epoch: Int, method: String, id: String, decision: Int, code: Int, caps_before: Int, caps_after: Int, revoked: String) -> String {
     let prev_sha: String = s.audit_chain_head;
     let mut entry: McpAuditEntry = mcp_audit_entry_new(epoch, method, id, decision, code, caps_before, caps_after, revoked, prev_sha, "");
@@ -72,7 +53,6 @@ pub fn mcp_audit_record(s: &mut McpSession, epoch: Int, method: String, id: Stri
     return h;
 }
 
-// Return the last N entries of s.audit_log as a JSON array. N <= 0 returns all entries.
 pub fn mcp_audit_tail(s: &McpSession, n: Int) -> String {
     let entries: List[McpAuditEntry] = s.audit_log;
     let total: Int = list_len(entries);
@@ -82,31 +62,26 @@ pub fn mcp_audit_tail(s: &McpSession, n: Int) -> String {
     let mut i: Int = start;
     let mut first: Bool = true;
     while i < total {
-        let e: McpAuditEntry = list_get(entries, i);
         if !first { out = out + ","; }
-        out = out + mcp_audit_entry_to_json(&e);
+        out = out + mcp_audit_entry_to_json(&list_get(entries, i));
         first = false;
         i = i + 1;
     }
     return out + "]";
 }
 
-// Persist s.audit_log to FsWriteCap at mcp_audit_log_path(). Each entry is one JSONL line.
 pub fn mcp_audit_persist(fw: &FsWriteCap, s: &McpSession) -> Int {
     let writer: FileWriter = file_writer_open(fw, mcp_audit_log_path(), true);
     let entries: List[McpAuditEntry] = s.audit_log;
     let total: Int = list_len(entries);
     let mut i: Int = 0;
     while i < total {
-        let e: McpAuditEntry = list_get(entries, i);
-        let line: String = mcp_audit_entry_to_json(&e) + "\n";
-        let _ = file_writer_write(fw, writer, line);
+        let _: Result[Void, String] = file_writer_write(fw, writer, mcp_audit_entry_to_json(&list_get(entries, i)) + "\n");
         i = i + 1;
     }
     return total;
 }
 
-// Compact s.audit_log to keep only the last keep_last_n entries. Returns the number of dropped entries. Resets s.audit_chain_head to the last kept entry's sha (or "" if empty).
 pub fn mcp_audit_compact(s: &mut McpSession, keep_last_n: Int) -> Int {
     let entries: List[McpAuditEntry] = s.audit_log;
     let total: Int = list_len(entries);
@@ -127,37 +102,31 @@ pub fn mcp_audit_compact(s: &mut McpSession, keep_last_n: Int) -> Int {
     return total - keep_last_n;
 }
 
-// Read the entire audit log file as a JSONL string. "" if absent.
-pub fn mcp_audit_load(fs: &FsReadCap) -> String {
-    let ro: Result[FileReader, String] = file_reader_open(fs, mcp_audit_log_path());
-    if ro.is_err() { return ""; }
-    let r: FileReader = match ro { Ok(v) => v, Err(_) => return "" };
-    let rr: Result[String, String] = file_reader_read_all(fs, r);
-    if rr.is_err() { return ""; }
-    return match rr { Ok(s) => s, Err(_) => "" };
-}
-
-// Verify the SHA chain of a file. True iff every non-empty entry's prev_sha matches the previous entry's sha AND every entry's sha matches crypto_sha256_internal(body). Blank lines are skipped.
 pub fn mcp_audit_verify(fs: &FsReadCap) -> Bool {
     let ro: Result[FileReader, String] = file_reader_open(fs, mcp_audit_log_path());
-    if ro.is_err() { return true; }
-    let r: FileReader = match ro { Ok(v) => v, Err(_) => return true };
+    if ro.is_err() { return false; }
+    let r: FileReader = match ro { Ok(v) => v, Err(_) => return false; };
     let lr: Result[List[String], String] = file_reader_lines(fs, r);
     if lr.is_err() { return false; }
-    let lines: List[String] = match lr { Ok(v) => v, Err(_) => return false };
+    let lines: List[String] = match lr { Ok(v) => v, Err(_) => return false; };
     let total: Int = list_len(lines);
     let mut prev_sha: String = "";
+    let mut any: Bool = false;
     let mut i: Int = 0;
     while i < total {
         let line: String = list_get(lines, i);
         if chars_len(line) > 0 {
-            let e: McpAuditEntry = mcp_audit_entry_from_json(line);
-            if e.prev_sha != prev_sha { return false; }
-            let h: String = crypto_sha256_internal(mcp_audit_entry_body(&e));
-            if h != e.sha { return false; }
-            prev_sha = e.sha;
+            any = true;
+            let method: String = mcp_json_extract_string(line, "method");
+            let id: String = mcp_json_extract_string(line, "id");
+            let sha: String = mcp_json_extract_string(line, "sha");
+            let prev: String = mcp_json_extract_string(line, "prev_sha");
+            if prev != prev_sha { return false; }
+            let e: McpAuditEntry = mcp_audit_entry_new(mcp_json_extract_int(line, "epoch"), method, id, mcp_json_extract_int(line, "decision"), mcp_json_extract_int(line, "code"), mcp_json_extract_int(line, "caps_before"), mcp_json_extract_int(line, "caps_after"), mcp_json_extract_string(line, "revoked"), prev, sha);
+            if crypto_sha256_internal(mcp_audit_entry_body(&e)) != sha { return false; }
+            prev_sha = sha;
         }
         i = i + 1;
     }
-    return true;
+    return any;
 }
