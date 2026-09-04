@@ -11,8 +11,8 @@
 //   4. Verify the on-disk chain fail-closed.
 
 import "engine/core/mcp_json.oo";
-import "std/fs/file_writer.oo";
-import "std/fs/file_reader.oo";
+import "std/fs/file/file_writer.oo";
+import "std/fs/file/file_reader.oo";
 
 pub type McpAuditEntry = struct {
     epoch: Int,
@@ -76,7 +76,7 @@ pub fn mcp_audit_persist(fw: &FsWriteCap, s: &McpSession) -> Int {
     let total: Int = list_len(entries);
     let mut i: Int = 0;
     while i < total {
-        let _: Result[Void, String] = file_writer_write(fw, writer, mcp_audit_entry_to_json(&list_get(entries, i)) + "\n");
+        let _: Result[FileWriter, String] = file_writer_write(fw, writer, mcp_audit_entry_to_json(&list_get(entries, i)) + "\n");
         i = i + 1;
     }
     return total;

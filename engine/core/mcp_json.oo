@@ -153,7 +153,7 @@ pub fn mcp_json_parse_int(s: String) -> Int {
     let mut any: Bool = false;
     while i < n {
         let c: String = char_at(s, i);
-        if c < "0" || c > "9" { return 0; }
+        if !char_is_digit(c) { return 0; }
         acc = acc * 10 + (byte_at(c, 0) - 48);
         any = true;
         i = i + 1;
@@ -174,14 +174,14 @@ pub fn mcp_json_is_nonneg_int_token(raw: String) -> Bool {
         if i >= end { return false; }
         while i < end {
             let c: String = char_at(raw, i);
-            if c < "0" || c > "9" { return false; }
+            if !char_is_digit(c) { return false; }
             i = i + 1;
         }
         return true;
     }
     while i < n {
         let c: String = char_at(raw, i);
-        if c < "0" || c > "9" { return false; }
+        if !char_is_digit(c) { return false; }
         i = i + 1;
     }
     return true;
@@ -233,7 +233,7 @@ pub fn mcp_json_content_length(header: String) -> Int {
     let mut acc: String = "";
     while i < n {
         let c: String = char_at(rest, i);
-        if c < "0" || c > "9" { break; }
+        if !char_is_digit(c) { break; }
         acc = acc + c;
         i = i + 1;
     }

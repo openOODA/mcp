@@ -56,7 +56,9 @@ pub fn mcp_redteam_fire_obfuscation() -> String {
     let g: McpGraph = mcp_graph_canonical("", "");
     let bad: Int = mcp_tool_required_caps(&g, "get_orientation_forged");
     let good: Int = mcp_tool_required_caps(&g, "get_orientation");
-    let ok: Bool = bad == 0 - 1 && good == 0;
+    let name_rejected: Bool = bad < 0;
+    let name_listed: Bool = good == 0;
+    let ok: Bool = name_rejected && name_listed;
     return mcp_redteam_result(redteam_gate_obfuscation(), "obfuscation", ok, if ok { "unknown name rejected" } else { "unknown name accepted" });
 }
 
@@ -81,7 +83,8 @@ pub fn mcp_redteam_fire_traversal() -> String {
 
 pub fn mcp_redteam_fire_escalation() -> String {
     let r: Int = mcp_dispatch_cap_audit("resources/read", 0);
-    let ok: Bool = r == 0 - 32603;
+    let denied: Int = 0 - 32603;
+    let ok: Bool = r == denied;
     return mcp_redteam_result(redteam_gate_escalation(), "escalation", ok, if ok { "missing FsReadCap rejected" } else { "missing cap accepted" });
 }
 
@@ -89,7 +92,10 @@ pub fn mcp_redteam_fire_integrity() -> String {
     let b: Int = mcp_token_to_bit("NotACap");
     let fs: Int = mcp_token_to_bit("FsCap");
     let ffi: Int = mcp_token_to_bit("FfiCap");
-    let ok: Bool = b == 0 - 1 && fs == 0 - 1 && ffi == 13;
+    let unknown_closed: Bool = b < 0;
+    let ghost_closed: Bool = fs < 0;
+    let ffi_open: Bool = ffi == 13;
+    let ok: Bool = unknown_closed && ghost_closed && ffi_open;
     return mcp_redteam_result(redteam_gate_integrity(), "integrity", ok, if ok { "unknown and ghost tokens rejected" } else { "token map drifted" });
 }
 

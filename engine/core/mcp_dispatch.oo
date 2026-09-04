@@ -73,7 +73,7 @@ pub fn mcp_dispatch_decide(s: &McpSession, g: &McpGraph, method: String, orient:
     if method == "tools/call" {
         if !orient.extracted { return 0 - 32602; }
         let req: Int = mcp_tool_required_caps(g, orient.tool_name);
-        if req == 0 - 1 { return 0 - 32601; }
+        if req < 0 { return 0 - 32601; }
         if req == 0 { return 0; }
         if (req & s.caps_held) != req { return 0 - 32603; }
         return 0;
