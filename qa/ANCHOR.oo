@@ -1,20 +1,24 @@
 // # MCP QA Index
 //
-// Logline: Index of the six hostile probe drivers. A driver that cannot fail is a defect.
+// Logline: Index of the eight hostile probe drivers. A driver that cannot fail is a defect.
 //
 // Setup: Each probe returns Result. Ok(0) only after assertions pass.
 //
 // Beats:
-//   1. probe_initialize.oo — initialize, pre-init refuse, duplicate id.
+//   1. probe_initialize.oo — initialize, pre-init refuse, duplicate id, clientName ignored.
 //   2. probe_tools_list.oo — 20 live tools, no ghost names.
-//   3. probe_tool_call.oo — schema and unknown tool.
-//   4. probe_resources_list.oo — seven URIs, no registry.
-//   5. probe_heartbeat.oo — ping before and after Ready.
+//   3. probe_tool_call.oo — schema, unknown tool, missing FsReadCap.
+//   4. probe_resources_list.oo — list, read, file URI, em/metrics tier.
+//   5. probe_ping.oo — ping, cancel, rate window.
 //   6. probe_double_run.oo — identical initialize on two sessions.
+//   7. probe_merge.oo — config splice keeps sibling keys.
+//   8. probe_redteam.oo — eight gates pass.
 
 import "probe_initialize.oo";
 import "probe_tools_list.oo";
 import "probe_tool_call.oo";
 import "probe_resources_list.oo";
-import "probe_heartbeat.oo";
+import "probe_ping.oo";
 import "probe_double_run.oo";
+import "probe_merge.oo";
+import "probe_redteam.oo";

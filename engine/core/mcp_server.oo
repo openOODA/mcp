@@ -14,7 +14,7 @@ import "engine/core/mcp_session.oo";
 import "engine/core/mcp_dispatch.oo";
 import "engine/federation/mcp_codex.oo";
 import "engine/core/mcp_transport.oo";
-import "engine/state/mcp_sampling.oo";
+import "engine/state/mcp_roots.oo";
 import "engine/state/mcp_notification.oo";
 import "engine/core/mcp_batch.oo";
 import "engine/state/mcp_em.oo";
@@ -37,7 +37,7 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
     if mcp_session_seen_id(s, id) { return mcp_session_error_duplicate_id(id); }
     let sha: String = g.substrate.gold_master_sha256;
 
-    if method != "initialize" && method != "initialized" && method != "notifications/initialized" && method != "shutdown" && method != "exit" && method != "ping" && method != "notifications/cancelled" && method != "notifications/roots/list_changed" && !mcp_session_check_rate(s, 100, 1000) {
+    if chars_len(id) > 0 && !mcp_session_check_rate(s, 100, 1000) {
         return mcp_dispatch_err(id, 0 - 32607, "Rate limit: 100 req per 1000 req_seq");
     }
 
@@ -99,7 +99,7 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
     } else if method == "resources/read" {
         if chars_len(orient.if_none_match) > 0 && mcp_dispatch_etag_matches(orient.if_none_match, sha) {
             response = mcp_dispatch_not_modified(id);
-        } else if !mcp_sampling_root_allows(s, orient.uri) {
+        } else if !mcp_root_allows(s, orient.uri) {
             response = mcp_dispatch_err(id, 0 - 32605, "URI outside declared client roots: " + orient.uri);
         } else if orient.uri == "ooda://em/metrics" {
             if s.tier != mcp_tier_audit() {

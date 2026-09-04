@@ -1,0 +1,33 @@
+// # MCP Red Team Probe
+//
+// Logline: Fire all eight gates. Any fail result fails this probe.
+//
+// Setup: In-memory. Gates call dispatch, session, and the cap map.
+//
+// Beats:
+//   1. Run mcp_redteam_run_all_json.
+//   2. Refuse any \"result\":\"fail\".
+//   3. Require eight pass tokens.
+
+import "../engine/health/mcp_redteam.oo";
+
+pub fn probe_redteam_run() -> Result[Int, String] {
+    let out: String = mcp_redteam_run_all_json();
+    if str_contains(out, "\"result\":\"fail\"") { return Err("a redteam gate failed: " + out); }
+    let mut n: Int = 0;
+    let mut i: Int = 0;
+    let needle: String = "\"result\":\"pass\"";
+    let nlen: Int = chars_len(needle);
+    let total: Int = chars_len(out);
+    while i + nlen <= total {
+        if str_slice(out, i, i + nlen) == needle { n = n + 1; }
+        i = i + 1;
+    }
+    if n != 8 { return Err("expected 8 passing gates, got " + n.to_string()); }
+    return Ok(0);
+}
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    println("probe: MCP Red Team");
+    return probe_redteam_run();
+}

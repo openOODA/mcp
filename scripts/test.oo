@@ -1,20 +1,22 @@
 // # Test MCP
 //
-// Logline: Run the six probe functions and the surface verifier. Any Err fails the package.
+// Logline: Run the eight probe functions and the surface verifier. Any Err fails the package.
 //
 // Setup: In-process. No fake passed++. Requires FsReadCap for handle_body.
 //
 // Beats:
 //   1. verify surface.
-//   2. Run six probes.
+//   2. Run eight probes.
 //   3. Return the first Err.
 
 import "../qa/probe_initialize.oo";
 import "../qa/probe_tools_list.oo";
 import "../qa/probe_tool_call.oo";
 import "../qa/probe_resources_list.oo";
-import "../qa/probe_heartbeat.oo";
+import "../qa/probe_ping.oo";
 import "../qa/probe_double_run.oo";
+import "../qa/probe_merge.oo";
+import "../qa/probe_redteam.oo";
 import "verify.oo";
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
@@ -28,10 +30,14 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) 
     if c.is_err() { return c; }
     let d: Result[Int, String] = probe_resources_list_run(fs_r);
     if d.is_err() { return d; }
-    let e: Result[Int, String] = probe_heartbeat_run(fs_r);
+    let e: Result[Int, String] = probe_ping_run(fs_r);
     if e.is_err() { return e; }
     let f: Result[Int, String] = probe_double_run_run(fs_r);
     if f.is_err() { return f; }
-    println("test: 6 probes + verify passed");
+    let h: Result[Int, String] = probe_merge_run();
+    if h.is_err() { return h; }
+    let r: Result[Int, String] = probe_redteam_run();
+    if r.is_err() { return r; }
+    println("test: 8 probes + verify passed");
     return Ok(0);
 }

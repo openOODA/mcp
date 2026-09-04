@@ -11,7 +11,7 @@
 
 import "engine/core/mcp_session.oo";
 
-pub fn mcp_sampling_root_allows(s: &McpSession, uri: String) -> Bool {
+pub fn mcp_root_allows(s: &McpSession, uri: String) -> Bool {
     if str_starts_with(uri, "ooda://") { return true; }
     let roots: List[String] = s.client_roots;
     let n: Int = list_len(roots);

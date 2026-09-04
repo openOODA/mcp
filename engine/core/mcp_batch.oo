@@ -8,8 +8,10 @@
 //   1. mcp_batch_is_batch: true if body starts with '[' and ends with ']'.
 //   2. mcp_batch_split: extract each top-level {…} between [ and ].
 //   3. mcp_batch_collect: join response strings into a result array.
+//   4. Notification = empty JSON-RPC id token.
 
-// F-07: detect a JSON-RPC 2.0 batch (array) vs a single request object.
+import "engine/core/mcp_json.oo";
+
 pub fn mcp_batch_is_batch(body: String) -> Bool {
     let n: Int = chars_len(body);
     if n < 2 { return false; }
@@ -68,7 +70,6 @@ pub fn mcp_batch_collect(responses: List[String]) -> String {
     return out + "]";
 }
 
-// F-07: true if the item is a notification (no "id" field). JSON-RPC 2.0 says notifications get no response.
 pub fn mcp_batch_is_notification(item: String) -> Bool {
-    return !str_contains(item, "\"id\":");
+    return chars_len(mcp_json_extract_id(item)) == 0;
 }

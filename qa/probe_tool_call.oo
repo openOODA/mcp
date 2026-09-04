@@ -11,6 +11,7 @@
 
 import "../engine/core/mcp_server.oo";
 import "../engine/core/mcp_session.oo";
+import "../engine/core/mcp_dispatch.oo";
 import "../engine/state/mcp_graph.oo";
 
 fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
@@ -30,6 +31,14 @@ pub fn probe_tool_call_run(fs: &FsReadCap) -> Result[Int, String] {
     let ok: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}");
     if !str_contains(ok, "codex-body") { return Err("get_orientation must wrap codex text"); }
     if !str_contains(ok, "\"content\"") { return Err("get_orientation must use content envelope"); }
+    let neg: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"summarize_board\",\"arguments\":{\"name\":\"RULES\",\"max_chars\":-1}}}");
+    if !str_contains(neg, "-32602") { return Err("negative max_chars must return -32602"); }
+    let mut s0: McpSession = mcp_session_new();
+    s0.phase = mcp_phase_ready();
+    s0.caps_held = 0;
+    let orient: McpOrient = mcp_dispatch_orient("tools/call", "{\"name\":\"read_board\",\"arguments\":{\"name\":\"RULES\"}}");
+    let denied: Int = mcp_dispatch_decide(&s0, &g, "tools/call", &orient);
+    if denied != 0 - 32603 { return Err("read_board without FsReadCap must return -32603"); }
     return Ok(0);
 }
 

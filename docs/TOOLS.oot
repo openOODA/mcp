@@ -28,6 +28,4 @@ requiresCap 0 uses the session default. requiresCap 1 is FsReadCap.
 | get_practice | 1 | {name} | REDTEAM, WORKFLOW, or RELEASE |
 | audit_compact | 0 | {keep_last_n?} | Drop old audit rows |
 
-Deleted names (not served): get_milestone_status, get_em_swarm, get_security_threat_model, get_workflow_protocol, get_redteam_methodology, refresh_dynamic_graph, health, ooda.northstar, ooda.rules.
-
 Boards: ANCHOR, RULES, NORTHSTAR, RFC-0001..RFC-0006, REDTEAM, WORKFLOW, RELEASE.

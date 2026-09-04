@@ -30,6 +30,19 @@ pub fn probe_resources_list_run(fs: &FsReadCap) -> Result[Int, String] {
     if str_contains(r, "ooda://registry/catalog") { return Err("ghost registry catalog still listed"); }
     if mcp_orient_uri_is_canonical("file:///etc/passwd") { return Err("file URI must not be canonical"); }
     if mcp_orient_uri_is_canonical("ooda://registry/catalog") { return Err("registry URI must not be canonical"); }
+    let rd: String = mcp_server_handle_body(fs, &mut s, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"resources/read\",\"params\":{\"uri\":\"ooda://orientation\"}}");
+    if !str_contains(rd, "codex-text") { return Err("resources/read orientation must return codex"); }
+    let bad: String = mcp_server_handle_body(fs, &mut s, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"resources/read\",\"params\":{\"uri\":\"file:///etc/passwd\"}}");
+    if !str_contains(bad, "-32602") { return Err("file URI must return -32602"); }
+    let em: String = mcp_server_handle_body(fs, &mut s, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"resources/read\",\"params\":{\"uri\":\"ooda://em/metrics\"}}");
+    if !str_contains(em, "-32604") { return Err("standard tier must deny em/metrics"); }
+    let mut sa: McpSession = mcp_session_new();
+    let _: String = mcp_server_handle_body(fs, &mut sa, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"tier\":\"audit\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}");
+    let _: String = mcp_server_handle_body(fs, &mut sa, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let ema: String = mcp_server_handle_body(fs, &mut sa, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/read\",\"params\":{\"uri\":\"ooda://em/metrics\"}}");
+    if str_contains(ema, "-32604") { return Err("audit tier must not deny em/metrics"); }
+    if str_contains(ema, "\"error\"") { return Err("audit tier em/metrics must not be an error"); }
+    if !str_contains(ema, "ooda://em/metrics") { return Err("audit tier must serve em/metrics"); }
     return Ok(0);
 }
 

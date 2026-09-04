@@ -9,7 +9,7 @@
 //   2. Err if any read fails.
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    let files: List[String] = ["cli/main.oo", "cli/cmd_mcp.oo", "engine/ANCHOR.oo", "engine/core/mcp_server.oo", "engine/core/mcp_json.oo", "qa/ANCHOR.oo", "ANCHOR.oo"];
+    let files: List[String] = ["cli/main.oo", "cli/cmd_mcp.oo", "engine/ANCHOR.oo", "engine/core/mcp_server.oo", "engine/core/mcp_json.oo", "engine/state/mcp_roots.oo", "qa/ANCHOR.oo", "qa/probe_ping.oo", "ANCHOR.oo"];
     let mut i: Int = 0;
     while i < list_len(files) {
         let path: String = list_get(files, i);

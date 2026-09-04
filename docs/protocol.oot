@@ -24,7 +24,7 @@ id may be a string or a number. Duplicate id returns -32603.
 | -32604 | Tier denies method |
 | -32605 | URI outside client roots |
 | -32606 | Not modified (ETag) |
-| -32607 | Rate limit 100 per 1000 seq |
+| -32607 | Rate limit 100 per 1000 seq (every request with an id, including ping) |
 
 ## initialize
 

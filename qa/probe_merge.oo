@@ -1,0 +1,44 @@
+// # MCP Config Merge Probe
+//
+// Logline: Hostile test that mcp-merge splices the ooda entry and does not drop sibling keys.
+//
+// Setup: Pure string apply. No filesystem.
+//
+// Beats:
+//   1. Empty or non-object text fails closed.
+//   2. Existing mcpServers keeps other servers and adds ooda.
+//   3. Second apply is a no-op.
+//   4. Missing mcpServers inserts the key without dropping others.
+
+import "../cli/safe_merge_core.oo";
+
+pub fn probe_merge_run() -> Result[Int, String] {
+    let e1: Result[String, String] = safe_mcp_merge_apply("");
+    if e1.is_ok() { return Err("empty text must fail"); }
+    let e2: Result[String, String] = safe_mcp_merge_apply("[1]");
+    if e2.is_ok() { return Err("array must fail"); }
+    let src: String = "{\"mcpServers\":{\"other\":{\"command\":\"x\"}},\"keep\":true}";
+    let a1: Result[String, String] = safe_mcp_merge_apply(src);
+    if a1.is_err() { return Err("valid object must merge"); }
+    let out: String = match a1 { Ok(s) => s, Err(_) => "" };
+    if !str_contains(out, "\"ooda\":") { return Err("merge must insert ooda key"); }
+    if !str_contains(out, "\"other\"") { return Err("merge must keep sibling servers"); }
+    if !str_contains(out, "\"keep\":true") { return Err("merge must keep top-level keys"); }
+    if !safe_mcp_merge_already_has_ooda(out) { return Err("merged text must report ooda present"); }
+    let a2: Result[String, String] = safe_mcp_merge_apply(out);
+    if a2.is_err() { return Err("idempotent apply must succeed"); }
+    let out2: String = match a2 { Ok(s) => s, Err(_) => "" };
+    if out2 != out { return Err("second apply must be a no-op"); }
+    let bare: String = "{\"name\":\"claude\"}";
+    let a3: Result[String, String] = safe_mcp_merge_apply(bare);
+    if a3.is_err() { return Err("object without mcpServers must merge"); }
+    let out3: String = match a3 { Ok(s) => s, Err(_) => "" };
+    if !str_contains(out3, "\"mcpServers\"") { return Err("merge must add mcpServers"); }
+    if !str_contains(out3, "\"name\":\"claude\"") { return Err("merge must keep name"); }
+    return Ok(0);
+}
+
+pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+    println("probe: MCP Merge");
+    return probe_merge_run();
+}

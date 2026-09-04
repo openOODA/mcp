@@ -31,6 +31,11 @@ pub fn probe_initialize_run(fs: &FsReadCap) -> Result[Int, String] {
     let _: String = mcp_server_handle_body(fs, &mut s3, &g, "codex", init);
     let r3: String = mcp_server_handle_body(fs, &mut s3, &g, "codex", init);
     if !str_contains(r3, "-32603") { return Err("duplicate id must return -32603"); }
+
+    let mut s4: McpSession = mcp_session_new();
+    let forged: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientName\":\"forged\"}}";
+    let _: String = mcp_server_handle_body(fs, &mut s4, &g, "codex", forged);
+    if s4.client_name != "" { return Err("params.clientName must not set session client_name"); }
     return Ok(0);
 }
 

@@ -7,11 +7,11 @@
 // Beats:
 //   1. mcp_graph.oo and mcp_cap.oo.
 //   2. mcp_notification.oo, mcp_ooda_state.oo.
-//   3. mcp_sampling.oo, mcp_em.oo.
+//   3. mcp_roots.oo, mcp_em.oo.
 
 import "mcp_cap.oo";
 import "mcp_em.oo";
 import "mcp_graph.oo";
 import "mcp_notification.oo";
 import "mcp_ooda_state.oo";
-import "mcp_sampling.oo";
+import "mcp_roots.oo";
