@@ -9,11 +9,11 @@
 //   2. Bad JSONL ingest does not move session totals.
 //   3. Valid JSONL ingest increases prompt tokens and tool_calls.
 
-import "../engine/core/mcp_server.oo";
-import "../engine/core/mcp_session.oo";
-import "../engine/state/mcp_graph.oo";
-import "../engine/tool/mcp_tool.oo";
-import "../engine/tool/mcp_tool_token.oo";
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/tool/mcp_tool.oo";
+import "engine/tool/mcp_tool_token.oo";
 
 fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";

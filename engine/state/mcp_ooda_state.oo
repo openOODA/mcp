@@ -26,15 +26,14 @@ pub fn mcp_ooda_state_get_phase(s: &McpSession) -> String {
 }
 
 pub fn mcp_ooda_state_get_decision_journal(s: &McpSession, n: Int) -> String {
-    let entries: List[McpAuditEntry] = s.audit_log;
-    let total: Int = list_len(entries);
+    let total: Int = list_len(s.audit_log);
     if total == 0 { return "[]"; }
     let mut out: String = "[";
     let mut count: Int = 0;
     let mut i: Int = total - 1;
     let mut first: Bool = true;
     while i >= 0 && (n <= 0 || count < n) {
-        let e: McpAuditEntry = list_get(entries, i);
+        let e: McpAuditEntry = list_get(s.audit_log, i);
         let m: String = e.method;
         if m == "tools/call" || m == "resources/read" || m == "prompts/get" || m == "roots/list" {
             if !first { out = out + ","; }

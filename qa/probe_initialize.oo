@@ -10,50 +10,50 @@
 //   3. Duplicate id returns -32603. Bad protocolVersion is -32600. Second initialize fails.
 //   4. method initialized without the notifications/ prefix is -32601.
 
-import "../engine/core/mcp_server.oo";
-import "../engine/core/mcp_session.oo";
-import "../engine/state/mcp_graph.oo";
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
 
 pub fn probe_initialize_run(fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
     let mut s: McpSession = mcp_session_new();
     let r: String = mcp_server_handle_body(fs, &mut s, &g, "codex", init);
-    if !str_contains(r, "2024-11-05") { return Err("initialize missing protocol"); }
-    if !str_contains(r, "openOODA MCP Server") { return Err("initialize missing serverInfo"); }
-    if s.caps_held != 1 { return Err("initialize did not grant FsReadCap bit 0"); }
+    if !str_contains(r, "2024-11-05") { println("FAIL: r=" + r); return Err("initialize missing protocol"); }
+    if !str_contains(r, "openOODA MCP Server") { println("FAIL: serverInfo r=" + r); return Err("initialize missing serverInfo"); }
+    if s.caps_held != 1 { println("FAIL: caps_held=" + s.caps_held.to_string()); return Err("initialize did not grant FsReadCap bit 0"); }
 
     let mut s2: McpSession = mcp_session_new();
     let call: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}";
     let r2: String = mcp_server_handle_body(fs, &mut s2, &g, "codex", call);
-    if !str_contains(r2, "-32600") { return Err("pre-init tools/call must return -32600"); }
+    if !str_contains(r2, "-32600") { println("FAIL: r2=" + r2); return Err("pre-init tools/call must return -32600"); }
 
     let mut s3: McpSession = mcp_session_new();
-    let _: String = mcp_server_handle_body(fs, &mut s3, &g, "codex", init);
+    let _d1: String = mcp_server_handle_body(fs, &mut s3, &g, "codex", init);
     let r3: String = mcp_server_handle_body(fs, &mut s3, &g, "codex", init);
-    if !str_contains(r3, "-32603") { return Err("duplicate id must return -32603"); }
+    if !str_contains(r3, "-32603") { println("FAIL: r3=" + r3); return Err("duplicate id must return -32603"); }
 
     let mut s4: McpSession = mcp_session_new();
     let forged: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientName\":\"forged\"}}";
-    let _: String = mcp_server_handle_body(fs, &mut s4, &g, "codex", forged);
-    if s4.client_name != "" { return Err("params.clientName must not set session client_name"); }
+    let _d2: String = mcp_server_handle_body(fs, &mut s4, &g, "codex", forged);
+    if s4.client_name != "" { println("FAIL: client_name=" + s4.client_name); return Err("params.clientName must not set session client_name"); }
 
     let mut s5: McpSession = mcp_session_new();
     let badv: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"9999-01-01\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
     let rv: String = mcp_server_handle_body(fs, &mut s5, &g, "codex", badv);
-    if !str_contains(rv, "-32600") { return Err("unsupported protocolVersion must return -32600"); }
+    if !str_contains(rv, "-32600") { println("FAIL: rv=" + rv); return Err("unsupported protocolVersion must return -32600"); }
     let good: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
     let rg: String = mcp_server_handle_body(fs, &mut s5, &g, "codex", good);
-    if !str_contains(rg, "2024-11-05") { return Err("valid initialize after version reject must succeed"); }
+    if !str_contains(rg, "2024-11-05") { println("FAIL: rg=" + rg); return Err("valid initialize after version reject must succeed"); }
     let twice: String = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
     let r2b: String = mcp_server_handle_body(fs, &mut s5, &g, "codex", twice);
-    if !str_contains(r2b, "already initialized") { return Err("second initialize must fail"); }
+    if !str_contains(r2b, "already initialized") { println("FAIL: r2b=" + r2b); return Err("second initialize must fail"); }
 
     let mut s6: McpSession = mcp_session_new();
-    let _: String = mcp_server_handle_body(fs, &mut s6, &g, "codex", init);
-    let _: String = mcp_server_handle_body(fs, &mut s6, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let _d3: String = mcp_server_handle_body(fs, &mut s6, &g, "codex", init);
+    let _d4: String = mcp_server_handle_body(fs, &mut s6, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
     let alias: String = mcp_server_handle_body(fs, &mut s6, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"initialized\"}");
-    if !str_contains(alias, "-32601") { return Err("initialized without notifications/ prefix must return -32601"); }
+    if !str_contains(alias, "-32601") { println("FAIL: alias=" + alias); return Err("initialized without notifications/ prefix must return -32601"); }
     return Ok(0);
 }
 

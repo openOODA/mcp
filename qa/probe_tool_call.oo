@@ -9,10 +9,10 @@
 //   2. read_board without name is schema-invalid.
 //   3. get_orientation wraps the codex text.
 
-import "../engine/core/mcp_server.oo";
-import "../engine/core/mcp_session.oo";
-import "../engine/core/mcp_dispatch.oo";
-import "../engine/state/mcp_graph.oo";
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/core/mcp_dispatch.oo";
+import "engine/state/mcp_graph.oo";
 
 fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";

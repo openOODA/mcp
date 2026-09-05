@@ -9,41 +9,63 @@
 //   2. Run ten probes.
 //   3. Return the first Err.
 
-import "../qa/probe_initialize.oo";
-import "../qa/probe_tools_list.oo";
-import "../qa/probe_tool_call.oo";
-import "../qa/probe_resources_list.oo";
-import "../qa/probe_ping.oo";
-import "../qa/probe_double_run.oo";
-import "../qa/probe_merge.oo";
-import "../qa/probe_redteam.oo";
-import "../qa/probe_token.oo";
-import "../qa/probe_protocol.oo";
-import "verify.oo";
+import "qa/probe_initialize.oo";
+import "qa/probe_tools_list.oo";
+import "qa/probe_tool_call.oo";
+import "qa/probe_resources_list.oo";
+import "qa/probe_ping.oo";
+import "qa/probe_double_run.oo";
+import "qa/probe_merge.oo";
+import "qa/probe_redteam.oo";
+import "qa/probe_token.oo";
+import "qa/probe_protocol.oo";
+import "verify_surface.oo";
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
     let v: Result[Int, String] = mcp_verify_surface();
-    if v.is_err() { return v; }
+    if v.is_err() { println("FAIL: surface"); return v; }
+    println("PASS: surface");
+
     let a: Result[Int, String] = probe_initialize_run(fs_r);
-    if a.is_err() { return a; }
+    if a.is_err() { println("FAIL: probe_initialize"); return a; }
+    println("PASS: probe_initialize");
+
     let b: Result[Int, String] = probe_tools_list_run(fs_r);
-    if b.is_err() { return b; }
+    if b.is_err() { println("FAIL: probe_tools_list"); return b; }
+    println("PASS: probe_tools_list");
+
     let c: Result[Int, String] = probe_tool_call_run(fs_r);
-    if c.is_err() { return c; }
+    if c.is_err() { println("FAIL: probe_tool_call"); return c; }
+    println("PASS: probe_tool_call");
+
     let d: Result[Int, String] = probe_resources_list_run(fs_r);
-    if d.is_err() { return d; }
+    if d.is_err() { println("FAIL: probe_resources_list"); return d; }
+    println("PASS: probe_resources_list");
+
     let e: Result[Int, String] = probe_ping_run(fs_r);
-    if e.is_err() { return e; }
+    if e.is_err() { println("FAIL: probe_ping"); return e; }
+    println("PASS: probe_ping");
+
     let f: Result[Int, String] = probe_double_run_run(fs_r);
-    if f.is_err() { return f; }
+    if f.is_err() { println("FAIL: probe_double_run"); return f; }
+    println("PASS: probe_double_run");
+
     let h: Result[Int, String] = probe_merge_run(fs_r, fw);
-    if h.is_err() { return h; }
+    if h.is_err() { println("FAIL: probe_merge"); return h; }
+    println("PASS: probe_merge");
+
     let r: Result[Int, String] = probe_redteam_run();
-    if r.is_err() { return r; }
+    if r.is_err() { println("FAIL: probe_redteam"); return r; }
+    println("PASS: probe_redteam");
+
     let t: Result[Int, String] = probe_token_run(fs_r);
-    if t.is_err() { return t; }
+    if t.is_err() { println("FAIL: probe_token"); return t; }
+    println("PASS: probe_token");
+
     let pr: Result[Int, String] = probe_protocol_run(fs_r);
-    if pr.is_err() { return pr; }
+    if pr.is_err() { println("FAIL: probe_protocol"); return pr; }
+    println("PASS: probe_protocol");
+
     println("test: 10 probes + verify passed");
     return Ok(0);
 }

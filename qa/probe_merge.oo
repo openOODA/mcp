@@ -10,7 +10,7 @@
 //   3. File merge writes ooda and keeps sibling keys.
 //   4. Second file merge returns 0.
 
-import "../cli/safe_merge_core.oo";
+import "cli/safe_merge_core.oo";
 
 pub fn probe_merge_run(fr: &FsReadCap, fw: &FsWriteCap) -> Result[Int, String] {
     let e1: Result[String, String] = safe_mcp_merge_apply("");

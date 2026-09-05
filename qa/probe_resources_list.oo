@@ -9,10 +9,10 @@
 //   2. List does not contain registry/catalog.
 //   3. Non-canonical file URI is not advertised.
 
-import "../engine/core/mcp_server.oo";
-import "../engine/core/mcp_session.oo";
-import "../engine/state/mcp_graph.oo";
-import "../engine/core/mcp_dispatch.oo";
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/core/mcp_dispatch.oo";
 
 fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
@@ -23,7 +23,7 @@ fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
 pub fn probe_resources_list_run(fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
     let mut s: McpSession = mcp_session_new();
-    let _: String = probe_ready(fs, &mut s, &g);
+    let _r1: String = probe_ready(fs, &mut s, &g);
     let r: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/list\",\"params\":{}}");
     if !str_contains(r, "ooda://orientation") { return Err("resources/list missing orientation"); }
     if !str_contains(r, "ooda://em/metrics") { return Err("resources/list missing em/metrics"); }
@@ -37,8 +37,8 @@ pub fn probe_resources_list_run(fs: &FsReadCap) -> Result[Int, String] {
     let em: String = mcp_server_handle_body(fs, &mut s, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"resources/read\",\"params\":{\"uri\":\"ooda://em/metrics\"}}");
     if !str_contains(em, "-32604") { return Err("standard tier must deny em/metrics"); }
     let mut sa: McpSession = mcp_session_new();
-    let _: String = mcp_server_handle_body(fs, &mut sa, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"tier\":\"audit\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}");
-    let _: String = mcp_server_handle_body(fs, &mut sa, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let _r2: String = mcp_server_handle_body(fs, &mut sa, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"tier\":\"audit\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}");
+    let _r3: String = mcp_server_handle_body(fs, &mut sa, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
     let ema: String = mcp_server_handle_body(fs, &mut sa, &g, "codex-text", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"resources/read\",\"params\":{\"uri\":\"ooda://em/metrics\"}}");
     if str_contains(ema, "-32604") { return Err("audit tier must not deny em/metrics"); }
     if str_contains(ema, "\"error\"") { return Err("audit tier em/metrics must not be an error"); }

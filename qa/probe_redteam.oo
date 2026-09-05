@@ -9,7 +9,7 @@
 //   2. Refuse any \"result\":\"fail\".
 //   3. Require eight pass tokens.
 
-import "../engine/health/mcp_redteam.oo";
+import "engine/health/mcp_redteam.oo";
 
 pub fn probe_redteam_run() -> Result[Int, String] {
     let out: String = mcp_redteam_run_all_json();

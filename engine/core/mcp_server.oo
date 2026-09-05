@@ -167,13 +167,12 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
 }
 
 fn mcp_server_roots_json(id: String, s: &McpSession) -> String {
-    let roots: List[String] = s.client_roots;
     let mut body: String = "{\"roots\":[";
-    let n: Int = list_len(roots);
+    let n: Int = list_len(s.client_roots);
     let mut i: Int = 0;
     while i < n {
         if i > 0 { body = body + ","; }
-        body = body + "{\"uri\":\"" + mcp_json_escape(list_get(roots, i)) + "\"}";
+        body = body + "{\"uri\":\"" + mcp_json_escape(list_get(s.client_roots, i)) + "\"}";
         i = i + 1;
     }
     body = body + "]}";

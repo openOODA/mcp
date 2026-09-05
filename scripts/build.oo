@@ -9,17 +9,33 @@
 //   2. Err if any path is missing or unreadable.
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    let files: List[String] = [
-        "cli/main.oo", "cli/cmd_mcp.oo", "cli/safe_merge.oo", "cli/safe_merge_core.oo",
-        "engine/core/mcp_json.oo", "engine/core/mcp_batch.oo", "engine/core/mcp_dispatch.oo",
-        "engine/core/mcp_server.oo", "engine/core/mcp_session.oo", "engine/core/mcp_stdio.oo",
-        "engine/core/mcp_transport.oo", "engine/federation/mcp_codex.oo",
-        "engine/health/mcp_audit.oo", "engine/health/mcp_redteam.oo",
-        "engine/resource/mcp_context_budget.oo", "engine/resource/mcp_format.oo", "engine/resource/mcp_schema.oo",
-        "engine/state/mcp_cap.oo", "engine/state/mcp_em.oo", "engine/state/mcp_graph.oo",
-        "engine/state/mcp_notification.oo", "engine/state/mcp_ooda_state.oo", "engine/state/mcp_roots.oo",
-        "engine/tool/mcp_tool.oo", "engine/tool/mcp_tool_dispatch.oo", "engine/tool/mcp_tool_token.oo"
-    ];
+    let mut files: List[String] = list_new();
+    files = list_push(files, "cli/main.oo");
+    files = list_push(files, "cli/cmd_mcp.oo");
+    files = list_push(files, "cli/safe_merge.oo");
+    files = list_push(files, "cli/safe_merge_core.oo");
+    files = list_push(files, "engine/core/mcp_json.oo");
+    files = list_push(files, "engine/core/mcp_batch.oo");
+    files = list_push(files, "engine/core/mcp_dispatch.oo");
+    files = list_push(files, "engine/core/mcp_server.oo");
+    files = list_push(files, "engine/core/mcp_session.oo");
+    files = list_push(files, "engine/core/mcp_stdio.oo");
+    files = list_push(files, "engine/core/mcp_transport.oo");
+    files = list_push(files, "engine/federation/mcp_codex.oo");
+    files = list_push(files, "engine/health/mcp_audit.oo");
+    files = list_push(files, "engine/health/mcp_redteam.oo");
+    files = list_push(files, "engine/resource/mcp_context_budget.oo");
+    files = list_push(files, "engine/resource/mcp_format.oo");
+    files = list_push(files, "engine/resource/mcp_schema.oo");
+    files = list_push(files, "engine/state/mcp_cap.oo");
+    files = list_push(files, "engine/state/mcp_em.oo");
+    files = list_push(files, "engine/state/mcp_graph.oo");
+    files = list_push(files, "engine/state/mcp_notification.oo");
+    files = list_push(files, "engine/state/mcp_ooda_state.oo");
+    files = list_push(files, "engine/state/mcp_roots.oo");
+    files = list_push(files, "engine/tool/mcp_tool.oo");
+    files = list_push(files, "engine/tool/mcp_tool_dispatch.oo");
+    files = list_push(files, "engine/tool/mcp_tool_token.oo");
     let mut i: Int = 0;
     while i < list_len(files) {
         let path: String = list_get(files, i);

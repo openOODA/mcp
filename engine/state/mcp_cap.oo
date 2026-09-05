@@ -54,11 +54,10 @@ pub fn mcp_cap_fs_read_bit() -> Int { return 1; }
 
 pub fn mcp_caps_bitmask_from_graph(g: &McpGraph) -> Int {
     let mut mask: Int = 0;
-    let caps: List[McpCapability] = g.capabilities;
-    let n: Int = list_len(caps);
+    let n: Int = list_len(g.capabilities);
     let mut i: Int = 0;
     while i < n {
-        let c: McpCapability = list_get(caps, i);
+        let c: McpCapability = list_get(g.capabilities, i);
         let bit: Int = mcp_token_to_bit(c.token);
         if bit >= 0 { mask = mask + (1 << bit); }
         i = i + 1;

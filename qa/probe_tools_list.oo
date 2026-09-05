@@ -9,10 +9,10 @@
 //   2. tools/list contains get_rules and get_rfc.
 //   3. tools/list rejects get_milestone_status and ooda.northstar.
 
-import "../engine/core/mcp_server.oo";
-import "../engine/core/mcp_session.oo";
-import "../engine/state/mcp_graph.oo";
-import "../engine/tool/mcp_tool.oo";
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/tool/mcp_tool.oo";
 
 fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";

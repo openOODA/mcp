@@ -16,13 +16,12 @@ import "engine/state/mcp_graph.oo";
 import "engine/tool/mcp_tool.oo";
 
 pub fn mcp_context_budget_get_board_index(g: &McpGraph) -> String {
-    let brds: List[McpBoard] = g.boards;
-    let n: Int = list_len(brds);
+    let n: Int = list_len(g.boards);
     let mut out: String = "[";
     let mut i: Int = 0;
     while i < n {
         if i > 0 { out = out + ","; }
-        let b: McpBoard = list_get(brds, i);
+        let b: McpBoard = list_get(g.boards, i);
         out = out + "{\"name\":\"" + b.name + "\",\"path\":\"" + b.path + "\",\"priority\":" + b.read_priority.to_string() + ",\"summary_chars\":" + chars_len(b.summary).to_string() + "}";
         i = i + 1;
     }
@@ -31,11 +30,10 @@ pub fn mcp_context_budget_get_board_index(g: &McpGraph) -> String {
 
 pub fn mcp_context_budget_summarize_board(fs: &FsReadCap, g: &McpGraph, name: String, max_chars: Int) -> String {
     if max_chars <= 0 { return "{\"error\":\"max_chars must be > 0\"}"; }
-    let brds: List[McpBoard] = g.boards;
-    let n: Int = list_len(brds);
+    let n: Int = list_len(g.boards);
     let mut i: Int = 0;
     while i < n {
-        let b: McpBoard = list_get(brds, i);
+        let b: McpBoard = list_get(g.boards, i);
         if b.name == name {
             let path: String = mcp_tool_board_path(g, b.path);
             let rr: Result[String, String] = read_file(fs, path);

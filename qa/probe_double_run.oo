@@ -9,9 +9,9 @@
 //   2. Run initialize on session B.
 //   3. Compare the two response strings.
 
-import "../engine/core/mcp_server.oo";
-import "../engine/core/mcp_session.oo";
-import "../engine/state/mcp_graph.oo";
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
 
 pub fn probe_double_run_run(fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");

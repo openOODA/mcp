@@ -1,10 +1,17 @@
-// # MCP Scripts Index
+// # MCP Scripts Index — Anchor for Agents
 //
 // Logline: Index of the four entry points. Each fails closed. None print fake success.
 //
 // Setup: build -> test -> verify -> release. Version is the git tag.
+//
+// Beats:
+//   1. build.oo — fail closed if a production source file is missing.
+//   2. test.oo — run the ten probe functions and the surface verifier.
+//   3. verify.oo — fail closed if the 14 tokens, 12 boards, or 22 tools drift.
+//   4. release.oo — fail closed unless verify_surface passes.
 
-import "build.oo";
-import "test.oo";
-import "verify.oo";
-import "release.oo";
+// Sibling script entry points (.oo files):
+// - build.oo
+// - test.oo
+// - verify.oo
+// - release.oo

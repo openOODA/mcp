@@ -214,13 +214,17 @@ pub fn mcp_json_escape(s: String) -> String {
 }
 
 pub fn mcp_json_ok(id_raw: String, result: String) -> String {
-    let idj: String = if chars_len(id_raw) == 0 { "null" } else { id_raw };
-    return "{\"jsonrpc\":\"2.0\",\"id\":" + idj + ",\"result\":" + result + "}";
+    if chars_len(id_raw) == 0 {
+        return "{\"jsonrpc\":\"2.0\",\"id\":null,\"result\":" + result + "}";
+    }
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id_raw + ",\"result\":" + result + "}";
 }
 
 pub fn mcp_json_err(id_raw: String, code: Int, msg: String) -> String {
-    let idj: String = if chars_len(id_raw) == 0 { "null" } else { id_raw };
-    return "{\"jsonrpc\":\"2.0\",\"id\":" + idj + ",\"error\":{\"code\":" + code.to_string() + ",\"message\":\"" + mcp_json_escape(msg) + "\"}}";
+    if chars_len(id_raw) == 0 {
+        return "{\"jsonrpc\":\"2.0\",\"id\":null,\"error\":{\"code\":" + code.to_string() + ",\"message\":\"" + mcp_json_escape(msg) + "\"}}";
+    }
+    return "{\"jsonrpc\":\"2.0\",\"id\":" + id_raw + ",\"error\":{\"code\":" + code.to_string() + ",\"message\":\"" + mcp_json_escape(msg) + "\"}}";
 }
 
 pub fn mcp_json_content_length(header: String) -> Int {

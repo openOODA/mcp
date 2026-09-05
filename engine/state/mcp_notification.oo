@@ -27,11 +27,10 @@ pub fn mcp_pending_count(s: &McpSession) -> Int {
 pub fn mcp_drain_into_response(s: &mut McpSession, raw: String, response: String) -> String {
     let n: Int = mcp_pending_count(s);
     if n == 0 { return response; }
-    let notifs: List[String] = s.pending_notifications;
     let mut out: String = response;
     let mut i: Int = 0;
     while i < n {
-        let entry: String = list_get(notifs, i);
+        let entry: String = list_get(s.pending_notifications, i);
         if chars_len(entry) > 0 { out = out + mcp_transport_emit(raw, entry); }
         i = i + 1;
     }

@@ -15,12 +15,11 @@ import "engine/core/mcp_batch.oo";
 
 pub fn mcp_root_allows(s: &McpSession, uri: String) -> Bool {
     if str_starts_with(uri, "ooda://") { return true; }
-    let roots: List[String] = s.client_roots;
-    let n: Int = list_len(roots);
+    let n: Int = list_len(s.client_roots);
     if n == 0 { return false; }
     let mut i: Int = 0;
     while i < n {
-        if str_starts_with(uri, list_get(roots, i)) { return true; }
+        if str_starts_with(uri, list_get(s.client_roots, i)) { return true; }
         i = i + 1;
     }
     return false;

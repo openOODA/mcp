@@ -14,11 +14,10 @@ import "engine/core/mcp_json.oo";
 import "engine/state/mcp_graph.oo";
 
 pub fn mcp_tool_required_caps(g: &McpGraph, tool_name: String) -> Int {
-    let tcs: List[McpToolCap] = g.tool_caps;
-    let n: Int = list_len(tcs);
+    let n: Int = list_len(g.tool_caps);
     let mut i: Int = 0;
     while i < n {
-        let t: McpToolCap = list_get(tcs, i);
+        let t: McpToolCap = list_get(g.tool_caps, i);
         if t.tool == tool_name { return t.required_caps; }
         i = i + 1;
     }
@@ -68,11 +67,10 @@ pub fn mcp_tool_board_path(g: &McpGraph, rel: String) -> String {
 }
 
 pub fn mcp_tool_read_board(fs: &FsReadCap, g: &McpGraph, board_name: String) -> String {
-    let brds: List[McpBoard] = g.boards;
-    let n: Int = list_len(brds);
+    let n: Int = list_len(g.boards);
     let mut i: Int = 0;
     while i < n {
-        let b: McpBoard = list_get(brds, i);
+        let b: McpBoard = list_get(g.boards, i);
         if b.name == board_name {
             let path: String = mcp_tool_board_path(g, b.path);
             let rr: Result[String, String] = read_file(fs, path);

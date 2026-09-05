@@ -1,7 +1,15 @@
 // # MCP Examples Index — Anchor for Agents
 //
 // Logline: Index of the 3 sample JSON-RPC request files for the MCP server.
+//
+// Setup: Each example is the minimum viable demonstration of one real use case.
+//
+// Beats:
+//   1. initialize_request.oot — sample MCP initialize request and expected fields.
+//   2. tools_list_request.oot — sample tools/list request and expected tool set.
+//   3. tool_call_request.oot — sample tools/call request for get_orientation.
 
-import "initialize_request.oot";
-import "tools_list_request.oot";
-import "tool_call_request.oot";
+// Sibling example documents (.oot files):
+// - initialize_request.oot
+// - tools_list_request.oot
+// - tool_call_request.oot
