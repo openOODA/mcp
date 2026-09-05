@@ -62,7 +62,8 @@ pub fn mcp_audit_tail(s: &McpSession, n: Int) -> String {
     let mut first: Bool = true;
     while i < total {
         if !first { out = out + ","; }
-        out = out + mcp_audit_entry_to_json(&list_get(s.audit_log, i));
+        let entry: McpAuditEntry = list_get(s.audit_log, i);
+        out = out + mcp_audit_entry_to_json(&entry);
         first = false;
         i = i + 1;
     }
@@ -74,7 +75,8 @@ pub fn mcp_audit_persist(fw: &FsWriteCap, s: &McpSession) -> Int {
     let total: Int = list_len(s.audit_log);
     let mut i: Int = 0;
     while i < total {
-        let _: Result[FileWriter, String] = file_writer_write(fw, writer, mcp_audit_entry_to_json(&list_get(s.audit_log, i)) + "\n");
+        let entry: McpAuditEntry = list_get(s.audit_log, i);
+        let _: Result[FileWriter, String] = file_writer_write(fw, writer, mcp_audit_entry_to_json(&entry) + "\n");
         i = i + 1;
     }
     return total;

@@ -12,6 +12,11 @@
 import "engine/state/mcp_graph.oo";
 
 pub fn mcp_codex_path_env(env: &EnvCap) -> String {
+    let r0: Result[String, String] = env_get(env, "OODA_CODEX");
+    if r0.is_ok() {
+        let v0: String = match r0 { Ok(s) => s, Err(_) => "" };
+        if chars_len(v0) > 0 { return v0; }
+    }
     let r: Result[String, String] = env_get(env, "OODACODEX");
     if r.is_ok() {
         let v: String = match r { Ok(s) => s, Err(_) => "" };

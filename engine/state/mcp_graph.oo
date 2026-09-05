@@ -194,21 +194,24 @@ pub fn mcp_graph_to_json(g: &McpGraph) -> String {
     let mut i: Int = 0;
     while i < list_len(g.capabilities) {
         if i > 0 { caps_json = caps_json + ","; }
-        caps_json = caps_json + mcp_graph_cap_to_json(&list_get(g.capabilities, i));
+        let c: McpCapability = list_get(g.capabilities, i);
+        caps_json = caps_json + mcp_graph_cap_to_json(&c);
         i = i + 1;
     }
     let mut brds_json: String = "";
     let mut j: Int = 0;
     while j < list_len(g.boards) {
         if j > 0 { brds_json = brds_json + ","; }
-        brds_json = brds_json + mcp_graph_board_to_json(&list_get(g.boards, j));
+        let b: McpBoard = list_get(g.boards, j);
+        brds_json = brds_json + mcp_graph_board_to_json(&b);
         j = j + 1;
     }
     let mut gts_json: String = "";
     let mut k: Int = 0;
     while k < list_len(g.redteam_gates) {
         if k > 0 { gts_json = gts_json + ","; }
-        gts_json = gts_json + mcp_graph_gate_to_json(&list_get(g.redteam_gates, k));
+        let gt: McpRedteamGate = list_get(g.redteam_gates, k);
+        gts_json = gts_json + mcp_graph_gate_to_json(&gt);
         k = k + 1;
     }
     return "{\"version\":\"" + g.version + "\",\"protocol\":\"" + g.protocol + "\",\"boardRoot\":\"" + g.board_root + "\",\"capabilities\":[" + caps_json + "],\"boards\":[" + brds_json + "],\"redteamGates\":[" + gts_json + "],\"goldMasterSha256\":\"" + g.substrate.gold_master_sha256 + "\"}";
