@@ -52,6 +52,36 @@ pub fn mcp_bit_to_token(bit: Int) -> String {
 
 pub fn mcp_cap_fs_read_bit() -> Int { return 1; }
 
+pub fn mcp_token_to_bit_substrate(token: String) -> Int {
+    if token == "FsReadCap"      { return 0; }
+    if token == "FsWriteCap"     { return 1; }
+    if token == "NetCap"         { return 2; }
+    if token == "TcpCap"         { return 3; }
+    if token == "UdpCap"         { return 4; }
+    if token == "SysCap"         { return 5; }
+    if token == "ProcessCap"     { return 6; }
+    if token == "EnvCap"         { return 7; }
+    if token == "TimeCap"        { return 8; }
+    if token == "RandCap"        { return 9; }
+    if token == "AllocCap"       { return 10; }
+    if token == "ThreadCap"      { return 11; }
+    if token == "GpuCap"         { return 12; }
+    if token == "FfiCap"         { return 13; }
+    if token == "FsCap"          { return 14; }
+    if token == "ArenaCap"       { return 15; }
+    if token == "MetricsCap"     { return 16; }
+    if token == "SignCap"        { return 17; }
+    if token == "BindCap"        { return 18; }
+    if token == "AudioCap"       { return 19; }
+    if token == "CameraCap"      { return 20; }
+    if token == "UsbCap"         { return 21; }
+    if token == "HidCap"         { return 22; }
+    if token == "WindowCap"      { return 23; }
+    if token == "FrameCap"       { return 24; }
+    if token == "CompilerReadCap"{ return 25; }
+    return 0 - 1;
+}
+
 pub fn mcp_caps_bitmask_from_graph(g: &McpGraph) -> Int {
     let mut mask: Int = 0;
     let n: Int = list_len(g.capabilities);

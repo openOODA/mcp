@@ -1,26 +1,47 @@
 // # MCP Verify Surface Core
 //
-// Logline: Fail closed if the 14 NORTHSTAR tokens, 12 boards, or 23 tools drift.
+// Logline: Fail closed if cap inventory, boards, or tools drift. Zero-trust SSoT.
 //
-// Setup: Pure graph constructors. No VERSION file. Ghost names are defects.
-//
+// Setup: Pure graph + FsReadCap reads of oodar sec/cap/caps.h, cap_table.json,
+//        and NORTHSTAR 14. 14 subset of 26, SSoT is oodar.
 // Beats:
-//   1. 14 caps; FfiCap present; FsCap absent.
-//   2. 12 boards; NORTHSTAR present; ROADMAP absent.
+//   1. 14 language caps; 26 substrate caps; subset.
+//   2. 12 boards; NORTHSTAR present.
 //   3. 23 tools.
 
 import "engine/state/mcp_graph.oo";
 import "engine/state/mcp_cap.oo";
 import "engine/tool/mcp_tool.oo";
 
+pub fn mcp_verify_surface_zero_trust(fs: &FsReadCap) -> Result[Int, String] {
+    let t: Result[String, String] = read_file(fs, "oodar/sec/cap/cap_table.json");
+    if t.is_err() { return Err("cap_table.json missing"); }
+    let j: String = match t { Ok(s) => s, Err(_) => "" };
+    if str_index_of(j, "\"cap_count\": 26") < 0 { return Err("cap_table.json not 26"); }
+    let h: Result[String, String] = read_file(fs, "oodar/sec/cap/caps.h");
+    if h.is_err() { return Err("caps.h missing"); }
+    let hs: String = match h { Ok(s) => s, Err(_) => "" };
+    let c: Int = str_count(hs, "#define OODAR_CAP_");
+    if c != 26 { return Err("caps.h not 26, got " + c.to_string()); }
+    return mcp_verify_surface();
+}
+
 pub fn mcp_verify_surface() -> Result[Int, String] {
     let caps: List[McpCapability] = mcp_graph_canonical_caps();
-    if list_len(caps) != 14 { return Err("cap count drifted"); }
+    if list_len(caps) != 14 { return Err("14 language caps drifted"); }
+    let subs: List[McpCapability] = mcp_graph_canonical_substrate_caps();
+    if list_len(subs) != 26 { return Err("26 substrate caps drifted"); }
     if mcp_token_to_bit("FfiCap") != 13 { return Err("FfiCap must be bit 13"); }
     if mcp_token_to_bit("ThreadCap") != 11 { return Err("ThreadCap must be bit 11"); }
     if mcp_token_to_bit("FsCap") != 0 - 1 { return Err("FsCap must be unknown"); }
     if mcp_token_to_bit("HttpCap") != 0 - 1 { return Err("HttpCap must be unknown"); }
     if mcp_token_to_bit("BindCap") != 0 - 1 { return Err("BindCap must be unknown"); }
+    let mut i: Int = 0;
+    while i < list_len(caps) {
+        let c: McpCapability = list_get(caps, i);
+        if mcp_token_to_bit_substrate(c.name) == 0 - 1 { return Err("14 not subset of 26: " + c.name); }
+        i = i + 1;
+    }
     let brds: List[McpBoard] = mcp_graph_canonical_boards();
     if list_len(brds) != 12 { return Err("board count drifted"); }
     let mut has_ns: Bool = false;

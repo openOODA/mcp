@@ -102,6 +102,23 @@ pub fn mcp_graph_canonical_caps() -> List[McpCapability] {
     return out;
 }
 
+pub fn mcp_graph_canonical_substrate_caps() -> List[McpCapability] {
+    let mut out: List[McpCapability] = mcp_graph_canonical_caps();
+    out = list_push(out, mcp_cap_new("FsCap",           "fs",   "core", 1, true, "Legacy Fs (banned)"));
+    out = list_push(out, mcp_cap_new("ArenaCap",        "mem",  "core", 1, true, "Arena"));
+    out = list_push(out, mcp_cap_new("MetricsCap",      "met",  "core", 1, true, "Metrics"));
+    out = list_push(out, mcp_cap_new("SignCap",         "sec",  "core", 1, true, "Sign"));
+    out = list_push(out, mcp_cap_new("BindCap",         "net",  "core", 1, true, "Bind"));
+    out = list_push(out, mcp_cap_new("AudioCap",        "aud",  "app",  1, true, "Audio (future)"));
+    out = list_push(out, mcp_cap_new("CameraCap",       "cam",  "app",  1, true, "Camera (future)"));
+    out = list_push(out, mcp_cap_new("UsbCap",          "usb",  "app",  1, true, "USB (future)"));
+    out = list_push(out, mcp_cap_new("HidCap",          "hid",  "app",  1, true, "HID (future)"));
+    out = list_push(out, mcp_cap_new("WindowCap",       "win",  "app",  1, true, "Window (future)"));
+    out = list_push(out, mcp_cap_new("FrameCap",        "frm",  "app",  1, true, "Frame (future)"));
+    out = list_push(out, mcp_cap_new("CompilerReadCap", "cmp",  "core", 1, true, "Compiler read"));
+    return out;
+}
+
 pub fn mcp_graph_canonical_boards() -> List[McpBoard] {
     let mut out: List[McpBoard] = list_new();
     out = list_push(out, mcp_board_new("ANCHOR",    "ANCHOR.oo",                                  "Agent front door", 1));
