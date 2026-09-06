@@ -18,8 +18,8 @@ import "engine/core/mcp_batch.oo";
 import "engine/federation/mcp_codex.oo";
 import "engine/health/mcp_audit.oo";
 
-pub fn mcp_stdio_poll_ms() -> Int { return 100; }
-pub fn mcp_stdio_idle_iters() -> Int { return 3000; }
+pub fn mcp_stdio_poll_ms() -> Int { return 1; }
+pub fn mcp_stdio_idle_iters() -> Int { return 300000; }
 
 fn mcp_stdio_finish(fw: &FsWriteCap, s: &McpSession, rc: Result[Int, String]) -> Result[Int, String] {
     let _: Int = mcp_audit_persist(fw, s);
@@ -73,6 +73,21 @@ pub fn mcp_stdio_serve(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap) -> Result[
             buf = buf + chunk;
             total = total + bytes_len(chunk);
             idle = 0;
+            let mut more: Bool = true;
+            while more && total <= 1048576 {
+                let r0: Result[String, String] = oo_read_stdin_chunk(0);
+                if r0.is_ok() {
+                    let extra: String = match r0 { Ok(s) => s, Err(_) => "" };
+                    if chars_len(extra) > 0 {
+                        buf = buf + extra;
+                        total = total + bytes_len(extra);
+                    } else {
+                        more = false;
+                    }
+                } else {
+                    more = false;
+                }
+            }
         }
     }
     return mcp_stdio_finish(fw, &session, Ok(0));
