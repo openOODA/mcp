@@ -1,0 +1,172 @@
+// # MCP Tool Slicing
+//
+// Logline: Slices rules and capability graphs to minimize token usage for LLM agents.
+//
+// Setup: Fail-closed on missing board. Topics matched against section headings.
+//
+// Beats:
+//   1. Slice RULES.oot by topic keywords while preserving constitutional preamble.
+//   2. Filter capability graph by target capability name, prefix, or category.
+//   3. Wrap sliced output in standard MCP response envelope.
+
+import "engine/core/mcp_json.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/state/mcp_cap.oo";
+import "engine/tool/mcp_tool.oo";
+
+fn ascii_lower(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "A" { out = out + "a"; }
+        else if c == "B" { out = out + "b"; }
+        else if c == "C" { out = out + "c"; }
+        else if c == "D" { out = out + "d"; }
+        else if c == "E" { out = out + "e"; }
+        else if c == "F" { out = out + "f"; }
+        else if c == "G" { out = out + "g"; }
+        else if c == "H" { out = out + "h"; }
+        else if c == "I" { out = out + "i"; }
+        else if c == "J" { out = out + "j"; }
+        else if c == "K" { out = out + "k"; }
+        else if c == "L" { out = out + "l"; }
+        else if c == "M" { out = out + "m"; }
+        else if c == "N" { out = out + "n"; }
+        else if c == "O" { out = out + "o"; }
+        else if c == "P" { out = out + "p"; }
+        else if c == "Q" { out = out + "q"; }
+        else if c == "R" { out = out + "r"; }
+        else if c == "S" { out = out + "s"; }
+        else if c == "T" { out = out + "t"; }
+        else if c == "U" { out = out + "u"; }
+        else if c == "V" { out = out + "v"; }
+        else if c == "W" { out = out + "w"; }
+        else if c == "X" { out = out + "x"; }
+        else if c == "Y" { out = out + "y"; }
+        else if c == "Z" { out = out + "z"; }
+        else { out = out + c; }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn mcp_tool_slice_rules(fs: &FsReadCap, g: &McpGraph, topic: String) -> String {
+    let mut rules_path: String = "";
+    let n: Int = list_len(g.boards);
+    let mut i: Int = 0;
+    while i < n {
+        let b: McpBoard = list_get(g.boards, i);
+        if b.name == "RULES" {
+            rules_path = mcp_tool_board_path(g, b.path);
+        }
+        i = i + 1;
+    }
+    if chars_len(rules_path) == 0 {
+        return mcp_tool_wrap("{\"error\":\"RULES board not configured\"}");
+    }
+    if !path_exists(fs, rules_path) {
+        if path_exists(fs, "openOODA/" + rules_path) {
+            rules_path = "openOODA/" + rules_path;
+        } else if path_exists(fs, "openOODA/RULES.oot") {
+            rules_path = "openOODA/RULES.oot";
+        }
+    }
+    let rr: Result[String, String] = read_file(fs, rules_path);
+    if rr.is_err() {
+        return mcp_tool_wrap("{\"error\":\"cannot read RULES board\",\"path\":\"" + rules_path + "\"}");
+    }
+    let text: String = match rr { Ok(s) => s, Err(_) => "" };
+    if chars_len(topic) == 0 {
+        return mcp_tool_wrap("# RULES\nPath: " + rules_path + "\n\n" + text);
+    }
+
+    let query: String = ascii_lower(topic);
+    let mut matched_sections: String = "";
+    let mut match_count: Int = 0;
+    let total_len: Int = chars_len(text);
+    let mut cur: Int = 0;
+
+    while cur < total_len {
+        let rest: String = str_slice(text, cur, total_len);
+        let rel_next: Int = str_index_of(rest, "### ");
+        if rel_next < 0 {
+            cur = total_len;
+        } else {
+            let start_sec: Int = cur + rel_next;
+            let after_sec: String = str_slice(text, start_sec + 4, total_len);
+            let rel_end: Int = str_index_of(after_sec, "\n### ");
+            let end_sec: Int = if rel_end >= 0 { start_sec + 4 + rel_end } else { total_len };
+            let sec_text: String = str_slice(text, start_sec, end_sec);
+            let nl_idx: Int = str_index_of(sec_text, "\n");
+            let heading: String = if nl_idx >= 0 { str_slice(sec_text, 0, nl_idx) } else { sec_text };
+            if str_contains(ascii_lower(heading), query) || str_contains(ascii_lower(sec_text), query) {
+                matched_sections = matched_sections + sec_text + "\n\n";
+                match_count = match_count + 1;
+            }
+            cur = end_sec;
+        }
+    }
+
+    let preamble: String = "# RULES (Topic Slice: " + topic + ")\nFile: openOODA/RULES.oot\nConstitutional Non-Negotiable: These governance rules do not change across all repos. Zero Ambient Authority & Fail-Closed.\n\n";
+
+    if match_count == 0 {
+        let fallback: String = preamble + "No rule sections matched topic: \"" + topic + "\".\nAvailable rule topics:\n  1.1 First Principles\n  1.2 Boyd E-M\n  1.3 Action\n  1.4 Honesty\n  1.5 Security & Boundary Physics\n  1.6 Multi-Agent Coordination\n  1.7 Pure .oo Implementation\n  1.8 Academy Code Structure\n  1.9 File Line Cap\n  1.10 Double-Run Determinism\n  1.12 Minimal State\n  1.16 Error Handling & Result Types";
+        return mcp_tool_wrap(fallback);
+    }
+
+    return mcp_tool_wrap(preamble + matched_sections);
+}
+
+pub fn mcp_graph_filter_json(g: &McpGraph, target: String) -> String {
+    let t_lower: String = ascii_lower(target);
+    let mut caps_json: String = "";
+    let mut matching_bits: List[Int] = list_new();
+    let mut count: Int = 0;
+    let n_caps: Int = list_len(g.capabilities);
+    let mut i: Int = 0;
+    while i < n_caps {
+        let c: McpCapability = list_get(g.capabilities, i);
+        let tok_lower: String = ascii_lower(c.token);
+        let kind_lower: String = ascii_lower(c.kind);
+        if str_contains(tok_lower, t_lower) || str_contains(kind_lower, t_lower) {
+            if count > 0 { caps_json = caps_json + ","; }
+            caps_json = caps_json + mcp_graph_cap_to_json(&c);
+            let bit: Int = mcp_token_to_bit(c.token);
+            if bit >= 0 {
+                matching_bits = list_push(matching_bits, bit);
+            }
+            count = count + 1;
+        }
+        i = i + 1;
+    }
+
+    let mut tools_json: String = "";
+    let mut tool_count: Int = 0;
+    let n_tools: Int = list_len(g.tool_caps);
+    let mut j: Int = 0;
+    while j < n_tools {
+        let tc: McpToolCap = list_get(g.tool_caps, j);
+        let mut matched: Bool = false;
+        let mut k: Int = 0;
+        while k < list_len(matching_bits) {
+            let b: Int = list_get(matching_bits, k);
+            if (tc.required_caps & (1 << b)) != 0 {
+                matched = true;
+            }
+            k = k + 1;
+        }
+        if str_contains(ascii_lower(tc.tool), t_lower) {
+            matched = true;
+        }
+        if matched {
+            if tool_count > 0 { tools_json = tools_json + ","; }
+            tools_json = tools_json + "{\"tool\":\"" + tc.tool + "\",\"requiredCaps\":" + tc.required_caps.to_string() + "}";
+            tool_count = tool_count + 1;
+        }
+        j = j + 1;
+    }
+
+    return "{\"version\":\"" + g.version + "\",\"protocol\":\"" + g.protocol + "\",\"filter\":\"" + mcp_json_escape(target) + "\",\"capabilities\":[" + caps_json + "],\"matchingTools\":[" + tools_json + "]}";
+}

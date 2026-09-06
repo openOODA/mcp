@@ -24,7 +24,7 @@ pub fn mcp_tool_required_caps(g: &McpGraph, tool_name: String) -> Int {
     return 0 - 1;
 }
 
-pub fn mcp_tool_count() -> Int { return 22; }
+pub fn mcp_tool_count() -> Int { return 23; }
 
 fn mcp_tool_entry(g: &McpGraph, name: String, desc: String, props: String, req: String) -> String {
     let cap: Int = mcp_tool_required_caps(g, name);
@@ -32,7 +32,7 @@ fn mcp_tool_entry(g: &McpGraph, name: String, desc: String, props: String, req: 
 }
 
 pub fn mcp_tool_list_json(g: &McpGraph) -> String {
-    let a: String = mcp_tool_entry(g, "get_capability_graph", "Typed 14-cap graph", "{}", "[]");
+    let a: String = mcp_tool_entry(g, "get_capability_graph", "Typed 14-cap graph", "{\"target\":{\"type\":\"string\"}}", "[]");
     let b: String = mcp_tool_entry(g, "get_orientation", "Orientation codex text", "{}", "[]");
     let c: String = mcp_tool_entry(g, "read_board", "Read one governance board", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]");
     let d: String = mcp_tool_entry(g, "get_audit_log", "Last N hash-chained audit entries", "{\"tail\":{\"type\":\"integer\"}}", "[]");
@@ -47,14 +47,15 @@ pub fn mcp_tool_list_json(g: &McpGraph) -> String {
     let o: String = mcp_tool_entry(g, "get_format_constraints", "RFC-0003 file format rules", "{}", "[]");
     let p: String = mcp_tool_entry(g, "validate_codex_format", "Check Academy header and line cap", "{\"text\":{\"type\":\"string\"}}", "[\"text\"]");
     let q: String = mcp_tool_entry(g, "get_northstar", "Read NORTHSTAR.oot", "{}", "[]");
-    let r: String = mcp_tool_entry(g, "get_rules", "Read RULES.oot", "{}", "[]");
+    let r: String = mcp_tool_entry(g, "get_rules", "Read RULES.oot", "{\"topic\":{\"type\":\"string\"}}", "[]");
     let s: String = mcp_tool_entry(g, "get_rfc", "Read one RFC by board name", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]");
     let t: String = mcp_tool_entry(g, "get_practice", "Read one practice by board name", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]");
     let u: String = mcp_tool_entry(g, "audit_compact", "Keep last N audit entries", "{\"keep_last_n\":{\"type\":\"integer\"}}", "[]");
     let v: String = mcp_tool_entry(g, "estimate_tokens", "LLM token estimate for text", "{\"text\":{\"type\":\"string\"}}", "[\"text\"]");
     let w: String = mcp_tool_entry(g, "token_status", "Session LLM token totals", "{}", "[]");
     let x: String = mcp_tool_entry(g, "token_ingest", "Add JSONL transcript into session totals", "{\"text\":{\"type\":\"string\"}}", "[\"text\"]");
-    return "{\"tools\":[" + a + "," + b + "," + c + "," + d + "," + e + "," + f + "," + h + "," + i + "," + k + "," + l + "," + m + "," + n + "," + o + "," + p + "," + q + "," + r + "," + s + "," + t + "," + u + "," + v + "," + w + "," + x + "]}";
+    let y: String = mcp_tool_entry(g, "attenuate_capability", "Derive a cryptographically restricted child capability token", "{\"parent_capability\":{\"type\":\"string\"},\"child_mask\":{\"type\":\"integer\"},\"path_prefix\":{\"type\":\"string\"},\"ttl_requests\":{\"type\":\"integer\"}}", "[\"parent_capability\"]");
+    return "{\"tools\":[" + a + "," + b + "," + c + "," + d + "," + e + "," + f + "," + h + "," + i + "," + k + "," + l + "," + m + "," + n + "," + o + "," + p + "," + q + "," + r + "," + s + "," + t + "," + u + "," + v + "," + w + "," + x + "," + y + "]}";
 }
 
 pub fn mcp_tool_wrap(text: String) -> String {

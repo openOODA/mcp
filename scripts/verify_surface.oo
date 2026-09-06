@@ -1,13 +1,13 @@
 // # MCP Verify Surface Core
 //
-// Logline: Fail closed if the 14 NORTHSTAR tokens, 12 boards, or 22 tools drift.
+// Logline: Fail closed if the 14 NORTHSTAR tokens, 12 boards, or 23 tools drift.
 //
 // Setup: Pure graph constructors. No VERSION file. Ghost names are defects.
 //
 // Beats:
 //   1. 14 caps; FfiCap present; FsCap absent.
 //   2. 12 boards; NORTHSTAR present; ROADMAP absent.
-//   3. 22 tools.
+//   3. 23 tools.
 
 import "engine/state/mcp_graph.oo";
 import "engine/state/mcp_cap.oo";
@@ -35,13 +35,14 @@ pub fn mcp_verify_surface() -> Result[Int, String] {
         i = i + 1;
     }
     if !has_ns { return Err("NORTHSTAR board missing"); }
-    if mcp_tool_count() != 22 { return Err("tool count drifted"); }
+    if mcp_tool_count() != 23 { return Err("tool count drifted"); }
     let g: McpGraph = mcp_graph_canonical("", "");
     if mcp_tool_required_caps(&g, "read_board") != 1 { return Err("read_board must require FsReadCap"); }
     if mcp_tool_required_caps(&g, "get_orientation") != 0 { return Err("get_orientation must require 0"); }
     if mcp_tool_required_caps(&g, "estimate_tokens") != 0 { return Err("estimate_tokens must require 0"); }
     if mcp_tool_required_caps(&g, "token_status") != 0 { return Err("token_status must require 0"); }
     if mcp_tool_required_caps(&g, "token_ingest") != 0 { return Err("token_ingest must require 0"); }
+    if mcp_tool_required_caps(&g, "attenuate_capability") != 0 { return Err("attenuate_capability must require 0"); }
     if mcp_tool_required_caps(&g, "estimate_chars") != 0 - 1 { return Err("estimate_chars must be unknown"); }
     if mcp_tool_required_caps(&g, "get_milestone_status") != 0 - 1 { return Err("get_milestone_status must be unknown"); }
     return Ok(0);

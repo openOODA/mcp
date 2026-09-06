@@ -1,0 +1,129 @@
+// # MCP Dynamic Capability Attenuation Engine
+//
+// Logline: Derives, cryptographically seals, and enforces attenuated child capability tokens with path and TTL constraints.
+//
+// Setup: Pure .oo logic. Sovereign token signing. Fail-closed on privilege escalation, path escape, or expired TTL.
+//
+// Beats:
+//   1. Validate requested child mask is a strict subset of session caps_held.
+//   2. Validate path prefix confinement and reject directory traversal.
+//   3. Compute expiration sequence window and seal token with cryptographic digest.
+//   4. Verify token integrity, check expiration, and enforce capability and path bounds.
+
+import "engine/core/mcp_session.oo";
+import "engine/core/mcp_json.oo";
+import "engine/state/mcp_cap.oo";
+
+pub type McpAttenuatedToken = struct {
+    token_id: String,
+    parent_token: String,
+    child_mask: Int,
+    path_prefix: String,
+    expires_seq: Int,
+    signature: String
+};
+
+fn mcp_attenuation_secret() -> String {
+    return "openooda-sovereign-attenuation-secret-2026";
+}
+
+pub fn mcp_attenuate_token(
+    s: &mut McpSession,
+    parent_cap: String,
+    requested_mask: Int,
+    path_prefix: String,
+    ttl_requests: Int
+) -> Result[String, String] {
+    let p_bit: Int = mcp_token_to_bit(parent_cap);
+    if p_bit < 0 {
+        return Err("attenuation rejected: unknown parent capability " + parent_cap);
+    }
+    let p_mask: Int = 1 << p_bit;
+    let actual_child_mask: Int = if requested_mask > 0 { requested_mask } else { p_mask };
+
+    // Privilege escalation check: all bits in actual_child_mask must be held in s.caps_held
+    if (s.caps_held & actual_child_mask) != actual_child_mask {
+        return Err("attenuation escalation rejected: requested mask " + actual_child_mask.to_string() + " exceeds held caps " + s.caps_held.to_string());
+    }
+
+    if str_index_of(path_prefix, "..") >= 0 {
+        return Err("attenuation path prefix traversal rejected");
+    }
+
+    let ttl: Int = if ttl_requests > 0 { ttl_requests } else { 100 };
+    let exp_seq: Int = s.request_seq + ttl;
+    let tok_id: String = "tok-" + s.request_seq.to_string() + "-" + actual_child_mask.to_string();
+    let norm_pfx: String = if chars_len(path_prefix) > 0 { path_prefix } else { "*" };
+
+    let payload: String = tok_id + "|" + parent_cap + "|" + actual_child_mask.to_string() + "|" + norm_pfx + "|" + exp_seq.to_string();
+    let sig: String = crypto_sha256_internal(payload + "|" + mcp_attenuation_secret());
+
+    let token_str: String = "ATTEN." + tok_id + "." + parent_cap + "." + actual_child_mask.to_string() + "." + norm_pfx + "." + exp_seq.to_string() + "." + sig;
+    return Ok(token_str);
+}
+
+pub fn mcp_attenuate_verify(
+    s: &McpSession,
+    token_str: String,
+    required_cap: String,
+    target_path: String
+) -> Result[Bool, String] {
+    if !str_starts_with(token_str, "ATTEN.") {
+        return Err("attenuated token invalid format: missing prefix");
+    }
+    let body: String = str_slice(token_str, 6, chars_len(token_str));
+
+    // Token format: tok_id.parent_cap.child_mask.norm_pfx.exp_seq.sig
+    let p1: Int = str_index_of(body, ".");
+    if p1 < 0 { return Err("attenuated token malformed: missing tok_id"); }
+    let tok_id: String = str_slice(body, 0, p1);
+    let rem1: String = str_slice(body, p1 + 1, chars_len(body));
+
+    let p2: Int = str_index_of(rem1, ".");
+    if p2 < 0 { return Err("attenuated token malformed: missing parent_cap"); }
+    let parent_cap: String = str_slice(rem1, 0, p2);
+    let rem2: String = str_slice(rem1, p2 + 1, chars_len(rem1));
+
+    let p3: Int = str_index_of(rem2, ".");
+    if p3 < 0 { return Err("attenuated token malformed: missing child_mask"); }
+    let mask_str: String = str_slice(rem2, 0, p3);
+    let rem3: String = str_slice(rem2, p3 + 1, chars_len(rem2));
+
+    let p4: Int = str_index_of(rem3, ".");
+    if p4 < 0 { return Err("attenuated token malformed: missing norm_pfx"); }
+    let norm_pfx: String = str_slice(rem3, 0, p4);
+    let rem4: String = str_slice(rem3, p4 + 1, chars_len(rem3));
+
+    let p5: Int = str_index_of(rem4, ".");
+    if p5 < 0 { return Err("attenuated token malformed: missing exp_seq"); }
+    let exp_str: String = str_slice(rem4, 0, p5);
+    let sig: String = str_slice(rem4, p5 + 1, chars_len(rem4));
+
+    let payload: String = tok_id + "|" + parent_cap + "|" + mask_str + "|" + norm_pfx + "|" + exp_str;
+    let expected_sig: String = crypto_sha256_internal(payload + "|" + mcp_attenuation_secret());
+    if sig != expected_sig {
+        return Err("attenuated token signature invalid: tamper or forgery detected");
+    }
+
+    let exp_seq: Int = mcp_json_parse_int(exp_str);
+    if s.request_seq > exp_seq {
+        return Err("attenuated token expired: request seq " + s.request_seq.to_string() + " exceeds ttl " + exp_seq.to_string());
+    }
+
+    let child_mask: Int = mcp_json_parse_int(mask_str);
+    let req_bit: Int = mcp_token_to_bit(required_cap);
+    if req_bit >= 0 {
+        let req_mask: Int = 1 << req_bit;
+        if (child_mask & req_mask) == 0 {
+            return Err("attenuated token capability denied: " + required_cap + " not in granted child mask");
+        }
+    }
+
+    if norm_pfx != "*" && chars_len(target_path) > 0 {
+        if !str_starts_with(target_path, norm_pfx) {
+            return Err("attenuated token path access denied: " + target_path + " outside boundary " + norm_pfx);
+        }
+    }
+
+    return Ok(true);
+}

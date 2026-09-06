@@ -1,0 +1,74 @@
+// # MCP Slicing Probe
+//
+// Logline: Verifies rule and capability graph slicing for agent token economy.
+//
+// Setup: Ready session. Fails closed on missing content, inadequate compression, or non-determinism.
+//
+// Beats:
+//   1. Verify get_rules topic slicing extracts matched section with constitutional preamble.
+//   2. Verify get_rules topic slicing achieves >= 60% byte reduction against full board.
+//   3. Verify get_capability_graph target filtering extracts matching caps and tools.
+//   4. Verify double-run determinism: Run_1 == Run_2.
+
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+
+fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let _: String = mcp_server_handle_body(fs, s, g, "codex-body", init);
+    return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+}
+
+pub fn probe_slice_run(fs: &FsReadCap) -> Result[Int, String] {
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "openOODA");
+    let mut s: McpSession = mcp_session_new();
+    mcp_session_grant_cap(&mut s, 1);
+    let _init1: String = probe_ready(fs, &mut s, &g);
+
+    // 1. Full get_rules
+    let r_full: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"get_rules\",\"arguments\":{}}}");
+    if !str_contains(r_full, "RULES") { return Err("probe_slice: full get_rules missing RULES"); }
+
+    // 2. Sliced get_rules (topic: boyd)
+    let r_sliced: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_rules\",\"arguments\":{\"topic\":\"boyd\"}}}");
+    if !str_contains(r_sliced, "Topic Slice: boyd") { return Err("probe_slice: missing topic header"); }
+    if !str_contains(r_sliced, "Boyd's Energy-Maneuverability") { return Err("probe_slice: missing boyd section content"); }
+    if !str_contains(r_sliced, "Zero Ambient Authority") { return Err("probe_slice: missing constitutional preamble"); }
+
+    let len_full: Int = bytes_len(r_full);
+    let len_sliced: Int = bytes_len(r_sliced);
+    if len_sliced >= len_full { return Err("probe_slice: sliced rules not smaller than full rules"); }
+
+    let saved_pct: Int = ((len_full - len_sliced) * 100) / len_full;
+    if saved_pct < 60 {
+        return Err("probe_slice: expected >= 60% rule reduction, got: " + saved_pct.to_string() + "%");
+    }
+
+    // 3. Full get_capability_graph
+    let g_full: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_capability_graph\",\"arguments\":{}}}");
+    if !str_contains(g_full, "FsReadCap") { return Err("probe_slice: full graph missing FsReadCap"); }
+
+    // 4. Target-filtered get_capability_graph (target: FsReadCap)
+    let g_filtered: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_capability_graph\",\"arguments\":{\"target\":\"FsReadCap\"}}}");
+    if !str_contains(g_filtered, "FsReadCap") { return Err("probe_slice: filtered graph missing FsReadCap"); }
+    if !str_contains(g_filtered, "read_board") { return Err("probe_slice: filtered graph missing matching tool read_board"); }
+    if str_contains(g_filtered, "GpuCap") { return Err("probe_slice: filtered graph must not contain GpuCap"); }
+
+    let g_len_full: Int = bytes_len(g_full);
+    let g_len_filt: Int = bytes_len(g_filtered);
+    if g_len_filt >= g_len_full { return Err("probe_slice: filtered graph not smaller than full graph"); }
+
+    // 5. Double-run determinism with fresh session
+    let mut s2: McpSession = mcp_session_new();
+    mcp_session_grant_cap(&mut s2, 1);
+    let _init2: String = probe_ready(fs, &mut s2, &g);
+
+    let r_sliced2: String = mcp_server_handle_body(fs, &mut s2, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_rules\",\"arguments\":{\"topic\":\"boyd\"}}}");
+    if r_sliced != r_sliced2 { return Err("probe_slice: non-deterministic rule slicing"); }
+
+    let g_filtered2: String = mcp_server_handle_body(fs, &mut s2, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"get_capability_graph\",\"arguments\":{\"target\":\"FsReadCap\"}}}");
+    if g_filtered != g_filtered2 { return Err("probe_slice: non-deterministic graph filtering"); }
+
+    return Ok(0);
+}

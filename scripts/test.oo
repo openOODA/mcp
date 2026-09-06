@@ -19,6 +19,8 @@ import "qa/probe_merge.oo";
 import "qa/probe_redteam.oo";
 import "qa/probe_token.oo";
 import "qa/probe_protocol.oo";
+import "qa/probe_slice.oo";
+import "qa/probe_attenuation.oo";
 import "verify_surface.oo";
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
@@ -66,6 +68,18 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     if pr.is_err() { println("FAIL: probe_protocol"); return pr; }
     println("PASS: probe_protocol");
 
-    println("test: 10 probes + verify passed");
+    let ps: Result[Int, String] = probe_slice_run(fs_r);
+    if ps.is_err() { println("FAIL: probe_slice"); return ps; }
+    println("PASS: probe_slice");
+
+    let pa: Result[Int, String] = probe_attenuation_run(fs_r);
+    if pa.is_err() {
+        let e_pa: String = match pa { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_attenuation: " + e_pa);
+        return pa;
+    }
+    println("PASS: probe_attenuation");
+
+    println("test: 12 probes + verify passed");
     return Ok(0);
 }

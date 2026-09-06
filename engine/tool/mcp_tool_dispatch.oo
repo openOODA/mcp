@@ -18,9 +18,15 @@ import "engine/resource/mcp_context_budget.oo";
 import "engine/resource/mcp_format.oo";
 import "engine/tool/mcp_tool.oo";
 import "engine/tool/mcp_tool_token.oo";
+import "engine/tool/mcp_tool_slice.oo";
+import "engine/state/mcp_attenuation.oo";
 
 pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &McpGraph, s: &mut McpSession, fs: &FsReadCap) -> String {
-    if name == "get_capability_graph" { return mcp_tool_wrap(mcp_graph_to_json(g)); }
+    if name == "get_capability_graph" {
+        let target: String = mcp_tool_arg_string(args, "target", "");
+        if chars_len(target) > 0 { return mcp_tool_wrap(mcp_graph_filter_json(g, target)); }
+        return mcp_tool_wrap(mcp_graph_to_json(g));
+    }
     if name == "get_orientation" { return mcp_tool_wrap(codex_text); }
     if name == "read_board" { return mcp_tool_read_board(fs, g, mcp_tool_arg_string(args, "name", "")); }
     if name == "get_audit_log" { return mcp_tool_wrap(mcp_audit_tail(s, mcp_tool_arg_int(args, "tail", 10))); }
@@ -37,7 +43,11 @@ pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &Mcp
     if name == "get_format_constraints" { return mcp_tool_wrap(mcp_format_get_constraints()); }
     if name == "validate_codex_format" { return mcp_tool_wrap(mcp_format_validate_codex(mcp_json_extract_string(args, "text"))); }
     if name == "get_northstar" { return mcp_tool_read_board(fs, g, "NORTHSTAR"); }
-    if name == "get_rules" { return mcp_tool_read_board(fs, g, "RULES"); }
+    if name == "get_rules" {
+        let topic: String = mcp_tool_arg_string(args, "topic", "");
+        if chars_len(topic) > 0 { return mcp_tool_slice_rules(fs, g, topic); }
+        return mcp_tool_read_board(fs, g, "RULES");
+    }
     if name == "get_rfc" { return mcp_tool_read_board(fs, g, mcp_tool_rfc_name(mcp_tool_arg_string(args, "name", ""))); }
     if name == "get_practice" { return mcp_tool_read_board(fs, g, mcp_tool_practice_name(mcp_tool_arg_string(args, "name", ""))); }
     if name == "audit_compact" {
@@ -51,6 +61,19 @@ pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &Mcp
     if name == "token_status" { return mcp_tool_wrap(mcp_token_status(s)); }
     if name == "token_ingest" {
         return mcp_tool_wrap(mcp_token_ingest(s, mcp_tool_arg_string(args, "text", "")));
+    }
+    if name == "attenuate_capability" {
+        let parent_cap: String = mcp_tool_arg_string(args, "parent_capability", "");
+        let child_mask: Int = mcp_tool_arg_int(args, "child_mask", 0);
+        let path_prefix: String = mcp_tool_arg_string(args, "path_prefix", "");
+        let ttl: Int = mcp_tool_arg_int(args, "ttl_requests", 100);
+        let r_tok: Result[String, String] = mcp_attenuate_token(s, parent_cap, child_mask, path_prefix, ttl);
+        if r_tok.is_err() {
+            let e: String = match r_tok { Ok(_) => "", Err(m) => m };
+            return mcp_tool_wrap("{\"error\":\"" + e + "\"}");
+        }
+        let token_str: String = match r_tok { Ok(tok) => tok, Err(_) => "" };
+        return mcp_tool_wrap("{\"status\":\"OK\",\"token\":\"" + token_str + "\"}");
     }
     return "{\"error\":\"unknown tool: " + name + "\"}";
 }

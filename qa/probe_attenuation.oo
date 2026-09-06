@@ -1,0 +1,122 @@
+// # MCP Capability Attenuation Probe
+//
+// Logline: Verifies dynamic capability attenuation, privilege escalation rejection, path prefix confinement, and TTL expiration.
+//
+// Setup: Ready session with FsReadCap and FsWriteCap. Fails closed on any security violation or non-determinism.
+//
+// Beats:
+//   1. Verify valid derivation of attenuated child capability token.
+//   2. Verify privilege escalation attempt is rejected fail-closed.
+//   3. Verify path traversal in path prefix constraint is rejected.
+//   4. Verify attenuated token grants authorized capability within path prefix.
+//   5. Verify unauthorized capability and out-of-scope paths are rejected.
+//   6. Verify token expiration after request sequence advances past TTL.
+//   7. Verify tampered token is rejected with signature forgery error.
+//   8. Verify tools/call attenuate_capability end-to-end.
+//   9. Verify double-run determinism: Run_1 == Run_2.
+
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/state/mcp_cap.oo";
+import "engine/state/mcp_attenuation.oo";
+
+fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let _init1: String = mcp_server_handle_body(fs, s, g, "codex-body", init);
+    return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+}
+
+pub fn probe_attenuation_run(fs: &FsReadCap) -> Result[Int, String] {
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "openOODA");
+    let mut s: McpSession = mcp_session_new();
+    mcp_session_grant_cap(&mut s, 1); // FsReadCap (bit 0, mask 1)
+    mcp_session_grant_cap(&mut s, 2); // FsWriteCap (bit 1, mask 2)
+    let _init1: String = probe_ready(fs, &mut s, &g);
+
+    // 1. Valid derivation
+    let r_tok: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 1, "/home/jeryd/Projects/openOODA", 50);
+    if r_tok.is_err() {
+        return Err("probe_attenuation: valid derivation failed");
+    }
+    let tok: String = match r_tok { Ok(t) => t, Err(_) => "" };
+    if !str_starts_with(tok, "ATTEN.") {
+        return Err("probe_attenuation: token missing ATTEN. prefix");
+    }
+
+    // 2. Privilege escalation attempt (requesting ProcessCap mask 64, not held in caps_held=3)
+    let r_esc: Result[String, String] = mcp_attenuate_token(&mut s, "ProcessCap", 64, "/home/jeryd", 50);
+    if r_esc.is_ok() {
+        return Err("probe_attenuation: privilege escalation must fail closed");
+    }
+
+    // 3. Path traversal rejection
+    let r_trav: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 1, "../escape", 50);
+    if r_trav.is_ok() {
+        return Err("probe_attenuation: path traversal must fail closed");
+    }
+
+    // 4. Authorized capability within scope
+    let v_ok: Result[Bool, String] = mcp_attenuate_verify(&s, tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_ok.is_err() {
+        return Err("probe_attenuation: authorized capability verification failed");
+    }
+
+    // 5. Unauthorized capability rejection (FsWriteCap not in child mask 1)
+    let v_unauth: Result[Bool, String] = mcp_attenuate_verify(&s, tok, "FsWriteCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_unauth.is_ok() {
+        return Err("probe_attenuation: unauthorized capability must be denied");
+    }
+
+    // 6. Out-of-scope path rejection
+    let v_scope: Result[Bool, String] = mcp_attenuate_verify(&s, tok, "FsReadCap", "/home/jeryd/secret");
+    if v_scope.is_ok() {
+        return Err("probe_attenuation: out-of-scope path must be denied");
+    }
+
+    // 7. Token expiration check
+    s.request_seq = 200; // expires_seq was ~50, so 200 is expired
+    let v_exp: Result[Bool, String] = mcp_attenuate_verify(&s, tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_exp.is_ok() {
+        return Err("probe_attenuation: expired token must be rejected");
+    }
+
+    // 8. Tamper detection (modified token string)
+    let tampered_tok: String = tok + "corrupt";
+    let v_tamp: Result[Bool, String] = mcp_attenuate_verify(&s, tampered_tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_tamp.is_ok() {
+        return Err("probe_attenuation: tampered token must be rejected");
+    }
+
+    // 9. Tool call via MCP server dispatch
+    s.request_seq = 1; // reset sequence
+    let tool_call: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"attenuate_capability\",\"arguments\":{\"parent_capability\":\"FsReadCap\",\"child_mask\":1,\"path_prefix\":\"/home/jeryd\",\"ttl_requests\":20}}}";
+    let r_tool: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", tool_call);
+    if !str_contains(r_tool, "OK") {
+        return Err("probe_attenuation: tools/call attenuate_capability failed: " + r_tool);
+    }
+    if !str_contains(r_tool, "ATTEN.") {
+        return Err("probe_attenuation: tools/call response missing ATTEN. token");
+    }
+
+    // 10. Double-run determinism: Run_1 == Run_2
+    let mut s1: McpSession = mcp_session_new();
+    mcp_session_grant_cap(&mut s1, 1);
+    let _i1: String = probe_ready(fs, &mut s1, &g);
+    let r_t1: Result[String, String] = mcp_attenuate_token(&mut s1, "FsReadCap", 1, "/test", 10);
+    if r_t1.is_err() { return Err("probe_attenuation: s1 token failed"); }
+    let t1: String = match r_t1 { Ok(x) => x, Err(e) => "" };
+
+    let mut s2: McpSession = mcp_session_new();
+    mcp_session_grant_cap(&mut s2, 1);
+    let _i2: String = probe_ready(fs, &mut s2, &g);
+    let r_t2: Result[String, String] = mcp_attenuate_token(&mut s2, "FsReadCap", 1, "/test", 10);
+    if r_t2.is_err() { return Err("probe_attenuation: s2 token failed"); }
+    let t2: String = match r_t2 { Ok(y) => y, Err(e) => "" };
+
+    if t1 != t2 {
+        return Err("probe_attenuation: double-run determinism failed: Run_1 != Run_2");
+    }
+
+    return Ok(0);
+}

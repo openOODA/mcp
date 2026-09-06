@@ -40,6 +40,13 @@ pub fn mcp_schema_validate(name: String, args: String) -> Int {
         if r1 != 0 { return r1; }
         return mcp_schema_optional_int_nonneg(args, "max_chars");
     }
+    if name == "attenuate_capability" {
+        let r_req: Int = mcp_schema_require_string(args, "parent_capability");
+        if r_req != 0 { return r_req; }
+        let r_m: Int = mcp_schema_optional_int_nonneg(args, "child_mask");
+        if r_m != 0 { return r_m; }
+        return mcp_schema_optional_int_nonneg(args, "ttl_requests");
+    }
     return mcp_schema_err_kind();
 }
 

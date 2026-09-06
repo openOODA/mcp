@@ -22,7 +22,7 @@ fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
 }
 
 pub fn probe_token_run(fs: &FsReadCap) -> Result[Int, String] {
-    if mcp_tool_count() != 22 { return Err("tool count drifted from 22"); }
+    if mcp_tool_count() != 23 { return Err("tool count drifted from 23"); }
     let est: String = mcp_token_estimate("abcdefghijklmnop");
     if !str_contains(est, "\"tokens\"") { return Err("estimate missing tokens"); }
     if str_contains(est, "\"tokens\":0") { return Err("non-empty text must not be zero tokens"); }

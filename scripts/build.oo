@@ -33,9 +33,11 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, env: &EnvCap, args: List[String]) 
     files = list_push(files, "engine/state/mcp_notification.oo");
     files = list_push(files, "engine/state/mcp_ooda_state.oo");
     files = list_push(files, "engine/state/mcp_roots.oo");
+    files = list_push(files, "engine/state/mcp_attenuation.oo");
     files = list_push(files, "engine/tool/mcp_tool.oo");
     files = list_push(files, "engine/tool/mcp_tool_dispatch.oo");
     files = list_push(files, "engine/tool/mcp_tool_token.oo");
+    files = list_push(files, "engine/tool/mcp_tool_slice.oo");
     let mut i: Int = 0;
     while i < list_len(files) {
         let path: String = list_get(files, i);
