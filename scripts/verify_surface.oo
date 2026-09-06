@@ -21,7 +21,16 @@ pub fn mcp_verify_surface_zero_trust(fs: &FsReadCap) -> Result[Int, String] {
     let h: Result[String, String] = read_file(fs, "oodar/sec/cap/caps.h");
     if h.is_err() { return Err("caps.h missing"); }
     let hs: String = match h { Ok(s) => s, Err(_) => "" };
-    let c: Int = str_count(hs, "#define OODAR_CAP_");
+    let mut c: Int = 0;
+    let mut p: Int = 0;
+    let total: Int = chars_len(hs);
+    while p < total {
+        let sub: String = str_slice(hs, p, total);
+        let n: Int = str_index_of(sub, "#define OODAR_CAP_");
+        if n < 0 { break; }
+        c = c + 1;
+        p = p + n + 1;
+    }
     if c != 26 { return Err("caps.h not 26, got " + c.to_string()); }
     return mcp_verify_surface();
 }
