@@ -48,21 +48,21 @@ pub fn mcp_verify_surface() -> Result[Int, String] {
     let mut i: Int = 0;
     while i < list_len(caps) {
         let c: McpCapability = list_get(caps, i);
-        if mcp_token_to_bit_substrate(c.name) == 0 - 1 { return Err("14 not subset of 26: " + c.name); }
+        if mcp_token_to_bit_substrate(c.token) == 0 - 1 { return Err("14 not subset of 26: " + c.token); }
         i = i + 1;
     }
     let brds: List[McpBoard] = mcp_graph_canonical_boards();
     if list_len(brds) != 12 { return Err("board count drifted"); }
     let mut has_ns: Bool = false;
-    let mut i: Int = 0;
-    while i < list_len(brds) {
-        let b: McpBoard = list_get(brds, i);
+    let mut j: Int = 0;
+    while j < list_len(brds) {
+        let b: McpBoard = list_get(brds, j);
         let n: String = b.name;
         if n == "NORTHSTAR" { has_ns = true; }
         if n == "ROADMAP" || n == "SHIPPED" || n == "START" || n == "FORMAT" || n == "MOONSHOTS" {
             return Err("ghost board still present: " + n);
         }
-        i = i + 1;
+        j = j + 1;
     }
     if !has_ns { return Err("NORTHSTAR board missing"); }
     if mcp_tool_count() != 23 { return Err("tool count drifted"); }
