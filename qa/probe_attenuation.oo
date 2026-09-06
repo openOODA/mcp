@@ -1,19 +1,14 @@
 // # MCP Capability Attenuation Probe
 //
-// Logline: Verifies dynamic capability attenuation, privilege escalation rejection, path prefix confinement, and TTL expiration.
+// Logline: Verifies dynamic capability attenuation across multi-algorithm suite, tamper detection, and TTL expiration.
 //
 // Setup: Ready session with FsReadCap and FsWriteCap. Fails closed on any security violation or non-determinism.
 //
 // Beats:
-//   1. Verify valid derivation of attenuated child capability token.
-//   2. Verify privilege escalation attempt is rejected fail-closed.
-//   3. Verify path traversal in path prefix constraint is rejected.
-//   4. Verify attenuated token grants authorized capability within path prefix.
-//   5. Verify unauthorized capability and out-of-scope paths are rejected.
-//   6. Verify token expiration after request sequence advances past TTL.
-//   7. Verify tampered token is rejected with signature forgery error.
-//   8. Verify tools/call attenuate_capability end-to-end.
-//   9. Verify double-run determinism: Run_1 == Run_2.
+//   1. Verify derivation and verification across blake3, sha3, sha512, and sha256.
+//   2. Verify cross-algorithm substitution and bit-flip tampering are rejected.
+//   3. Verify privilege escalation, path traversal, out-of-scope paths, and expired TTL are rejected.
+//   4. Verify tools/call attenuate_capability end-to-end and double-run determinism: Run_1 == Run_2.
 
 import "engine/core/mcp_server.oo";
 import "engine/core/mcp_session.oo";
@@ -34,85 +29,122 @@ pub fn probe_attenuation_run(fs: &FsReadCap) -> Result[Int, String] {
     mcp_session_grant_cap(&mut s, 2); // FsWriteCap (bit 1, mask 2)
     let _init1: String = probe_ready(fs, &mut s, &g);
 
-    // 1. Valid derivation
-    let r_tok: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 1, "/home/jeryd/Projects/openOODA", 50);
-    if r_tok.is_err() {
-        return Err("probe_attenuation: valid derivation failed");
-    }
-    let tok: String = match r_tok { Ok(t) => t, Err(_) => "" };
-    if !str_starts_with(tok, "ATTEN.") {
-        return Err("probe_attenuation: token missing ATTEN. prefix");
+    // 1. Derivation and verification across blake3, sha3, sha512, and sha256
+    let r_sha256: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 1, "/home/jeryd/Projects/openOODA", 50, "sha256");
+    if r_sha256.is_err() { return Err("probe_attenuation: sha256 derivation failed"); }
+    let tok_sha256: String = match r_sha256 { Ok(t) => t, Err(_) => "" };
+    if !str_starts_with(tok_sha256, "ATTEN.sha256.") { return Err("probe_attenuation: missing ATTEN.sha256. prefix"); }
+    let v_sha256: Result[Bool, String] = mcp_attenuate_verify(&s, tok_sha256, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_sha256.is_err() { return Err("probe_attenuation: sha256 verify failed"); }
+
+    let r_b3: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 1, "/home/jeryd/Projects/openOODA", 50, "blake3");
+    if r_b3.is_err() { return Err("probe_attenuation: blake3 derivation failed"); }
+    let tok_b3: String = match r_b3 { Ok(t) => t, Err(_) => "" };
+    if !str_starts_with(tok_b3, "ATTEN.blake3.") { return Err("probe_attenuation: missing ATTEN.blake3. prefix"); }
+    let v_b3: Result[Bool, String] = mcp_attenuate_verify(&s, tok_b3, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_b3.is_err() { return Err("probe_attenuation: blake3 verify failed"); }
+
+    let r_sha3: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 1, "/home/jeryd/Projects/openOODA", 50, "sha3");
+    if r_sha3.is_err() { return Err("probe_attenuation: sha3 derivation failed"); }
+    let tok_sha3: String = match r_sha3 { Ok(t) => t, Err(_) => "" };
+    if !str_starts_with(tok_sha3, "ATTEN.sha3.") { return Err("probe_attenuation: missing ATTEN.sha3. prefix"); }
+    let v_sha3: Result[Bool, String] = mcp_attenuate_verify(&s, tok_sha3, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_sha3.is_err() { return Err("probe_attenuation: sha3 verify failed"); }
+
+    let r_sha512: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 1, "/home/jeryd/Projects/openOODA", 50, "sha512");
+    if r_sha512.is_err() { return Err("probe_attenuation: sha512 derivation failed"); }
+    let tok_sha512: String = match r_sha512 { Ok(t) => t, Err(_) => "" };
+    if !str_starts_with(tok_sha512, "ATTEN.sha512.") { return Err("probe_attenuation: missing ATTEN.sha512. prefix"); }
+    let v_sha512: Result[Bool, String] = mcp_attenuate_verify(&s, tok_sha512, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_sha512.is_err() { return Err("probe_attenuation: sha512 verify failed"); }
+
+    // 2. Cross-algorithm substitution attack rejection
+    let sub_b3: String = "ATTEN.blake3." + str_slice(tok_sha256, 13, chars_len(tok_sha256));
+    let v_sub1: Result[Bool, String] = mcp_attenuate_verify(&s, sub_b3, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_sub1.is_ok() { return Err("probe_attenuation: cross-algo substitution sha256->blake3 must fail"); }
+
+    let sub_512: String = "ATTEN.sha512." + str_slice(tok_b3, 13, chars_len(tok_b3));
+    let v_sub2: Result[Bool, String] = mcp_attenuate_verify(&s, sub_512, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_sub2.is_ok() { return Err("probe_attenuation: cross-algo substitution blake3->sha512 must fail"); }
+
+    // 3. Signature bit-flip corruption rejection
+    let len_tok: Int = chars_len(tok_sha256);
+    let last_c: String = char_at(tok_sha256, len_tok - 1);
+    let flipped_c: String = if last_c == "0" { "1" } else { "0" };
+    let corrupt_tok: String = str_slice(tok_sha256, 0, len_tok - 1) + flipped_c;
+    let v_corrupt: Result[Bool, String] = mcp_attenuate_verify(&s, corrupt_tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_corrupt.is_ok() { return Err("probe_attenuation: bit-flipped signature must fail"); }
+
+    // 4. Privilege escalation attempt (requesting ProcessCap mask 64, not held in caps_held=3)
+    let r_esc: Result[String, String] = mcp_attenuate_token(&mut s, "ProcessCap", 64, "/home/jeryd", 50, "sha256");
+    if r_esc.is_ok() { return Err("probe_attenuation: privilege escalation must fail closed"); }
+
+    // 5. Path traversal rejection
+    let r_trav: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 1, "../escape", 50, "sha256");
+    if r_trav.is_ok() { return Err("probe_attenuation: path traversal must fail closed"); }
+
+    // 6. Authorized capability within scope
+    let v_ok: Result[Bool, String] = mcp_attenuate_verify(&s, tok_sha256, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_ok.is_err() { return Err("probe_attenuation: authorized capability verification failed"); }
+
+    // 7. Unauthorized capability rejection (FsWriteCap not in child mask 1)
+    let v_unauth: Result[Bool, String] = mcp_attenuate_verify(&s, tok_sha256, "FsWriteCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_unauth.is_ok() { return Err("probe_attenuation: unauthorized capability must be denied"); }
+
+    // 8. Out-of-scope path rejection
+    let v_scope: Result[Bool, String] = mcp_attenuate_verify(&s, tok_sha256, "FsReadCap", "/home/jeryd/secret");
+    if v_scope.is_ok() { return Err("probe_attenuation: out-of-scope path must be denied"); }
+
+    // 9. Monotonic TTL expiration check
+    let mut s_exp: McpSession = mcp_session_new();
+    mcp_session_grant_cap(&mut s_exp, 1);
+    s_exp.request_seq = 200; // expires_seq was ~50, so 200 is expired
+    let v_exp: Result[Bool, String] = mcp_attenuate_verify(&s_exp, tok_sha256, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_exp.is_ok() { return Err("probe_attenuation: expired token must be rejected"); }
+
+    // 10. Legacy 6-field token backward-compatibility
+    let leg_payload: String = "tok-1-1|FsReadCap|1|/home/jeryd/Projects/openOODA|100";
+    let leg_sig: String = crypto_sha256_internal(leg_payload + "|" + "openooda-sovereign-attenuation-secret-2026");
+    let leg_tok: String = "ATTEN.tok-1-1.FsReadCap.1./home/jeryd/Projects/openOODA.100." + leg_sig;
+    let v_leg: Result[Bool, String] = mcp_attenuate_verify(&s, leg_tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_leg.is_err() { return Err("probe_attenuation: legacy 6-field token verification failed"); }
+
+    // 11. Tool call via MCP server dispatch (default algo)
+    s.request_seq = 1;
+    let call_def: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"attenuate_capability\",\"arguments\":{\"parent_capability\":\"FsReadCap\",\"child_mask\":1,\"path_prefix\":\"/home/jeryd\",\"ttl_requests\":20}}}";
+    let r_def: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", call_def);
+    if !str_contains(r_def, "OK") || !str_contains(r_def, "ATTEN.sha256.") {
+        return Err("probe_attenuation: default tools/call failed: " + r_def);
     }
 
-    // 2. Privilege escalation attempt (requesting ProcessCap mask 64, not held in caps_held=3)
-    let r_esc: Result[String, String] = mcp_attenuate_token(&mut s, "ProcessCap", 64, "/home/jeryd", 50);
-    if r_esc.is_ok() {
-        return Err("probe_attenuation: privilege escalation must fail closed");
+    // 12. Tool call via MCP server dispatch (blake3 algo)
+    let call_b3: String = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"attenuate_capability\",\"arguments\":{\"parent_capability\":\"FsReadCap\",\"child_mask\":1,\"path_prefix\":\"/home/jeryd\",\"ttl_requests\":20,\"algo\":\"blake3\"}}}";
+    let r_b3_call: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", call_b3);
+    if !str_contains(r_b3_call, "OK") || !str_contains(r_b3_call, "ATTEN.blake3.") {
+        return Err("probe_attenuation: blake3 tools/call failed: " + r_b3_call);
     }
 
-    // 3. Path traversal rejection
-    let r_trav: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 1, "../escape", 50);
-    if r_trav.is_ok() {
-        return Err("probe_attenuation: path traversal must fail closed");
+    // 13. Tool call schema validation failure on invalid algo
+    let call_bad: String = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"attenuate_capability\",\"arguments\":{\"parent_capability\":\"FsReadCap\",\"algo\":\"md5\"}}}";
+    let r_bad: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", call_bad);
+    if !str_contains(r_bad, "-32602") {
+        return Err("probe_attenuation: invalid algo must fail schema validation (-32602): " + r_bad);
     }
 
-    // 4. Authorized capability within scope
-    let v_ok: Result[Bool, String] = mcp_attenuate_verify(&s, tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
-    if v_ok.is_err() {
-        return Err("probe_attenuation: authorized capability verification failed");
-    }
-
-    // 5. Unauthorized capability rejection (FsWriteCap not in child mask 1)
-    let v_unauth: Result[Bool, String] = mcp_attenuate_verify(&s, tok, "FsWriteCap", "/home/jeryd/Projects/openOODA/lsp");
-    if v_unauth.is_ok() {
-        return Err("probe_attenuation: unauthorized capability must be denied");
-    }
-
-    // 6. Out-of-scope path rejection
-    let v_scope: Result[Bool, String] = mcp_attenuate_verify(&s, tok, "FsReadCap", "/home/jeryd/secret");
-    if v_scope.is_ok() {
-        return Err("probe_attenuation: out-of-scope path must be denied");
-    }
-
-    // 7. Token expiration check
-    s.request_seq = 200; // expires_seq was ~50, so 200 is expired
-    let v_exp: Result[Bool, String] = mcp_attenuate_verify(&s, tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
-    if v_exp.is_ok() {
-        return Err("probe_attenuation: expired token must be rejected");
-    }
-
-    // 8. Tamper detection (modified token string)
-    let tampered_tok: String = tok + "corrupt";
-    let v_tamp: Result[Bool, String] = mcp_attenuate_verify(&s, tampered_tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
-    if v_tamp.is_ok() {
-        return Err("probe_attenuation: tampered token must be rejected");
-    }
-
-    // 9. Tool call via MCP server dispatch
-    s.request_seq = 1; // reset sequence
-    let tool_call: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"attenuate_capability\",\"arguments\":{\"parent_capability\":\"FsReadCap\",\"child_mask\":1,\"path_prefix\":\"/home/jeryd\",\"ttl_requests\":20}}}";
-    let r_tool: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", tool_call);
-    if !str_contains(r_tool, "OK") {
-        return Err("probe_attenuation: tools/call attenuate_capability failed: " + r_tool);
-    }
-    if !str_contains(r_tool, "ATTEN.") {
-        return Err("probe_attenuation: tools/call response missing ATTEN. token");
-    }
-
-    // 10. Double-run determinism: Run_1 == Run_2
+    // 14. Double-run determinism: Run_1 == Run_2
     let mut s1: McpSession = mcp_session_new();
     mcp_session_grant_cap(&mut s1, 1);
     let _i1: String = probe_ready(fs, &mut s1, &g);
-    let r_t1: Result[String, String] = mcp_attenuate_token(&mut s1, "FsReadCap", 1, "/test", 10);
+    let r_t1: Result[String, String] = mcp_attenuate_token(&mut s1, "FsReadCap", 1, "/test", 10, "blake3");
     if r_t1.is_err() { return Err("probe_attenuation: s1 token failed"); }
-    let t1: String = match r_t1 { Ok(x) => x, Err(e) => "" };
+    let t1: String = match r_t1 { Ok(x) => x, Err(_) => "" };
 
     let mut s2: McpSession = mcp_session_new();
     mcp_session_grant_cap(&mut s2, 1);
     let _i2: String = probe_ready(fs, &mut s2, &g);
-    let r_t2: Result[String, String] = mcp_attenuate_token(&mut s2, "FsReadCap", 1, "/test", 10);
+    let r_t2: Result[String, String] = mcp_attenuate_token(&mut s2, "FsReadCap", 1, "/test", 10, "blake3");
     if r_t2.is_err() { return Err("probe_attenuation: s2 token failed"); }
-    let t2: String = match r_t2 { Ok(y) => y, Err(e) => "" };
+    let t2: String = match r_t2 { Ok(y) => y, Err(_) => "" };
 
     if t1 != t2 {
         return Err("probe_attenuation: double-run determinism failed: Run_1 != Run_2");
@@ -120,3 +152,4 @@ pub fn probe_attenuation_run(fs: &FsReadCap) -> Result[Int, String] {
 
     return Ok(0);
 }
+

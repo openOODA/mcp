@@ -67,7 +67,8 @@ pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &Mcp
         let child_mask: Int = mcp_tool_arg_int(args, "child_mask", 0);
         let path_prefix: String = mcp_tool_arg_string(args, "path_prefix", "");
         let ttl: Int = mcp_tool_arg_int(args, "ttl_requests", 100);
-        let r_tok: Result[String, String] = mcp_attenuate_token(s, parent_cap, child_mask, path_prefix, ttl);
+        let algo: String = mcp_tool_arg_string(args, "algo", "sha256");
+        let r_tok: Result[String, String] = mcp_attenuate_token(s, parent_cap, child_mask, path_prefix, ttl, algo);
         if r_tok.is_err() {
             let e: String = match r_tok { Ok(_) => "", Err(m) => m };
             return mcp_tool_wrap("{\"error\":\"" + e + "\"}");

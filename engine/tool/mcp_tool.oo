@@ -54,7 +54,7 @@ pub fn mcp_tool_list_json(g: &McpGraph) -> String {
     let v: String = mcp_tool_entry(g, "estimate_tokens", "LLM token estimate for text", "{\"text\":{\"type\":\"string\"}}", "[\"text\"]");
     let w: String = mcp_tool_entry(g, "token_status", "Session LLM token totals", "{}", "[]");
     let x: String = mcp_tool_entry(g, "token_ingest", "Add JSONL transcript into session totals", "{\"text\":{\"type\":\"string\"}}", "[\"text\"]");
-    let y: String = mcp_tool_entry(g, "attenuate_capability", "Derive a cryptographically restricted child capability token", "{\"parent_capability\":{\"type\":\"string\"},\"child_mask\":{\"type\":\"integer\"},\"path_prefix\":{\"type\":\"string\"},\"ttl_requests\":{\"type\":\"integer\"}}", "[\"parent_capability\"]");
+    let y: String = mcp_tool_entry(g, "attenuate_capability", "Derive a cryptographically restricted child capability token", "{\"parent_capability\":{\"type\":\"string\"},\"child_mask\":{\"type\":\"integer\"},\"path_prefix\":{\"type\":\"string\"},\"ttl_requests\":{\"type\":\"integer\"},\"algo\":{\"type\":\"string\",\"enum\":[\"blake3\",\"sha3\",\"sha512\",\"sha256\"]}}", "[\"parent_capability\"]");
     return "{\"tools\":[" + a + "," + b + "," + c + "," + d + "," + e + "," + f + "," + h + "," + i + "," + k + "," + l + "," + m + "," + n + "," + o + "," + p + "," + q + "," + r + "," + s + "," + t + "," + u + "," + v + "," + w + "," + x + "," + y + "]}";
 }
 

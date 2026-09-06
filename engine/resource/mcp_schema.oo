@@ -45,7 +45,9 @@ pub fn mcp_schema_validate(name: String, args: String) -> Int {
         if r_req != 0 { return r_req; }
         let r_m: Int = mcp_schema_optional_int_nonneg(args, "child_mask");
         if r_m != 0 { return r_m; }
-        return mcp_schema_optional_int_nonneg(args, "ttl_requests");
+        let r_ttl: Int = mcp_schema_optional_int_nonneg(args, "ttl_requests");
+        if r_ttl != 0 { return r_ttl; }
+        return mcp_schema_optional_algo(args);
     }
     return mcp_schema_err_kind();
 }
@@ -63,4 +65,15 @@ fn mcp_schema_optional_int_nonneg(args: String, key: String) -> Int {
     if chars_len(raw) == 0 { return 0; }
     if !mcp_json_is_nonneg_int_token(raw) { return mcp_schema_err_kind(); }
     return 0;
+}
+
+fn mcp_schema_optional_algo(args: String) -> Int {
+    if chars_len(args) == 0 { return 0; }
+    let raw: String = mcp_json_extract_raw(args, "algo");
+    if chars_len(raw) == 0 { return 0; }
+    let a: String = mcp_json_extract_string(args, "algo");
+    if a == "blake3" || a == "sha3" || a == "sha512" || a == "sha256" {
+        return 0;
+    }
+    return mcp_schema_err_kind();
 }

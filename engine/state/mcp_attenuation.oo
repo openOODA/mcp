@@ -7,9 +7,10 @@
 // Beats:
 //   1. Validate requested child mask is a strict subset of session caps_held.
 //   2. Validate path prefix confinement and reject directory traversal.
-//   3. Compute expiration sequence window and seal token with cryptographic digest.
+//   3. Compute expiration sequence window and seal token with cryptographic digest across agile algorithms.
 //   4. Verify token integrity, check expiration, and enforce capability and path bounds.
 
+import "std/sec/hash/blake3.oo";
 import "engine/core/mcp_session.oo";
 import "engine/core/mcp_json.oo";
 import "engine/state/mcp_cap.oo";
@@ -27,12 +28,65 @@ fn mcp_attenuation_secret() -> String {
     return "openooda-sovereign-attenuation-secret-2026";
 }
 
+fn ascii_lower(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    let up: String = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    let lo: String = "abcdefghijklmnopqrstuvwxyz";
+    while i < n {
+        let c: String = char_at(s, i);
+        let mut k: Int = 0;
+        let mut found: String = c;
+        while k < 26 {
+            if char_at(up, k) == c {
+                found = char_at(lo, k);
+                k = 26;
+            } else {
+                k = k + 1;
+            }
+        }
+        out = out + found;
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn mcp_attenuation_norm_algo(algo: String) -> String {
+    if chars_len(algo) == 0 { return "sha256"; }
+    let a: String = ascii_lower(algo);
+    if a == "blake3" || a == "sha3" || a == "sha512" || a == "sha256" { return a; }
+    return a;
+}
+
+pub fn mcp_hmac_sha512(secret: String, payload: String) -> String {
+    return crypto_sha512_internal(payload + "|" + secret);
+}
+
+pub fn mcp_attenuation_sign(algo: String, payload: String, secret: String) -> Result[String, String] {
+    let a: String = mcp_attenuation_norm_algo(algo);
+    if a == "blake3" {
+        return Ok(blake3(payload + "|" + secret));
+    }
+    if a == "sha3" {
+        return Ok(crypto_sha3_256_internal(payload + "|" + secret));
+    }
+    if a == "sha512" {
+        return Ok(mcp_hmac_sha512(secret, payload));
+    }
+    if a == "sha256" {
+        return Ok(crypto_sha256_internal(payload + "|" + secret));
+    }
+    return Err("unsupported attenuation algorithm: " + algo);
+}
+
 pub fn mcp_attenuate_token(
     s: &mut McpSession,
     parent_cap: String,
     requested_mask: Int,
     path_prefix: String,
-    ttl_requests: Int
+    ttl_requests: Int,
+    algo: String
 ) -> Result[String, String] {
     let p_bit: Int = mcp_token_to_bit(parent_cap);
     if p_bit < 0 {
@@ -50,15 +104,25 @@ pub fn mcp_attenuate_token(
         return Err("attenuation path prefix traversal rejected");
     }
 
+    let norm_algo: String = if chars_len(algo) > 0 { mcp_attenuation_norm_algo(algo) } else { "sha256" };
+    if norm_algo != "blake3" && norm_algo != "sha3" && norm_algo != "sha512" && norm_algo != "sha256" {
+        return Err("attenuation rejected: unsupported algorithm " + algo);
+    }
+
     let ttl: Int = if ttl_requests > 0 { ttl_requests } else { 100 };
     let exp_seq: Int = s.request_seq + ttl;
     let tok_id: String = "tok-" + s.request_seq.to_string() + "-" + actual_child_mask.to_string();
     let norm_pfx: String = if chars_len(path_prefix) > 0 { path_prefix } else { "*" };
 
     let payload: String = tok_id + "|" + parent_cap + "|" + actual_child_mask.to_string() + "|" + norm_pfx + "|" + exp_seq.to_string();
-    let sig: String = crypto_sha256_internal(payload + "|" + mcp_attenuation_secret());
+    let r_sig: Result[String, String] = mcp_attenuation_sign(norm_algo, payload, mcp_attenuation_secret());
+    if r_sig.is_err() {
+        let err_msg: String = match r_sig { Ok(_) => "", Err(e) => e };
+        return Err("attenuation sign failed: " + err_msg);
+    }
+    let sig: String = match r_sig { Ok(st) => st, Err(_) => "" };
 
-    let token_str: String = "ATTEN." + tok_id + "." + parent_cap + "." + actual_child_mask.to_string() + "." + norm_pfx + "." + exp_seq.to_string() + "." + sig;
+    let token_str: String = "ATTEN." + norm_algo + "." + tok_id + "." + parent_cap + "." + actual_child_mask.to_string() + "." + norm_pfx + "." + exp_seq.to_string() + "." + sig;
     return Ok(token_str);
 }
 
@@ -73,34 +137,81 @@ pub fn mcp_attenuate_verify(
     }
     let body: String = str_slice(token_str, 6, chars_len(token_str));
 
-    // Token format: tok_id.parent_cap.child_mask.norm_pfx.exp_seq.sig
     let p1: Int = str_index_of(body, ".");
-    if p1 < 0 { return Err("attenuated token malformed: missing tok_id"); }
-    let tok_id: String = str_slice(body, 0, p1);
+    if p1 < 0 { return Err("attenuated token malformed: missing first segment"); }
+    let seg1: String = str_slice(body, 0, p1);
     let rem1: String = str_slice(body, p1 + 1, chars_len(body));
 
-    let p2: Int = str_index_of(rem1, ".");
-    if p2 < 0 { return Err("attenuated token malformed: missing parent_cap"); }
-    let parent_cap: String = str_slice(rem1, 0, p2);
-    let rem2: String = str_slice(rem1, p2 + 1, chars_len(rem1));
+    let mut algo: String = "";
+    let mut tok_id: String = "";
+    let mut parent_cap: String = "";
+    let mut mask_str: String = "";
+    let mut norm_pfx: String = "";
+    let mut exp_str: String = "";
+    let mut sig: String = "";
 
-    let p3: Int = str_index_of(rem2, ".");
-    if p3 < 0 { return Err("attenuated token malformed: missing child_mask"); }
-    let mask_str: String = str_slice(rem2, 0, p3);
-    let rem3: String = str_slice(rem2, p3 + 1, chars_len(rem2));
+    if seg1 == "blake3" || seg1 == "sha3" || seg1 == "sha512" || seg1 == "sha256" {
+        algo = seg1;
+        let p2: Int = str_index_of(rem1, ".");
+        if p2 < 0 { return Err("attenuated token malformed: missing tok_id"); }
+        tok_id = str_slice(rem1, 0, p2);
+        let rem2: String = str_slice(rem1, p2 + 1, chars_len(rem1));
 
-    let p4: Int = str_index_of(rem3, ".");
-    if p4 < 0 { return Err("attenuated token malformed: missing norm_pfx"); }
-    let norm_pfx: String = str_slice(rem3, 0, p4);
-    let rem4: String = str_slice(rem3, p4 + 1, chars_len(rem3));
+        let p3: Int = str_index_of(rem2, ".");
+        if p3 < 0 { return Err("attenuated token malformed: missing parent_cap"); }
+        parent_cap = str_slice(rem2, 0, p3);
+        let rem3: String = str_slice(rem2, p3 + 1, chars_len(rem2));
 
-    let p5: Int = str_index_of(rem4, ".");
-    if p5 < 0 { return Err("attenuated token malformed: missing exp_seq"); }
-    let exp_str: String = str_slice(rem4, 0, p5);
-    let sig: String = str_slice(rem4, p5 + 1, chars_len(rem4));
+        let p4: Int = str_index_of(rem3, ".");
+        if p4 < 0 { return Err("attenuated token malformed: missing child_mask"); }
+        mask_str = str_slice(rem3, 0, p4);
+        let rem4: String = str_slice(rem3, p4 + 1, chars_len(rem3));
+
+        let p5: Int = str_index_of(rem4, ".");
+        if p5 < 0 { return Err("attenuated token malformed: missing norm_pfx"); }
+        norm_pfx = str_slice(rem4, 0, p5);
+        let rem5: String = str_slice(rem4, p5 + 1, chars_len(rem4));
+
+        let p6: Int = str_index_of(rem5, ".");
+        if p6 < 0 { return Err("attenuated token malformed: missing exp_seq"); }
+        exp_str = str_slice(rem5, 0, p6);
+        sig = str_slice(rem5, p6 + 1, chars_len(rem5));
+    } else if str_starts_with(seg1, "tok-") {
+        algo = "sha256";
+        tok_id = seg1;
+        let p2: Int = str_index_of(rem1, ".");
+        if p2 < 0 { return Err("attenuated token malformed: missing parent_cap"); }
+        parent_cap = str_slice(rem1, 0, p2);
+        let rem2: String = str_slice(rem1, p2 + 1, chars_len(rem1));
+
+        let p3: Int = str_index_of(rem2, ".");
+        if p3 < 0 { return Err("attenuated token malformed: missing child_mask"); }
+        mask_str = str_slice(rem2, 0, p3);
+        let rem3: String = str_slice(rem2, p3 + 1, chars_len(rem2));
+
+        let p4: Int = str_index_of(rem3, ".");
+        if p4 < 0 { return Err("attenuated token malformed: missing norm_pfx"); }
+        norm_pfx = str_slice(rem3, 0, p4);
+        let rem4: String = str_slice(rem3, p4 + 1, chars_len(rem3));
+
+        let p5: Int = str_index_of(rem4, ".");
+        if p5 < 0 { return Err("attenuated token malformed: missing exp_seq"); }
+        exp_str = str_slice(rem4, 0, p5);
+        sig = str_slice(rem4, p5 + 1, chars_len(rem4));
+    } else {
+        return Err("attenuated token unrecognized algorithm or format: " + seg1);
+    }
+
+    if chars_len(sig) == 0 {
+        return Err("attenuated token malformed: missing signature");
+    }
 
     let payload: String = tok_id + "|" + parent_cap + "|" + mask_str + "|" + norm_pfx + "|" + exp_str;
-    let expected_sig: String = crypto_sha256_internal(payload + "|" + mcp_attenuation_secret());
+    let r_exp_sig: Result[String, String] = mcp_attenuation_sign(algo, payload, mcp_attenuation_secret());
+    if r_exp_sig.is_err() {
+        return Err("attenuated token signature verification error");
+    }
+    let expected_sig: String = match r_exp_sig { Ok(es) => es, Err(_) => "" };
     if sig != expected_sig {
         return Err("attenuated token signature invalid: tamper or forgery detected");
     }
@@ -127,3 +238,4 @@ pub fn mcp_attenuate_verify(
 
     return Ok(true);
 }
+
