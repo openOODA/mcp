@@ -90,11 +90,11 @@ pub fn mcp_redteam_fire_escalation() -> String {
 
 pub fn mcp_redteam_fire_integrity() -> String {
     let b: Int = mcp_token_to_bit("NotACap");
-    let fs: Int = mcp_token_to_bit("FsCap");
+    let http: Int = mcp_token_to_bit("HttpCap");
     let ffi: Int = mcp_token_to_bit("FfiCap");
     let unknown_closed: Bool = b < 0;
-    let ghost_closed: Bool = fs < 0;
-    let ffi_open: Bool = ffi == 13;
+    let ghost_closed: Bool = http < 0;
+    let ffi_open: Bool = ffi == 10;
     let ok: Bool = unknown_closed && ghost_closed && ffi_open;
     return mcp_redteam_result(redteam_gate_integrity(), "integrity", ok, if ok { "unknown and ghost tokens rejected" } else { "token map drifted" });
 }

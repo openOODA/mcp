@@ -7,7 +7,7 @@
 // Beats:
 //   1. build.oo — fail closed if a production source file is missing.
 //   2. test.oo — run the ten probe functions and the surface verifier.
-//   3. verify.oo — fail closed if the 14 tokens, 12 boards, or 22 tools drift.
+//   3. verify.oo — fail closed if the 20 tokens, 13 boards, or 23 tools drift.
 //   4. release.oo — fail closed unless verify_surface passes.
 
 // Sibling script entry points (.oo files):

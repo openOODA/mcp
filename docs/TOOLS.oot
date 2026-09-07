@@ -1,17 +1,17 @@
 # MCP Tool Catalog
 File: mcp/docs/TOOLS.oot
 
-Twenty-two tools. Results wrap as `{"content":[{"type":"text","text":"..."}]}`.
+Twenty-three tools. Results wrap as `{"content":[{"type":"text","text":"..."}]}`.
 
 requiresCap 0 uses the session default. requiresCap 1 is FsReadCap.
 
 | Name | Cap | Input | Purpose |
 |------|-----|-------|---------|
-| get_capability_graph | 0 | {} | 14-token graph JSON |
+| get_capability_graph | 0 | {} | 20-token graph JSON |
 | get_orientation | 0 | {} | Codex text from OODACODEX |
 | read_board | 1 | {name} | One governance board |
 | get_audit_log | 0 | {tail?} | Last N audit entries |
-| get_board_index | 0 | {} | 12 boards |
+| get_board_index | 0 | {} | 13 boards |
 | summarize_board | 1 | {name, max_chars?} | Truncated board |
 | compress_orient | 0 | {max_chars?} | Truncated codex |
 | get_context_budget | 0 | {} | Session counters |
@@ -29,5 +29,6 @@ requiresCap 0 uses the session default. requiresCap 1 is FsReadCap.
 | estimate_tokens | 0 | {text} | LLM token estimate (std estimator) |
 | token_status | 0 | {} | Session LLM token totals |
 | token_ingest | 0 | {text} | Add a JSONL transcript into session totals |
+| attenuate_capability | 0 | {parent_capability, child_mask?} | HMAC-attenuate a child cap |
 
-Boards: ANCHOR, RULES, NORTHSTAR, RFC-0001..RFC-0006, REDTEAM, WORKFLOW, RELEASE.
+Boards: ANCHOR, RULES, NORTHSTAR, RFC-0001..RFC-0007, REDTEAM, WORKFLOW, RELEASE.

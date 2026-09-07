@@ -32,7 +32,8 @@ Params: protocolVersion, clientInfo `{name, version}`, optional tier `minimal|st
 
 clientName at the params root is not read.
 
-protocolVersion must be `2024-11-05`. Any other value returns -32600.
+protocolVersion accepts `2024-11-05`, `2025-03-26`, and `2025-06-18`.
+Any other value returns -32600. The result always reports `2024-11-05`.
 
 A second initialize returns -32600 already initialized.
 

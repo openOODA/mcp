@@ -1,6 +1,6 @@
 // # Verify MCP Surface
 //
-// Logline: Fail closed if the 14 NORTHSTAR tokens, 12 boards, or 22 tools drift.
+// Logline: Fail closed if the 20 NORTHSTAR tokens, 13 boards, or 23 tools drift.
 //
 // Setup: Pure graph constructors. No VERSION file. Ghost names are defects.
 //

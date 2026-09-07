@@ -1,13 +1,13 @@
 // # MCP Typed Capability Graph
 //
-// Logline: Build the capability graph: 14 NORTHSTAR tokens, 12 live governance boards, 8 redteam gates.
+// Logline: Build the capability graph: 20 NORTHSTAR tokens, 13 live governance boards, 8 redteam gates.
 //
 // Setup: Pure constants. Board paths are relative to the codex directory. Ghost boards are absent.
 //
 // Beats:
 //   1. Declare graph records.
-//   2. Emit 14 NORTHSTAR tokens.
-//   3. Emit 12 boards that exist in openOODA governance.
+//   2. Emit 20 NORTHSTAR tokens. Bits match oodar cap_table.json.
+//   3. Emit 13 boards that exist in openOODA governance.
 //   4. Emit 8 redteam gates.
 //   5. Emit per-tool cap bits and serialize JSON.
 
@@ -53,6 +53,10 @@ pub type McpGraph = struct {
 
 pub fn mcp_wire_protocol_version() -> String { return "2024-11-05"; }
 
+pub fn mcp_protocol_accepted(v: String) -> Bool {
+    return v == "2024-11-05" || v == "2025-03-26" || v == "2025-06-18";
+}
+
 pub fn mcp_cap_new(token: String, kind: String, layer: String, params: Int, init_req: Bool, desc: String) -> McpCapability {
     return McpCapability { token: token, kind: kind, layer: layer, param_count: params, init_required: init_req, description: desc };
 }
@@ -97,25 +101,25 @@ pub fn mcp_graph_canonical_caps() -> List[McpCapability] {
     out = list_push(out, mcp_cap_new("RandCap",    "rand", "core", 0, true, "Randomness"));
     out = list_push(out, mcp_cap_new("AllocCap",   "mem",  "core", 0, true, "Heap"));
     out = list_push(out, mcp_cap_new("ThreadCap",  "thr",  "core", 0, true, "Threads"));
-    out = list_push(out, mcp_cap_new("GpuCap",     "gpu",  "hw",   0, true, "GPU"));
-    out = list_push(out, mcp_cap_new("FfiCap",     "ffi",  "core", 0, true, "Foreign function"));
+    out = list_push(out, mcp_cap_new("GpuCap",          "gpu",  "hw",   0, true, "GPU"));
+    out = list_push(out, mcp_cap_new("FfiCap",          "ffi",  "core", 0, true, "Foreign function"));
+    out = list_push(out, mcp_cap_new("FsCap",           "fs",   "core", 1, true, "Filesystem (subsumes read/write)"));
+    out = list_push(out, mcp_cap_new("ArenaCap",        "mem",  "core", 1, true, "Arena"));
+    out = list_push(out, mcp_cap_new("MetricsCap",      "met",  "core", 1, true, "Metrics"));
+    out = list_push(out, mcp_cap_new("SignCap",         "sec",  "core", 1, true, "Sign"));
+    out = list_push(out, mcp_cap_new("BindCap",         "net",  "core", 1, true, "Bind"));
+    out = list_push(out, mcp_cap_new("CompilerReadCap", "cmp",  "core", 1, true, "Compiler read"));
     return out;
 }
 
 pub fn mcp_graph_canonical_substrate_caps() -> List[McpCapability] {
     let mut out: List[McpCapability] = mcp_graph_canonical_caps();
-    out = list_push(out, mcp_cap_new("FsCap",           "fs",   "core", 1, true, "Legacy Fs (banned)"));
-    out = list_push(out, mcp_cap_new("ArenaCap",        "mem",  "core", 1, true, "Arena"));
-    out = list_push(out, mcp_cap_new("MetricsCap",      "met",  "core", 1, true, "Metrics"));
-    out = list_push(out, mcp_cap_new("SignCap",         "sec",  "core", 1, true, "Sign"));
-    out = list_push(out, mcp_cap_new("BindCap",         "net",  "core", 1, true, "Bind"));
     out = list_push(out, mcp_cap_new("AudioCap",        "aud",  "app",  1, true, "Audio (future)"));
     out = list_push(out, mcp_cap_new("CameraCap",       "cam",  "app",  1, true, "Camera (future)"));
     out = list_push(out, mcp_cap_new("UsbCap",          "usb",  "app",  1, true, "USB (future)"));
     out = list_push(out, mcp_cap_new("HidCap",          "hid",  "app",  1, true, "HID (future)"));
     out = list_push(out, mcp_cap_new("WindowCap",       "win",  "app",  1, true, "Window (future)"));
     out = list_push(out, mcp_cap_new("FrameCap",        "frm",  "app",  1, true, "Frame (future)"));
-    out = list_push(out, mcp_cap_new("CompilerReadCap", "cmp",  "core", 1, true, "Compiler read"));
     return out;
 }
 
@@ -130,9 +134,10 @@ pub fn mcp_graph_canonical_boards() -> List[McpBoard] {
     out = list_push(out, mcp_board_new("RFC-0004",  "rfcs/0004-engineering-model.oot",             "Engineering model", 7));
     out = list_push(out, mcp_board_new("RFC-0005",  "rfcs/0005-tactical-subsystem-template.oot",   "Subsystem template", 8));
     out = list_push(out, mcp_board_new("RFC-0006",  "rfcs/0006-versioning-and-release-protocol.oot","Auto-release", 9));
-    out = list_push(out, mcp_board_new("REDTEAM",   "practices/8d-red-team.oot",                   "8D red team", 10));
-    out = list_push(out, mcp_board_new("WORKFLOW",  "practices/ooda-workflow.oot",                 "OODA workflow", 11));
-    out = list_push(out, mcp_board_new("RELEASE",   "practices/release.oot",                       "Release practice", 12));
+    out = list_push(out, mcp_board_new("RFC-0007",  "rfcs/0007-blackbox-flight-recorder.oot",      "Blackbox flight recorder", 10));
+    out = list_push(out, mcp_board_new("REDTEAM",   "practices/8d-red-team.oot",                   "8D red team", 11));
+    out = list_push(out, mcp_board_new("WORKFLOW",  "practices/ooda-workflow.oot",                 "OODA workflow", 12));
+    out = list_push(out, mcp_board_new("RELEASE",   "practices/release.oot",                       "Release practice", 13));
     return out;
 }
 
@@ -153,10 +158,10 @@ pub fn mcp_graph_canonical_tool_caps() -> List[McpToolCap] {
     let mut out: List[McpToolCap] = list_new();
     out = list_push(out, McpToolCap { tool: "get_capability_graph",    required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "get_orientation",         required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "read_board",              required_caps: 1 });
+    out = list_push(out, McpToolCap { tool: "read_board",              required_caps: 8 });
     out = list_push(out, McpToolCap { tool: "get_audit_log",           required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "get_board_index",         required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "summarize_board",         required_caps: 1 });
+    out = list_push(out, McpToolCap { tool: "summarize_board",         required_caps: 8 });
     out = list_push(out, McpToolCap { tool: "compress_orient",         required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "get_context_budget",      required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "get_ooda_phase",          required_caps: 0 });
@@ -165,10 +170,10 @@ pub fn mcp_graph_canonical_tool_caps() -> List[McpToolCap] {
     out = list_push(out, McpToolCap { tool: "get_session_diagnostics", required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "get_format_constraints",  required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "validate_codex_format",   required_caps: 0 });
-    out = list_push(out, McpToolCap { tool: "get_northstar",           required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "get_rules",               required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "get_rfc",                 required_caps: 1 });
-    out = list_push(out, McpToolCap { tool: "get_practice",            required_caps: 1 });
+    out = list_push(out, McpToolCap { tool: "get_northstar",           required_caps: 8 });
+    out = list_push(out, McpToolCap { tool: "get_rules",               required_caps: 8 });
+    out = list_push(out, McpToolCap { tool: "get_rfc",                 required_caps: 8 });
+    out = list_push(out, McpToolCap { tool: "get_practice",            required_caps: 8 });
     out = list_push(out, McpToolCap { tool: "audit_compact",           required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "estimate_tokens",         required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "token_status",            required_caps: 0 });

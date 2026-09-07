@@ -6,7 +6,8 @@ The server is a live stdio binary. It reads one frame, writes one Content-Length
 ## Direct launch
 
 ```sh
-OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda mcp
+OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda-mcp --stdio
+# or: ooda mcp --stdio  (spawns ooda-mcp)
 ```
 
 ## Claude Desktop / Cursor
@@ -15,8 +16,8 @@ OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda mcp
 {
   "mcpServers": {
     "openooda": {
-      "command": "ooda",
-      "args": ["mcp"],
+      "command": "ooda-mcp",
+      "args": ["--stdio"],
       "env": { "OODACODEX": "/path/to/openOODA/NORTHSTAR.oot" }
     }
   }
@@ -27,6 +28,7 @@ Merge without destroying other keys:
 
 ```sh
 ooda mcp-merge ~/.config/Claude/claude_desktop_config.json
+# or: ooda-mcp mcp-merge ~/.config/Claude/claude_desktop_config.json
 ```
 
 Exit 0 = already present. Exit 1 = written. Exit 2 = error.

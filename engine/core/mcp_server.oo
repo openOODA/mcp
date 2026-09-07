@@ -2,7 +2,7 @@
 //
 // Logline: Dispatch one JSON-RPC body. File transport runs a bounded buffer. Live stdio is mcp_stdio.oo.
 //
-// Setup: OODACODEX is required. protocolVersion must be 2024-11-05. Cancel is per request id.
+// Setup: OODACODEX is required. protocolVersion accepts 2024-11-05, 2025-03-26, 2025-06-18. Cancel is per request id.
 //
 // Beats:
 //   1. Handle initialize, tools, resources, prompts, ping, shutdown, roots.
@@ -63,7 +63,7 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
         let client_name: String = mcp_json_extract_string(info, "name");
         let client_ver: String = mcp_json_extract_string(info, "version");
         let req_proto: String = mcp_json_extract_string(params, "protocolVersion");
-        if req_proto != mcp_wire_protocol_version() {
+        if !mcp_protocol_accepted(req_proto) {
             return mcp_dispatch_err(id, 0 - 32600, "unsupported protocolVersion");
         }
         let tier_str: String = mcp_json_extract_string(params, "tier");

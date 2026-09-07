@@ -21,7 +21,7 @@ pub fn probe_initialize_run(fs: &FsReadCap) -> Result[Int, String] {
     let r: String = mcp_server_handle_body(fs, &mut s, &g, "codex", init);
     if !str_contains(r, "2024-11-05") { println("FAIL: r=" + r); return Err("initialize missing protocol"); }
     if !str_contains(r, "openOODA MCP Server") { println("FAIL: serverInfo r=" + r); return Err("initialize missing serverInfo"); }
-    if s.caps_held != 1 { println("FAIL: caps_held=" + s.caps_held.to_string()); return Err("initialize did not grant FsReadCap bit 0"); }
+    if s.caps_held != 8 { println("FAIL: caps_held=" + s.caps_held.to_string()); return Err("initialize did not grant FsReadCap mask 8"); }
 
     let mut s2: McpSession = mcp_session_new();
     let call: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}";
@@ -48,6 +48,11 @@ pub fn probe_initialize_run(fs: &FsReadCap) -> Result[Int, String] {
     let twice: String = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
     let r2b: String = mcp_server_handle_body(fs, &mut s5, &g, "codex", twice);
     if !str_contains(r2b, "already initialized") { println("FAIL: r2b=" + r2b); return Err("second initialize must fail"); }
+
+    let mut s7: McpSession = mcp_session_new();
+    let v25: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2025-03-26\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let r25: String = mcp_server_handle_body(fs, &mut s7, &g, "codex", v25);
+    if !str_contains(r25, "2024-11-05") { println("FAIL: r25=" + r25); return Err("2025-03-26 must negotiate 2024-11-05"); }
 
     let mut s6: McpSession = mcp_session_new();
     let _d3: String = mcp_server_handle_body(fs, &mut s6, &g, "codex", init);

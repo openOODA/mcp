@@ -1,12 +1,12 @@
 // # MCP Tool Catalog
 //
-// Logline: Name, schema, cap bitmask, list JSON, wrap envelope, and board read for the 22 tools.
+// Logline: Name, schema, cap bitmask, list JSON, wrap envelope, and board read for the 23 tools.
 //
 // Setup: One catalog. Dispatch calls required_caps and wrap. Board paths join graph.board_root.
 //
 // Beats:
 //   1. mcp_tool_required_caps reads the graph table; unknown is -1.
-//   2. mcp_tool_list_json advertises the 22 tools.
+//   2. mcp_tool_list_json advertises the 23 tools.
 //   3. mcp_tool_wrap builds the MCP content envelope.
 //   4. mcp_tool_read_board reads one board under FsReadCap.
 
@@ -32,11 +32,11 @@ fn mcp_tool_entry(g: &McpGraph, name: String, desc: String, props: String, req: 
 }
 
 pub fn mcp_tool_list_json(g: &McpGraph) -> String {
-    let a: String = mcp_tool_entry(g, "get_capability_graph", "Typed 14-cap graph", "{\"target\":{\"type\":\"string\"}}", "[]");
+    let a: String = mcp_tool_entry(g, "get_capability_graph", "Typed 20-cap graph", "{\"target\":{\"type\":\"string\"}}", "[]");
     let b: String = mcp_tool_entry(g, "get_orientation", "Orientation codex text", "{}", "[]");
     let c: String = mcp_tool_entry(g, "read_board", "Read one governance board", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]");
     let d: String = mcp_tool_entry(g, "get_audit_log", "Last N hash-chained audit entries", "{\"tail\":{\"type\":\"integer\"}}", "[]");
-    let e: String = mcp_tool_entry(g, "get_board_index", "List 12 governance boards", "{}", "[]");
+    let e: String = mcp_tool_entry(g, "get_board_index", "List 13 governance boards", "{}", "[]");
     let f: String = mcp_tool_entry(g, "summarize_board", "Read and truncate one board", "{\"name\":{\"type\":\"string\"},\"max_chars\":{\"type\":\"integer\"}}", "[\"name\"]");
     let h: String = mcp_tool_entry(g, "compress_orient", "Truncate the codex", "{\"max_chars\":{\"type\":\"integer\"}}", "[]");
     let i: String = mcp_tool_entry(g, "get_context_budget", "Session byte and cap snapshot", "{}", "[]");

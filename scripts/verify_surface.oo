@@ -3,10 +3,10 @@
 // Logline: Fail closed if cap inventory, boards, or tools drift. Zero-trust SSoT.
 //
 // Setup: Pure graph + FsReadCap reads of oodar sec/cap/caps.h, cap_table.json,
-//        and NORTHSTAR 14. 14 subset of 26, SSoT is oodar.
+//        and NORTHSTAR 20. 20 subset of 26, SSoT is oodar cap_table.json.
 // Beats:
-//   1. 14 language caps; 26 substrate caps; subset.
-//   2. 12 boards; NORTHSTAR present.
+//   1. 20 language caps; 26 substrate caps; subset. Bits match caps.h.
+//   2. 13 boards; NORTHSTAR and RFC-0007 present.
 //   3. 23 tools.
 
 import "engine/state/mcp_graph.oo";
@@ -37,37 +37,45 @@ pub fn mcp_verify_surface_zero_trust(fs: &FsReadCap) -> Result[Int, String] {
 
 pub fn mcp_verify_surface() -> Result[Int, String] {
     let caps: List[McpCapability] = mcp_graph_canonical_caps();
-    if list_len(caps) != 14 { return Err("14 language caps drifted"); }
+    if list_len(caps) != 20 { return Err("20 language caps drifted"); }
     let subs: List[McpCapability] = mcp_graph_canonical_substrate_caps();
     if list_len(subs) != 26 { return Err("26 substrate caps drifted"); }
-    if mcp_token_to_bit("FfiCap") != 13 { return Err("FfiCap must be bit 13"); }
-    if mcp_token_to_bit("ThreadCap") != 11 { return Err("ThreadCap must be bit 11"); }
-    if mcp_token_to_bit("FsCap") != 0 - 1 { return Err("FsCap must be unknown"); }
+    if mcp_token_to_bit("FfiCap") != 10 { return Err("FfiCap must be oodar bit 10"); }
+    if mcp_token_to_bit("ThreadCap") != 26 { return Err("ThreadCap must be oodar bit 26"); }
+    if mcp_token_to_bit("FsReadCap") != 3 { return Err("FsReadCap must be oodar bit 3"); }
+    if mcp_token_to_bit("FsCap") != 5 { return Err("FsCap must be oodar bit 5"); }
+    if mcp_token_to_bit("BindCap") != 19 { return Err("BindCap must be oodar bit 19"); }
+    if mcp_token_to_bit("MetricsCap") != 11 { return Err("MetricsCap must be oodar bit 11"); }
     if mcp_token_to_bit("HttpCap") != 0 - 1 { return Err("HttpCap must be unknown"); }
-    if mcp_token_to_bit("BindCap") != 0 - 1 { return Err("BindCap must be unknown"); }
+    if mcp_token_to_bit("FsReadCap") != mcp_token_to_bit_substrate("FsReadCap") {
+        return Err("language bits must equal substrate bits");
+    }
     let mut i: Int = 0;
     while i < list_len(caps) {
         let c: McpCapability = list_get(caps, i);
-        if mcp_token_to_bit_substrate(c.token) == 0 - 1 { return Err("14 not subset of 26: " + c.token); }
+        if mcp_token_to_bit_substrate(c.token) == 0 - 1 { return Err("20 not subset of 26: " + c.token); }
         i = i + 1;
     }
     let brds: List[McpBoard] = mcp_graph_canonical_boards();
-    if list_len(brds) != 12 { return Err("board count drifted"); }
+    if list_len(brds) != 13 { return Err("board count drifted"); }
     let mut has_ns: Bool = false;
+    let mut has_bb: Bool = false;
     let mut j: Int = 0;
     while j < list_len(brds) {
         let b: McpBoard = list_get(brds, j);
         let n: String = b.name;
         if n == "NORTHSTAR" { has_ns = true; }
+        if n == "RFC-0007" { has_bb = true; }
         if n == "ROADMAP" || n == "SHIPPED" || n == "START" || n == "FORMAT" || n == "MOONSHOTS" {
             return Err("ghost board still present: " + n);
         }
         j = j + 1;
     }
     if !has_ns { return Err("NORTHSTAR board missing"); }
+    if !has_bb { return Err("RFC-0007 board missing"); }
     if mcp_tool_count() != 23 { return Err("tool count drifted"); }
     let g: McpGraph = mcp_graph_canonical("", "");
-    if mcp_tool_required_caps(&g, "read_board") != 1 { return Err("read_board must require FsReadCap"); }
+    if mcp_tool_required_caps(&g, "read_board") != 8 { return Err("read_board must require FsReadCap mask 8"); }
     if mcp_tool_required_caps(&g, "get_orientation") != 0 { return Err("get_orientation must require 0"); }
     if mcp_tool_required_caps(&g, "estimate_tokens") != 0 { return Err("estimate_tokens must require 0"); }
     if mcp_tool_required_caps(&g, "token_status") != 0 { return Err("token_status must require 0"); }

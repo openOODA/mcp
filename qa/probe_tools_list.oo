@@ -1,6 +1,6 @@
 // # MCP Tools List Probe
 //
-// Logline: Hostile test that tools/list advertises the live 22 tools and not deleted names.
+// Logline: Hostile test that tools/list advertises the live 23 tools and not deleted names.
 //
 // Setup: Session must reach Ready. Ghost tools must be absent.
 //

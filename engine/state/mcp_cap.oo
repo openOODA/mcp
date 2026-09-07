@@ -1,86 +1,84 @@
-// # MCP Capability Encoding (NORTHSTAR 14)
+// # MCP Capability Encoding (NORTHSTAR 20 ⊂ oodar 26)
 //
-// Logline: Map the 14 NORTHSTAR capability tokens onto bits 0..13. Unknown tokens return -1.
+// Logline: Map tokens onto oodar cap_table.json bit positions. Unknown tokens return -1.
 //
-// Setup: Canonical order matches NORTHSTAR.oot §4.2. No FsCap, HttpCap, or BindCap. No skip bits.
+// Setup: SSoT is oodar/sec/cap/caps.h. Language 20 is the implemented subset. No private 14-bit map.
 //
 // Beats:
-//   1. mcp_token_to_bit: token -> 0..13 or -1.
-//   2. mcp_bit_to_token: bit -> token or "".
-//   3. mcp_caps_bitmask_from_graph: OR of every known token in the graph.
-//   4. mcp_cap_full_mask: 16383.
+//   1. mcp_token_to_bit equals mcp_token_to_bit_substrate.
+//   2. mcp_bit_to_token inverts the table.
+//   3. mcp_cap_fs_read_bit is mask 8 (bit 3).
+//   4. mcp_cap_full_mask is the 20 language bits OR'd.
 
 import "engine/state/mcp_graph.oo";
 
-pub fn mcp_cap_full_mask() -> Int { return 16383; }
+pub fn mcp_cap_full_mask() -> Int { return 1007558655; }
 
 pub fn mcp_token_to_bit(token: String) -> Int {
-    if token == "FsReadCap"  { return 0; }
-    if token == "FsWriteCap" { return 1; }
-    if token == "NetCap"     { return 2; }
-    if token == "TcpCap"     { return 3; }
-    if token == "UdpCap"     { return 4; }
-    if token == "SysCap"     { return 5; }
-    if token == "ProcessCap" { return 6; }
-    if token == "EnvCap"     { return 7; }
-    if token == "TimeCap"    { return 8; }
-    if token == "RandCap"    { return 9; }
-    if token == "AllocCap"   { return 10; }
-    if token == "ThreadCap"  { return 11; }
-    if token == "GpuCap"     { return 12; }
-    if token == "FfiCap"     { return 13; }
+    return mcp_token_to_bit_substrate(token);
+}
+
+pub fn mcp_token_to_bit_substrate(token: String) -> Int {
+    if token == "NetCap"          { return 0; }
+    if token == "ProcessCap"      { return 1; }
+    if token == "FsWriteCap"      { return 2; }
+    if token == "FsReadCap"       { return 3; }
+    if token == "SysCap"          { return 4; }
+    if token == "FsCap"           { return 5; }
+    if token == "TimeCap"         { return 6; }
+    if token == "RandCap"         { return 7; }
+    if token == "AllocCap"        { return 8; }
+    if token == "ArenaCap"        { return 9; }
+    if token == "FfiCap"          { return 10; }
+    if token == "MetricsCap"      { return 11; }
+    if token == "SignCap"         { return 12; }
+    if token == "TcpCap"          { return 17; }
+    if token == "UdpCap"          { return 18; }
+    if token == "BindCap"         { return 19; }
+    if token == "AudioCap"        { return 20; }
+    if token == "CameraCap"       { return 21; }
+    if token == "UsbCap"          { return 22; }
+    if token == "HidCap"          { return 23; }
+    if token == "WindowCap"       { return 24; }
+    if token == "FrameCap"        { return 25; }
+    if token == "ThreadCap"       { return 26; }
+    if token == "GpuCap"          { return 27; }
+    if token == "EnvCap"          { return 28; }
+    if token == "CompilerReadCap" { return 29; }
     return 0 - 1;
 }
 
 pub fn mcp_bit_to_token(bit: Int) -> String {
-    if bit == 0  { return "FsReadCap"; }
-    if bit == 1  { return "FsWriteCap"; }
-    if bit == 2  { return "NetCap"; }
-    if bit == 3  { return "TcpCap"; }
-    if bit == 4  { return "UdpCap"; }
-    if bit == 5  { return "SysCap"; }
-    if bit == 6  { return "ProcessCap"; }
-    if bit == 7  { return "EnvCap"; }
-    if bit == 8  { return "TimeCap"; }
-    if bit == 9  { return "RandCap"; }
-    if bit == 10 { return "AllocCap"; }
-    if bit == 11 { return "ThreadCap"; }
-    if bit == 12 { return "GpuCap"; }
-    if bit == 13 { return "FfiCap"; }
+    if bit == 0  { return "NetCap"; }
+    if bit == 1  { return "ProcessCap"; }
+    if bit == 2  { return "FsWriteCap"; }
+    if bit == 3  { return "FsReadCap"; }
+    if bit == 4  { return "SysCap"; }
+    if bit == 5  { return "FsCap"; }
+    if bit == 6  { return "TimeCap"; }
+    if bit == 7  { return "RandCap"; }
+    if bit == 8  { return "AllocCap"; }
+    if bit == 9  { return "ArenaCap"; }
+    if bit == 10 { return "FfiCap"; }
+    if bit == 11 { return "MetricsCap"; }
+    if bit == 12 { return "SignCap"; }
+    if bit == 17 { return "TcpCap"; }
+    if bit == 18 { return "UdpCap"; }
+    if bit == 19 { return "BindCap"; }
+    if bit == 20 { return "AudioCap"; }
+    if bit == 21 { return "CameraCap"; }
+    if bit == 22 { return "UsbCap"; }
+    if bit == 23 { return "HidCap"; }
+    if bit == 24 { return "WindowCap"; }
+    if bit == 25 { return "FrameCap"; }
+    if bit == 26 { return "ThreadCap"; }
+    if bit == 27 { return "GpuCap"; }
+    if bit == 28 { return "EnvCap"; }
+    if bit == 29 { return "CompilerReadCap"; }
     return "";
 }
 
-pub fn mcp_cap_fs_read_bit() -> Int { return 1; }
-
-pub fn mcp_token_to_bit_substrate(token: String) -> Int {
-    if token == "FsReadCap"      { return 0; }
-    if token == "FsWriteCap"     { return 1; }
-    if token == "NetCap"         { return 2; }
-    if token == "TcpCap"         { return 3; }
-    if token == "UdpCap"         { return 4; }
-    if token == "SysCap"         { return 5; }
-    if token == "ProcessCap"     { return 6; }
-    if token == "EnvCap"         { return 7; }
-    if token == "TimeCap"        { return 8; }
-    if token == "RandCap"        { return 9; }
-    if token == "AllocCap"       { return 10; }
-    if token == "ThreadCap"      { return 11; }
-    if token == "GpuCap"         { return 12; }
-    if token == "FfiCap"         { return 13; }
-    if token == "FsCap"          { return 14; }
-    if token == "ArenaCap"       { return 15; }
-    if token == "MetricsCap"     { return 16; }
-    if token == "SignCap"        { return 17; }
-    if token == "BindCap"        { return 18; }
-    if token == "AudioCap"       { return 19; }
-    if token == "CameraCap"      { return 20; }
-    if token == "UsbCap"         { return 21; }
-    if token == "HidCap"         { return 22; }
-    if token == "WindowCap"      { return 23; }
-    if token == "FrameCap"       { return 24; }
-    if token == "CompilerReadCap"{ return 25; }
-    return 0 - 1;
-}
+pub fn mcp_cap_fs_read_bit() -> Int { return 8; }
 
 pub fn mcp_caps_bitmask_from_graph(g: &McpGraph) -> Int {
     let mut mask: Int = 0;

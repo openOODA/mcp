@@ -1,6 +1,6 @@
 // # Mcp State and Graph
 //
-// Logline: Capability graph, NORTHSTAR 14-bit map, roots policy, notifications, OODA state, E-M snapshot.
+// Logline: Capability graph, NORTHSTAR 20-bit map (oodar bits), roots policy, notifications, OODA state, E-M snapshot.
 //
 // Setup: No dynamic-graph persist. No skip-cap theater.
 //

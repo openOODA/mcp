@@ -23,7 +23,7 @@ fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
 pub fn probe_slice_run(fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "openOODA");
     let mut s: McpSession = mcp_session_new();
-    mcp_session_grant_cap(&mut s, 1);
+    mcp_session_grant_cap(&mut s, 8);
     let _init1: String = probe_ready(fs, &mut s, &g);
 
     // 1. Full get_rules
@@ -61,7 +61,7 @@ pub fn probe_slice_run(fs: &FsReadCap) -> Result[Int, String] {
 
     // 5. Double-run determinism with fresh session
     let mut s2: McpSession = mcp_session_new();
-    mcp_session_grant_cap(&mut s2, 1);
+    mcp_session_grant_cap(&mut s2, 8);
     let _init2: String = probe_ready(fs, &mut s2, &g);
 
     let r_sliced2: String = mcp_server_handle_body(fs, &mut s2, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_rules\",\"arguments\":{\"topic\":\"boyd\"}}}");
