@@ -2,8 +2,9 @@
 //
 // Logline: Index of the ten hostile probe drivers. A driver that cannot fail is a defect.
 //
-// Setup: Each probe exports probe_*_run. scripts/test.oo is the only main.
+// Setup: Each probe exports probe_*_run. suite.oo is the entry CI builds.
 //
+
 // Beats:
 //   1. probe_initialize.oo — initialize, protocolVersion, second init, alias refuse.
 //   2. probe_tools_list.oo — 22 live tools, no ghost names.
@@ -15,7 +16,9 @@
 //   8. probe_redteam.oo — eight gates pass.
 //   9. probe_token.oo — estimate_tokens, token_status, token_ingest.
 //   10. probe_protocol.oo — batch, prompts, roots, ETag, shutdown, exit.
+//   11. suite.oo runs the surface verifier plus all probes (CI entry).
 
+import "suite.oo";
 import "probe_initialize.oo";
 import "probe_tools_list.oo";
 import "probe_tool_call.oo";

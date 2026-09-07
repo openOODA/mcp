@@ -11,6 +11,7 @@
 
 import "engine/core/mcp_json.oo";
 import "engine/core/mcp_session.oo";
+import "engine/state/mcp_cap.oo";
 import "engine/state/mcp_graph.oo";
 import "engine/tool/mcp_tool.oo";
 
@@ -197,7 +198,7 @@ pub fn mcp_dispatch_act_prompt_get(name: String) -> String {
 }
 
 pub fn mcp_dispatch_required_caps(method: String) -> Int {
-    if method == "resources/read" { return 1; }
+    if method == "resources/read" { return mcp_cap_fs_read_bit(); }
     return 0;
 }
 

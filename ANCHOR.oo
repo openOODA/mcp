@@ -1,6 +1,6 @@
 // # MCP Subsystem — Anchor for Agents
 //
-// Logline: Front door for the mcp/ directory. Engine plus cli, qa, scripts, docs, examples, and audit.
+// Logline: Front door for the mcp/ directory. Engine plus cli, qa, docs, examples, and audit.
 //
 // Setup: Six engine subdirs. Version is the git tag. There is no VERSION file.
 //
@@ -8,13 +8,13 @@
 //   1. engine/ is the library: core, tool, health, federation, state, resource.
 //   2. cli/ is the mcp binary: stdio/file server and mcp-merge.
 //   3. qa/ has ten hostile probes that return Err on failure.
-//   4. scripts/ has build, test, verify, release; all fail closed.
+//   4. .github/workflows/ci.yml builds, tests, verifies, releases
+//      (gh-owned; no scripts/ runners); all fail closed.
 //   5. docs/ is the live protocol surface. audit/ is historical only.
 
 import "engine/ANCHOR.oo";
 import "cli/ANCHOR.oo";
 import "qa/ANCHOR.oo";
-import "scripts/ANCHOR.oo";
 import "docs/ANCHOR.oo";
 import "examples/ANCHOR.oo";
 import "audit/ANCHOR.oo";
