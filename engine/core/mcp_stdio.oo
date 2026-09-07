@@ -55,7 +55,7 @@ pub fn mcp_stdio_serve(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap) -> Result[
             continue;
         }
         if total > 1048576 { return mcp_stdio_finish(fw, &session, Err("input exceeds 1MiB")); }
-        let r: Result[String, String] = oo_read_stdin_chunk(fs, mcp_stdio_poll_ms());
+        let r: Result[String, String] = oo_read_stdin_chunk(mcp_stdio_poll_ms());
         if !r.is_ok() {
             idle = idle + 1;
             if idle > mcp_stdio_idle_iters() {
@@ -75,7 +75,7 @@ pub fn mcp_stdio_serve(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap) -> Result[
             idle = 0;
             let mut more: Bool = true;
             while more && total <= 1048576 {
-                let r0: Result[String, String] = oo_read_stdin_chunk(fs, 0);
+                let r0: Result[String, String] = oo_read_stdin_chunk(0);
                 if r0.is_ok() {
                     let extra: String = match r0 { Ok(s) => s, Err(_) => "" };
                     if chars_len(extra) > 0 {
