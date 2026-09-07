@@ -37,10 +37,16 @@ jobs:
         with:
           repository: openOODA/oodar
           path: oodar
+      - name: checkout openOODA
+        uses: actions/checkout@v4
+        with:
+          repository: openOODA/openOODA
+          path: openOODA
       - name: require compiler
         run: |
           test -x oodac/bin/oodac || chmod +x oodac/bin/oodac
           test -f oodar/core/blackbox/blackbox.c || { echo "missing oodar/core/blackbox/blackbox.c"; exit 1; }
+          test -f openOODA/RULES.oot || { echo "missing openOODA/RULES.oot"; exit 1; }
       - name: run suite proofs
         working-directory: ${{ github.workspace }}
         env:
