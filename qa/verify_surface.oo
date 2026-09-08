@@ -7,7 +7,7 @@
 // Beats:
 //   1. 20 language caps; 26 substrate caps; subset. Bits match caps.h.
 //   2. 13 boards; NORTHSTAR and RFC-0007 present.
-//   3. 23 tools.
+//   3. 26 tools.
 
 import "engine/state/mcp_graph.oo";
 import "engine/state/mcp_cap.oo";
@@ -73,9 +73,12 @@ pub fn mcp_verify_surface() -> Result[Int, String] {
     }
     if !has_ns { return Err("NORTHSTAR board missing"); }
     if !has_bb { return Err("RFC-0007 board missing"); }
-    if mcp_tool_count() != 23 { return Err("tool count drifted"); }
+    if mcp_tool_count() != 26 { return Err("tool count drifted"); }
     let g: McpGraph = mcp_graph_canonical("", "");
     if mcp_tool_required_caps(&g, "read_board") != 8 { return Err("read_board must require FsReadCap mask 8"); }
+    if mcp_tool_required_caps(&g, "oodac_check") != 8 { return Err("oodac_check must require FsReadCap mask 8"); }
+    if mcp_tool_required_caps(&g, "oodac_emit") != 8 { return Err("oodac_emit must require FsReadCap mask 8"); }
+    if mcp_tool_required_caps(&g, "oodac_build") != 8 { return Err("oodac_build must require FsReadCap mask 8"); }
     if mcp_tool_required_caps(&g, "get_orientation") != 0 { return Err("get_orientation must require 0"); }
     if mcp_tool_required_caps(&g, "estimate_tokens") != 0 { return Err("estimate_tokens must require 0"); }
     if mcp_tool_required_caps(&g, "token_status") != 0 { return Err("token_status must require 0"); }

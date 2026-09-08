@@ -1,14 +1,17 @@
 // # Mcp Tool Interface
 //
-// Logline: Tool catalog and tools/call dispatch for 22 typed tools.
+// Logline: Tool catalog and tools/call dispatch for 26 typed tools.
 //
 // Setup: One catalog in mcp_tool.oo. Dispatch in mcp_tool_dispatch.oo. Token tools in mcp_tool_token.oo.
+//        Exec tools in mcp_tool_exec.oo.
 //
 // Beats:
 //   1. mcp_tool.oo is the catalog, wrap, and board read.
 //   2. mcp_tool_dispatch.oo routes by name.
 //   3. mcp_tool_token.oo estimates and records LLM context tokens.
+//   4. mcp_tool_exec.oo runs oodac check/emit/build under the operator ProcessCap.
 
 import "mcp_tool.oo";
 import "mcp_tool_dispatch.oo";
 import "mcp_tool_token.oo";
+import "mcp_tool_exec.oo";

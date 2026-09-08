@@ -1,13 +1,13 @@
 // # MCP QA Index
 //
-// Logline: Index of the ten hostile probe drivers. A driver that cannot fail is a defect.
+// Logline: Index of the thirteen hostile probe drivers. A driver that cannot fail is a defect.
 //
 // Setup: Each probe exports probe_*_run. suite.oo is the entry CI builds.
 //
 
 // Beats:
 //   1. probe_initialize.oo — initialize, protocolVersion, second init, alias refuse.
-//   2. probe_tools_list.oo — 22 live tools, no ghost names.
+//   2. probe_tools_list.oo — 26 live tools, no ghost names.
 //   3. probe_tool_call.oo — schema, unknown tool, missing FsReadCap.
 //   4. probe_resources_list.oo — list, read, file URI, em/metrics tier.
 //   5. probe_ping.oo — ping, cancel, rate window.
@@ -16,7 +16,11 @@
 //   8. probe_redteam.oo — eight gates pass.
 //   9. probe_token.oo — estimate_tokens, token_status, token_ingest.
 //   10. probe_protocol.oo — batch, prompts, roots, ETag, shutdown, exit.
-//   11. suite.oo runs the surface verifier plus all probes (CI entry).
+//   11. probe_slice.oo — rules slicing by topic.
+//   12. probe_attenuation.oo — capability attenuation tokens.
+//   13. probe_exec.oo — oodac_check/emit/build over a real compiler.
+//   14. suite.oo runs the surface verifier plus all probes (CI entry).
+//   fixture_exec.oo is a runtime victim, never imported (it owns a main).
 
 import "suite.oo";
 import "probe_initialize.oo";
@@ -29,3 +33,6 @@ import "probe_merge.oo";
 import "probe_redteam.oo";
 import "probe_token.oo";
 import "probe_protocol.oo";
+import "probe_slice.oo";
+import "probe_attenuation.oo";
+import "probe_exec.oo";

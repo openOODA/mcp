@@ -16,18 +16,18 @@ import "engine/state/mcp_graph.oo";
 import "engine/state/mcp_cap.oo";
 import "engine/state/mcp_attenuation.oo";
 
-fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+fn probe_ready(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
-    let _init1: String = mcp_server_handle_body(fs, s, g, "codex-body", init);
-    return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let _init1: String = mcp_server_handle_body(fs, s, g, "codex-body", init, p);
+    return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
 }
 
-pub fn probe_attenuation_run(fs: &FsReadCap) -> Result[Int, String] {
+pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "openOODA");
     let mut s: McpSession = mcp_session_new();
     mcp_session_grant_cap(&mut s, 8); // FsReadCap (oodar bit 3, mask 8)
     mcp_session_grant_cap(&mut s, 4); // FsWriteCap (oodar bit 2, mask 4)
-    let _init1: String = probe_ready(fs, &mut s, &g);
+    let _init1: String = probe_ready(p, fs, &mut s, &g);
 
     // 1. Derivation and verification across blake3, sha3, sha512, and sha256
     let r_sha256: Result[String, String] = mcp_attenuate_token(&mut s, "FsReadCap", 8, "/home/jeryd/Projects/openOODA", 50, "sha256");
@@ -112,21 +112,21 @@ pub fn probe_attenuation_run(fs: &FsReadCap) -> Result[Int, String] {
     // 11. Tool call via MCP server dispatch (default algo)
     s.request_seq = 1;
     let call_def: String = "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"attenuate_capability\",\"arguments\":{\"parent_capability\":\"FsReadCap\",\"child_mask\":8,\"path_prefix\":\"/home/jeryd\",\"ttl_requests\":20}}}";
-    let r_def: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", call_def);
+    let r_def: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", call_def, p);
     if !str_contains(r_def, "OK") || !str_contains(r_def, "ATTEN.sha256.") {
         return Err("probe_attenuation: default tools/call failed: " + r_def);
     }
 
     // 12. Tool call via MCP server dispatch (blake3 algo)
     let call_b3: String = "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"attenuate_capability\",\"arguments\":{\"parent_capability\":\"FsReadCap\",\"child_mask\":8,\"path_prefix\":\"/home/jeryd\",\"ttl_requests\":20,\"algo\":\"blake3\"}}}";
-    let r_b3_call: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", call_b3);
+    let r_b3_call: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", call_b3, p);
     if !str_contains(r_b3_call, "OK") || !str_contains(r_b3_call, "ATTEN.blake3.") {
         return Err("probe_attenuation: blake3 tools/call failed: " + r_b3_call);
     }
 
     // 13. Tool call schema validation failure on invalid algo
     let call_bad: String = "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"attenuate_capability\",\"arguments\":{\"parent_capability\":\"FsReadCap\",\"algo\":\"md5\"}}}";
-    let r_bad: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", call_bad);
+    let r_bad: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", call_bad, p);
     if !str_contains(r_bad, "-32602") {
         return Err("probe_attenuation: invalid algo must fail schema validation (-32602): " + r_bad);
     }
@@ -134,14 +134,14 @@ pub fn probe_attenuation_run(fs: &FsReadCap) -> Result[Int, String] {
     // 14. Double-run determinism: Run_1 == Run_2
     let mut s1: McpSession = mcp_session_new();
     mcp_session_grant_cap(&mut s1, 8);
-    let _i1: String = probe_ready(fs, &mut s1, &g);
+    let _i1: String = probe_ready(p, fs, &mut s1, &g);
     let r_t1: Result[String, String] = mcp_attenuate_token(&mut s1, "FsReadCap", 8, "/test", 10, "blake3");
     if r_t1.is_err() { return Err("probe_attenuation: s1 token failed"); }
     let t1: String = match r_t1 { Ok(x) => x, Err(_) => "" };
 
     let mut s2: McpSession = mcp_session_new();
     mcp_session_grant_cap(&mut s2, 8);
-    let _i2: String = probe_ready(fs, &mut s2, &g);
+    let _i2: String = probe_ready(p, fs, &mut s2, &g);
     let r_t2: Result[String, String] = mcp_attenuate_token(&mut s2, "FsReadCap", 8, "/test", 10, "blake3");
     if r_t2.is_err() { return Err("probe_attenuation: s2 token failed"); }
     let t2: String = match r_t2 { Ok(y) => y, Err(_) => "" };

@@ -1,0 +1,96 @@
+// # MCP Compiler Exec Tools
+//
+// Logline: Run oodac check/emit/build under the operator ProcessCap; JSON results.
+//
+// Setup: Compiler path resolves from OODA_COMPILER else OODAC_BIN and is cached on
+//        the session by the server entry points. The remote client needs FsReadCap;
+//        spawning is authorized by the operator-held ProcessCap threaded from main.
+//        No PATH. No shell. sys_exec arity is direct (no cmd_execute 5-arg cap).
+//
+// Beats:
+//   1. Empty or missing compiler path fails closed with a JSON error.
+//   2. check runs `oodac check --json-errors`; emit runs emit-c/emit-llvm; build pins --backend c.
+//   3. Emit backend outside {c, llvm} fails closed. Output truncates to max_chars.
+
+import "engine/core/mcp_json.oo";
+import "std/fs/process/env.oo";
+import "std/fs/file/path.oo";
+
+pub fn mcp_exec_default_max() -> Int { return 4000; }
+
+pub fn mcp_exec_clamp_max(max_chars: Int) -> Int {
+    if max_chars <= 0 { return mcp_exec_default_max(); }
+    if max_chars > 65536 { return 65536; }
+    return max_chars;
+}
+
+pub fn mcp_exec_resolve_compiler(fs: &FsReadCap, env: &EnvCap) -> String {
+    let r1: Result[String, String] = env_get(env, "OODA_COMPILER");
+    let raw1: String = match r1 { Ok(s) => s, Err(_) => "" };
+    if chars_len(raw1) > 0 && path_exists(fs, raw1) { return raw1; }
+    let r2: Result[String, String] = env_get(env, "OODAC_BIN");
+    let raw2: String = match r2 { Ok(s) => s, Err(_) => "" };
+    if chars_len(raw2) > 0 && path_exists(fs, raw2) { return raw2; }
+    return "";
+}
+
+fn mcp_exec_truncate(text: String, max_chars: Int) -> String {
+    if chars_len(text) <= max_chars { return text; }
+    return str_slice(text, 0, max_chars) + "...[truncated]";
+}
+
+fn mcp_exec_result(ok: Bool, text: String, max_chars: Int) -> String {
+    let flag: String = if ok { "true" } else { "false" };
+    return "{\"ok\":" + flag + ",\"output\":\"" + mcp_json_escape(mcp_exec_truncate(text, max_chars)) + "\"}";
+}
+
+fn mcp_exec_run(p: &ProcessCap, oodac: String, sub: String, extra: String, target: String, max_chars: Int) -> String {
+    if chars_len(oodac) == 0 {
+        return "{\"error\":\"exec unavailable: set OODA_COMPILER or OODAC_BIN\"}";
+    }
+    if chars_len(target) == 0 {
+        return "{\"error\":\"missing path\"}";
+    }
+    let r: Result[String, String] = if chars_len(extra) == 0 {
+        sys_exec(p, oodac, sub, target)
+    } else {
+        sys_exec(p, oodac, sub, extra, target)
+    };
+    if r.is_ok() {
+        let out: String = match r { Ok(s) => s, Err(_) => "" };
+        return mcp_exec_result(true, out, max_chars);
+    }
+    let e: String = match r { Ok(_) => "", Err(m) => m };
+    return mcp_exec_result(false, e, max_chars);
+}
+
+pub fn mcp_exec_check(p: &ProcessCap, oodac: String, path: String, max_chars: Int) -> String {
+    return mcp_exec_run(p, oodac, "check", "--json-errors", path, mcp_exec_clamp_max(max_chars));
+}
+
+pub fn mcp_exec_emit(p: &ProcessCap, oodac: String, path: String, backend: String, max_chars: Int) -> String {
+    if backend != "c" && backend != "llvm" {
+        return "{\"error\":\"residual backend: " + mcp_json_escape(backend) + "\"}";
+    }
+    let sub: String = if backend == "llvm" { "emit-llvm" } else { "emit-c" };
+    return mcp_exec_run(p, oodac, sub, "", path, mcp_exec_clamp_max(max_chars));
+}
+
+pub fn mcp_exec_build(p: &ProcessCap, oodac: String, entry: String, out: String, max_chars: Int) -> String {
+    if chars_len(oodac) == 0 {
+        return "{\"error\":\"exec unavailable: set OODA_COMPILER or OODAC_BIN\"}";
+    }
+    if chars_len(entry) == 0 {
+        return "{\"error\":\"missing entry\"}";
+    }
+    if chars_len(out) == 0 {
+        return "{\"error\":\"missing out\"}";
+    }
+    let r: Result[String, String] = sys_exec(p, oodac, "build", "--backend", "c", entry, "-o", out);
+    if r.is_ok() {
+        let ok_out: String = match r { Ok(s) => s, Err(_) => "" };
+        return mcp_exec_result(true, ok_out, mcp_exec_clamp_max(max_chars));
+    }
+    let e: String = match r { Ok(_) => "", Err(m) => m };
+    return mcp_exec_result(false, e, mcp_exec_clamp_max(max_chars));
+}

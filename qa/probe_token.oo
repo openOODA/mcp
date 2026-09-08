@@ -15,14 +15,14 @@ import "engine/state/mcp_graph.oo";
 import "engine/tool/mcp_tool.oo";
 import "engine/tool/mcp_tool_token.oo";
 
-fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+fn probe_ready(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
-    let _: String = mcp_server_handle_body(fs, s, g, "codex", init);
-    return mcp_server_handle_body(fs, s, g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let _: String = mcp_server_handle_body(fs, s, g, "codex", init, p);
+    return mcp_server_handle_body(fs, s, g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
 }
 
-pub fn probe_token_run(fs: &FsReadCap) -> Result[Int, String] {
-    if mcp_tool_count() != 23 { return Err("tool count drifted from 23"); }
+pub fn probe_token_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, String] {
+    if mcp_tool_count() != 26 { return Err("tool count drifted from 26"); }
     let est: String = mcp_token_estimate("abcdefghijklmnop");
     if !str_contains(est, "\"tokens\"") { return Err("estimate missing tokens"); }
     if str_contains(est, "\"tokens\":0") { return Err("non-empty text must not be zero tokens"); }
@@ -44,14 +44,14 @@ pub fn probe_token_run(fs: &FsReadCap) -> Result[Int, String] {
 
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
     let mut s: McpSession = mcp_session_new();
-    let _: String = probe_ready(fs, &mut s, &g);
-    let miss: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"estimate_tokens\",\"arguments\":{}}}");
+    let _: String = probe_ready(p, fs, &mut s, &g);
+    let miss: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"estimate_tokens\",\"arguments\":{}}}", p);
     if !str_contains(miss, "-32602") { return Err("estimate_tokens without text must return -32602"); }
-    let ok: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"estimate_tokens\",\"arguments\":{\"text\":\"hello world from mcp\"}}}");
+    let ok: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"estimate_tokens\",\"arguments\":{\"text\":\"hello world from mcp\"}}}", p);
     if !str_contains(ok, "tokens") { return Err("estimate_tokens must return tokens"); }
-    let ing_bad: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"token_ingest\",\"arguments\":{\"text\":\"not-jsonl\"}}}");
+    let ing_bad: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"token_ingest\",\"arguments\":{\"text\":\"not-jsonl\"}}}", p);
     if !str_contains(ing_bad, "jsonl failed") && !str_contains(ing_bad, "\"ok\":false") { return Err("tools/call bad ingest must fail closed"); }
-    let st: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"token_status\",\"arguments\":{}}}");
+    let st: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"token_status\",\"arguments\":{}}}", p);
     if !str_contains(st, "tool_calls") { return Err("token_status missing tool_calls"); }
     if s.token_calls < 1 { return Err("tools/call must record token_calls"); }
     return Ok(0);

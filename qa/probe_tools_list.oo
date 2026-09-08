@@ -1,6 +1,6 @@
 // # MCP Tools List Probe
 //
-// Logline: Hostile test that tools/list advertises the live 23 tools and not deleted names.
+// Logline: Hostile test that tools/list advertises the live 26 tools and not deleted names.
 //
 // Setup: Session must reach Ready. Ghost tools must be absent.
 //
@@ -14,28 +14,31 @@ import "engine/core/mcp_session.oo";
 import "engine/state/mcp_graph.oo";
 import "engine/tool/mcp_tool.oo";
 
-fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+fn probe_ready(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
-    let _: String = mcp_server_handle_body(fs, s, g, "codex", init);
-    return mcp_server_handle_body(fs, s, g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let _: String = mcp_server_handle_body(fs, s, g, "codex", init, p);
+    return mcp_server_handle_body(fs, s, g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
 }
 
-pub fn probe_tools_list_run(fs: &FsReadCap) -> Result[Int, String] {
+pub fn probe_tools_list_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
     let mut s: McpSession = mcp_session_new();
-    let _: String = probe_ready(fs, &mut s, &g);
-    let r: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}");
+    let _: String = probe_ready(p, fs, &mut s, &g);
+    let r: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\",\"params\":{}}", p);
     if !str_contains(r, "get_rules") { return Err("tools/list missing get_rules"); }
     if !str_contains(r, "get_rfc") { return Err("tools/list missing get_rfc"); }
     if !str_contains(r, "get_practice") { return Err("tools/list missing get_practice"); }
     if str_contains(r, "get_milestone_status") { return Err("ghost tool get_milestone_status still listed"); }
     if str_contains(r, "ooda.northstar") { return Err("ghost tool ooda.northstar still listed"); }
     if str_contains(r, "get_em_swarm") { return Err("ghost tool get_em_swarm still listed"); }
-    if mcp_tool_count() != 23 { return Err("tool count drifted from 23"); }
+    if mcp_tool_count() != 26 { return Err("tool count drifted from 26"); }
     if !str_contains(r, "estimate_tokens") { return Err("tools/list missing estimate_tokens"); }
     if !str_contains(r, "token_status") { return Err("tools/list missing token_status"); }
     if !str_contains(r, "token_ingest") { return Err("tools/list missing token_ingest"); }
     if !str_contains(r, "attenuate_capability") { return Err("tools/list missing attenuate_capability"); }
+    if !str_contains(r, "oodac_check") { return Err("tools/list missing oodac_check"); }
+    if !str_contains(r, "oodac_emit") { return Err("tools/list missing oodac_emit"); }
+    if !str_contains(r, "oodac_build") { return Err("tools/list missing oodac_build"); }
     if str_contains(r, "estimate_chars") { return Err("ghost tool estimate_chars still listed"); }
     return Ok(0);
 }

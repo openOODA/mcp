@@ -1,0 +1,15 @@
+// # Exec Probe Fixture: minimal main for oodac_build
+//
+// Logline: Smallest buildable entry so probe_exec can check, emit, and build without fixtures outside the repo.
+//
+// Setup: No caps. No imports. Prints one line and returns Ok.
+//
+// Beats:
+//   1. oodac check passes on this file.
+//   2. oodac emit-c prints this file's C translation.
+//   3. oodac build produces a runnable binary from this file.
+
+pub fn main() -> Result[Int, String] {
+    println("mcp-exec-fixture");
+    return Ok(0);
+}

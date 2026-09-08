@@ -49,6 +49,23 @@ pub fn mcp_schema_validate(name: String, args: String) -> Int {
         if r_ttl != 0 { return r_ttl; }
         return mcp_schema_optional_algo(args);
     }
+    if name == "oodac_check" {
+        let r_p: Int = mcp_schema_require_string(args, "path");
+        if r_p != 0 { return r_p; }
+        return mcp_schema_optional_int_nonneg(args, "max_chars");
+    }
+    if name == "oodac_emit" {
+        let r_ep: Int = mcp_schema_require_string(args, "path");
+        if r_ep != 0 { return r_ep; }
+        return mcp_schema_optional_int_nonneg(args, "max_chars");
+    }
+    if name == "oodac_build" {
+        let r_be: Int = mcp_schema_require_string(args, "entry");
+        if r_be != 0 { return r_be; }
+        let r_bo: Int = mcp_schema_require_string(args, "out");
+        if r_bo != 0 { return r_bo; }
+        return mcp_schema_optional_int_nonneg(args, "max_chars");
+    }
     return mcp_schema_err_kind();
 }
 

@@ -179,6 +179,9 @@ pub fn mcp_graph_canonical_tool_caps() -> List[McpToolCap] {
     out = list_push(out, McpToolCap { tool: "token_status",            required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "token_ingest",            required_caps: 0 });
     out = list_push(out, McpToolCap { tool: "attenuate_capability",     required_caps: 0 });
+    out = list_push(out, McpToolCap { tool: "oodac_check",              required_caps: 8 });
+    out = list_push(out, McpToolCap { tool: "oodac_emit",               required_caps: 8 });
+    out = list_push(out, McpToolCap { tool: "oodac_build",              required_caps: 8 });
     return out;
 }
 

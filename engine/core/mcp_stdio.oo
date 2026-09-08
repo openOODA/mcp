@@ -17,6 +17,7 @@ import "engine/core/mcp_json.oo";
 import "engine/core/mcp_batch.oo";
 import "engine/federation/mcp_codex.oo";
 import "engine/health/mcp_audit.oo";
+import "engine/tool/mcp_tool_exec.oo";
 
 pub fn mcp_stdio_poll_ms() -> Int { return 1; }
 pub fn mcp_stdio_idle_iters() -> Int { return 300000; }
@@ -26,11 +27,12 @@ fn mcp_stdio_finish(fw: &FsWriteCap, s: &McpSession, rc: Result[Int, String]) ->
     return rc;
 }
 
-pub fn mcp_stdio_serve(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap) -> Result[Int, String] {
+pub fn mcp_stdio_serve(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, p: &ProcessCap) -> Result[Int, String] {
     let mut cache: McpCodexCache = mcp_codex_cache_new();
     let cached: Int = mcp_codex_resolve_cached(fs, env, &mut cache);
     if cached == 0 { return Err("OODACODEX missing or unreadable"); }
     let mut session: McpSession = mcp_session_new();
+    session.exec_oodac = mcp_exec_resolve_compiler(fs, env);
     let mut buf: String = "";
     let mut total: Int = 0;
     let mut frames: Int = 0;
@@ -44,7 +46,7 @@ pub fn mcp_stdio_serve(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap) -> Result[
             if chars_len(body) == 0 { continue; }
             frames = frames + 1;
             if frames > 256 { return mcp_stdio_finish(fw, &session, Err("frame cap 256")); }
-            let resp: String = if mcp_batch_is_batch(body) { mcp_server_handle_batch(fs, &mut session, &cache.graph, cache.text, body) } else { mcp_server_handle_body(fs, &mut session, &cache.graph, cache.text, body) };
+            let resp: String = if mcp_batch_is_batch(body) { mcp_server_handle_batch(fs, &mut session, &cache.graph, cache.text, body, p) } else { mcp_server_handle_body(fs, &mut session, &cache.graph, cache.text, body, p) };
             if chars_len(resp) > 0 {
                 if bytes_len(resp) > 1048576 { return mcp_stdio_finish(fw, &session, Err("response exceeds 1MiB")); }
                 print(mcp_json_frame(resp));

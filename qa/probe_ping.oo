@@ -14,35 +14,35 @@ import "engine/core/mcp_server.oo";
 import "engine/core/mcp_session.oo";
 import "engine/state/mcp_graph.oo";
 
-pub fn probe_ping_run(fs: &FsReadCap) -> Result[Int, String] {
+pub fn probe_ping_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
     let mut s0: McpSession = mcp_session_new();
-    let early: String = mcp_server_handle_body(fs, &mut s0, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{}}");
+    let early: String = mcp_server_handle_body(fs, &mut s0, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{}}", p);
     if !str_contains(early, "-32600") { return Err("ping before initialize must return -32600"); }
 
     let mut s: McpSession = mcp_session_new();
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
-    let _p1: String = mcp_server_handle_body(fs, &mut s, &g, "codex", init);
-    let _p2: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
-    let pong: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\",\"params\":{}}");
+    let _p1: String = mcp_server_handle_body(fs, &mut s, &g, "codex", init, p);
+    let _p2: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
+    let pong: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"ping\",\"params\":{}}", p);
     if !str_contains(pong, "\"pong\":true") { return Err("ping after Ready must return pong true"); }
 
-    let _p3: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":3}}");
-    let denied: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}");
+    let _p3: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":3}}", p);
+    let denied: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}", p);
     if !str_contains(denied, "-32603") { return Err("cancelled request id must return -32603"); }
-    let other: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}");
+    let other: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}", p);
     if str_contains(other, "-32603") { return Err("uncancelled id must not be refused"); }
-    let still: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"ping\",\"params\":{}}");
+    let still: String = mcp_server_handle_body(fs, &mut s, &g, "codex", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"ping\",\"params\":{}}", p);
     if !str_contains(still, "\"pong\":true") { return Err("ping after per-id cancel must still pong"); }
 
     let mut sr: McpSession = mcp_session_new();
-    let _p4: String = mcp_server_handle_body(fs, &mut sr, &g, "codex", init);
-    let _p5: String = mcp_server_handle_body(fs, &mut sr, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let _p4: String = mcp_server_handle_body(fs, &mut sr, &g, "codex", init, p);
+    let _p5: String = mcp_server_handle_body(fs, &mut sr, &g, "codex", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
     let mut i: Int = 0;
     let mut hit: Bool = false;
     while i < 120 {
         let req: String = "{\"jsonrpc\":\"2.0\",\"id\":" + (i + 10).to_string() + ",\"method\":\"ping\",\"params\":{}}";
-        let out: String = mcp_server_handle_body(fs, &mut sr, &g, "codex", req);
+        let out: String = mcp_server_handle_body(fs, &mut sr, &g, "codex", req, p);
         if str_contains(out, "-32607") { hit = true; i = 120; } else { i = i + 1; }
     }
     if !hit { return Err("rate window must refuse the 101st id-bearing request"); }

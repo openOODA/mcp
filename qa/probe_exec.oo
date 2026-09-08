@@ -1,0 +1,71 @@
+// # MCP Exec Tools Probe
+//
+// Logline: Hostile test for oodac_check, oodac_emit, and oodac_build over a real compiler.
+//
+// Setup: Ready session with exec_oodac resolved from OODA_COMPILER else OODAC_BIN.
+//        Fixture is qa/fixture_exec.oo. Build output lands under the workspace
+//        (jail-compatible) and is removed before pass.
+//
+// Beats:
+//   1. oodac_check without path is schema-invalid.
+//   2. oodac_check on the fixture returns ok true; on a missing file ok false with JSON diagnostics.
+//   3. oodac_emit with a residual backend fails closed; truncation marker appears on small max_chars.
+//   4. oodac_build produces a binary that runs and prints the fixture line; output file is removed.
+//   5. A session with no compiler path fails closed with exec unavailable.
+
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/tool/mcp_tool_exec.oo";
+
+fn probe_exec_ready(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let _: String = mcp_server_handle_body(fs, s, g, "codex-body", init, p);
+    return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
+}
+
+fn probe_exec_call(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, id: Int, tool: String, args: String) -> String {
+    let body: String = "{\"jsonrpc\":\"2.0\",\"id\":" + id.to_string() + ",\"method\":\"tools/call\",\"params\":{\"name\":\"" + tool + "\",\"arguments\":" + args + "}}";
+    return mcp_server_handle_body(fs, s, g, "codex-body", body, p);
+}
+
+pub fn probe_exec_run(p: &ProcessCap, fs: &FsReadCap, fw: &FsWriteCap, env: &EnvCap) -> Result[Int, String] {
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
+    let mut s: McpSession = mcp_session_new();
+    let _: String = probe_exec_ready(p, fs, &mut s, &g);
+    s.exec_oodac = mcp_exec_resolve_compiler(fs, env);
+    if chars_len(s.exec_oodac) == 0 { return Err("probe_exec: no compiler (need OODA_COMPILER or OODAC_BIN)"); }
+
+    let noschema: String = probe_exec_call(p, fs, &mut s, &g, 2, "oodac_check", "{}");
+    if !str_contains(noschema, "-32602") { return Err("oodac_check without path must return -32602"); }
+
+    let good: String = probe_exec_call(p, fs, &mut s, &g, 3, "oodac_check", "{\"path\":\"mcp/qa/fixture_exec.oo\"}");
+    if !str_contains(good, "\\\"ok\\\":true") { return Err("oodac_check on fixture must return ok true: " + good); }
+
+    let bad: String = probe_exec_call(p, fs, &mut s, &g, 4, "oodac_check", "{\"path\":\"mcp/qa/no_such_file.oo\"}");
+    if !str_contains(bad, "\\\"ok\\\":false") { return Err("oodac_check on missing file must return ok false"); }
+    if !str_contains(bad, "unreadable file") { return Err("oodac_check diagnostics must carry the compiler message"); }
+
+    let residual: String = probe_exec_call(p, fs, &mut s, &g, 5, "oodac_emit", "{\"path\":\"mcp/qa/fixture_exec.oo\",\"backend\":\"wasm\"}");
+    if !str_contains(residual, "residual backend") { return Err("oodac_emit with residual backend must fail closed"); }
+
+    let trunc: String = probe_exec_call(p, fs, &mut s, &g, 6, "oodac_emit", "{\"path\":\"mcp/qa/suite.oo\",\"backend\":\"c\",\"max_chars\":10}");
+    if !str_contains(trunc, "\\\"ok\\\":true") { return Err("oodac_emit on suite must return ok true"); }
+    if !str_contains(trunc, "[truncated]") { return Err("oodac_emit must truncate to max_chars"); }
+
+    let out: String = "mcp/qa/probe_exec_out";
+    let built: String = probe_exec_call(p, fs, &mut s, &g, 7, "oodac_build", "{\"entry\":\"mcp/qa/fixture_exec.oo\",\"out\":\"" + out + "\"}");
+    if !str_contains(built, "\\\"ok\\\":true") { return Err("oodac_build on fixture must return ok true: " + built); }
+    let rr: Result[String, String] = sys_exec(p, out);
+    if rr.is_err() { return Err("probe_exec: built binary did not run"); }
+    let rout: String = match rr { Ok(x) => x, Err(_) => "" };
+    if !str_contains(rout, "mcp-exec-fixture") { return Err("probe_exec: built binary printed wrong output"); }
+    let rm: Result[Void, String] = oo_fs_remove_file(fw, out);
+    if rm.is_err() { return Err("probe_exec: build output cleanup failed"); }
+
+    let mut s0: McpSession = mcp_session_new();
+    let _e0: String = probe_exec_ready(p, fs, &mut s0, &g);
+    let nocomp: String = probe_exec_call(p, fs, &mut s0, &g, 8, "oodac_check", "{\"path\":\"mcp/qa/fixture_exec.oo\"}");
+    if !str_contains(nocomp, "exec unavailable") { return Err("exec tool with no compiler must fail closed"); }
+    return Ok(0);
+}

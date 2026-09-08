@@ -13,13 +13,13 @@ import "engine/core/mcp_server.oo";
 import "engine/core/mcp_session.oo";
 import "engine/state/mcp_graph.oo";
 
-pub fn probe_double_run_run(fs: &FsReadCap) -> Result[Int, String] {
+pub fn probe_double_run_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
     let mut a: McpSession = mcp_session_new();
     let mut b: McpSession = mcp_session_new();
-    let ra: String = mcp_server_handle_body(fs, &mut a, &g, "codex", init);
-    let rb: String = mcp_server_handle_body(fs, &mut b, &g, "codex", init);
+    let ra: String = mcp_server_handle_body(fs, &mut a, &g, "codex", init, p);
+    let rb: String = mcp_server_handle_body(fs, &mut b, &g, "codex", init, p);
     if ra != rb { return Err("double-run drift on initialize"); }
     if chars_len(ra) == 0 { return Err("initialize produced empty response"); }
     return Ok(0);

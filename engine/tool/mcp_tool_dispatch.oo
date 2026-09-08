@@ -1,12 +1,13 @@
 // # MCP Tool Dispatch
 //
-// Logline: Route tools/call to one of 22 typed tools and wrap the result. Unknown tool fails closed.
+// Logline: Route tools/call to one of 26 typed tools and wrap the result. Unknown tool fails closed.
 //
-// Setup: Schema first. Board tools call mcp_tool_read_board. No health alias. No deleted-board tools.
+// Setup: Schema first. Board tools call mcp_tool_read_board. Exec tools (oodac_*) run under
+//        the operator ProcessCap against s.exec_oodac. No health alias. No deleted-board tools.
 //
 // Beats:
 //   1. Validate schema.
-//   2. Dispatch the 22 names.
+//   2. Dispatch the 26 names.
 //   3. Unknown name returns an error object.
 
 import "engine/core/mcp_json.oo";
@@ -19,9 +20,10 @@ import "engine/resource/mcp_format.oo";
 import "engine/tool/mcp_tool.oo";
 import "engine/tool/mcp_tool_token.oo";
 import "engine/tool/mcp_tool_slice.oo";
+import "engine/tool/mcp_tool_exec.oo";
 import "engine/state/mcp_attenuation.oo";
 
-pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &McpGraph, s: &mut McpSession, fs: &FsReadCap) -> String {
+pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &McpGraph, s: &mut McpSession, fs: &FsReadCap, p: &ProcessCap) -> String {
     if name == "get_capability_graph" {
         let target: String = mcp_tool_arg_string(args, "target", "");
         if chars_len(target) > 0 { return mcp_tool_wrap(mcp_graph_filter_json(g, target)); }
@@ -75,6 +77,15 @@ pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &Mcp
         }
         let token_str: String = match r_tok { Ok(tok) => tok, Err(_) => "" };
         return mcp_tool_wrap("{\"status\":\"OK\",\"token\":\"" + token_str + "\"}");
+    }
+    if name == "oodac_check" {
+        return mcp_tool_wrap(mcp_exec_check(p, s.exec_oodac, mcp_tool_arg_string(args, "path", ""), mcp_tool_arg_int(args, "max_chars", mcp_exec_default_max())));
+    }
+    if name == "oodac_emit" {
+        return mcp_tool_wrap(mcp_exec_emit(p, s.exec_oodac, mcp_tool_arg_string(args, "path", ""), mcp_tool_arg_string(args, "backend", "c"), mcp_tool_arg_int(args, "max_chars", mcp_exec_default_max())));
+    }
+    if name == "oodac_build" {
+        return mcp_tool_wrap(mcp_exec_build(p, s.exec_oodac, mcp_tool_arg_string(args, "entry", ""), mcp_tool_arg_string(args, "out", ""), mcp_tool_arg_int(args, "max_chars", mcp_exec_default_max())));
     }
     return "{\"error\":\"unknown tool: " + name + "\"}";
 }

@@ -1,12 +1,13 @@
 // # Test MCP
 //
-// Logline: Run the ten probe functions and the surface verifier. Any Err fails the package.
+// Logline: Run the thirteen probe functions and the surface verifier. Any Err fails the package.
 //
-// Setup: In-process. Merge probe needs FsWriteCap. No fake passed++.
+// Setup: In-process. Merge probe needs FsWriteCap. Exec probe needs ProcessCap plus
+//        OODA_COMPILER or OODAC_BIN. No fake passed++.
 //
 // Beats:
 //   1. verify surface.
-//   2. Run ten probes.
+//   2. Run thirteen probes.
 //   3. Return the first Err.
 
 import "qa/probe_initialize.oo";
@@ -21,6 +22,7 @@ import "qa/probe_token.oo";
 import "qa/probe_protocol.oo";
 import "qa/probe_slice.oo";
 import "qa/probe_attenuation.oo";
+import "qa/probe_exec.oo";
 import "verify_surface.oo";
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
@@ -28,27 +30,27 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     if v.is_err() { println("FAIL: surface"); return v; }
     println("PASS: surface");
 
-    let a: Result[Int, String] = probe_initialize_run(fs_r);
+    let a: Result[Int, String] = probe_initialize_run(p, fs_r);
     if a.is_err() { println("FAIL: probe_initialize"); return a; }
     println("PASS: probe_initialize");
 
-    let b: Result[Int, String] = probe_tools_list_run(fs_r);
+    let b: Result[Int, String] = probe_tools_list_run(p, fs_r);
     if b.is_err() { println("FAIL: probe_tools_list"); return b; }
     println("PASS: probe_tools_list");
 
-    let c: Result[Int, String] = probe_tool_call_run(fs_r);
+    let c: Result[Int, String] = probe_tool_call_run(p, fs_r);
     if c.is_err() { println("FAIL: probe_tool_call"); return c; }
     println("PASS: probe_tool_call");
 
-    let d: Result[Int, String] = probe_resources_list_run(fs_r);
+    let d: Result[Int, String] = probe_resources_list_run(p, fs_r);
     if d.is_err() { println("FAIL: probe_resources_list"); return d; }
     println("PASS: probe_resources_list");
 
-    let e: Result[Int, String] = probe_ping_run(fs_r);
+    let e: Result[Int, String] = probe_ping_run(p, fs_r);
     if e.is_err() { println("FAIL: probe_ping"); return e; }
     println("PASS: probe_ping");
 
-    let f: Result[Int, String] = probe_double_run_run(fs_r);
+    let f: Result[Int, String] = probe_double_run_run(p, fs_r);
     if f.is_err() { println("FAIL: probe_double_run"); return f; }
     println("PASS: probe_double_run");
 
@@ -60,19 +62,19 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     if r.is_err() { println("FAIL: probe_redteam"); return r; }
     println("PASS: probe_redteam");
 
-    let t: Result[Int, String] = probe_token_run(fs_r);
+    let t: Result[Int, String] = probe_token_run(p, fs_r);
     if t.is_err() { println("FAIL: probe_token"); return t; }
     println("PASS: probe_token");
 
-    let pr: Result[Int, String] = probe_protocol_run(fs_r);
+    let pr: Result[Int, String] = probe_protocol_run(p, fs_r);
     if pr.is_err() { println("FAIL: probe_protocol"); return pr; }
     println("PASS: probe_protocol");
 
-    let ps: Result[Int, String] = probe_slice_run(fs_r);
+    let ps: Result[Int, String] = probe_slice_run(p, fs_r);
     if ps.is_err() { println("FAIL: probe_slice"); return ps; }
     println("PASS: probe_slice");
 
-    let pa: Result[Int, String] = probe_attenuation_run(fs_r);
+    let pa: Result[Int, String] = probe_attenuation_run(p, fs_r);
     if pa.is_err() {
         let e_pa: String = match pa { Ok(_) => "", Err(msg) => msg };
         println("FAIL: probe_attenuation: " + e_pa);
@@ -80,6 +82,14 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     }
     println("PASS: probe_attenuation");
 
-    println("test: 12 probes + verify passed");
+    let pe: Result[Int, String] = probe_exec_run(p, fs_r, fw, env);
+    if pe.is_err() {
+        let e_pe: String = match pe { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_exec: " + e_pe);
+        return pe;
+    }
+    println("PASS: probe_exec");
+
+    println("test: 13 probes + verify passed");
     return Ok(0);
 }

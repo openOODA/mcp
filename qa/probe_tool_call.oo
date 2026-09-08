@@ -14,24 +14,24 @@ import "engine/core/mcp_session.oo";
 import "engine/core/mcp_dispatch.oo";
 import "engine/state/mcp_graph.oo";
 
-fn probe_ready(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+fn probe_ready(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
     let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
-    let _: String = mcp_server_handle_body(fs, s, g, "codex-body", init);
-    return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}");
+    let _: String = mcp_server_handle_body(fs, s, g, "codex-body", init, p);
+    return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
 }
 
-pub fn probe_tool_call_run(fs: &FsReadCap) -> Result[Int, String] {
+pub fn probe_tool_call_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
     let mut s: McpSession = mcp_session_new();
-    let _: String = probe_ready(fs, &mut s, &g);
-    let unk: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"no_such_tool\",\"arguments\":{}}}");
+    let _: String = probe_ready(p, fs, &mut s, &g);
+    let unk: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/call\",\"params\":{\"name\":\"no_such_tool\",\"arguments\":{}}}", p);
     if !str_contains(unk, "-32601") { return Err("unknown tool must return -32601"); }
-    let bad: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"read_board\",\"arguments\":{}}}");
+    let bad: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"read_board\",\"arguments\":{}}}", p);
     if !str_contains(bad, "-32602") { return Err("read_board without name must return -32602"); }
-    let ok: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}");
+    let ok: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":4,\"method\":\"tools/call\",\"params\":{\"name\":\"get_orientation\",\"arguments\":{}}}", p);
     if !str_contains(ok, "codex-body") { return Err("get_orientation must wrap codex text"); }
     if !str_contains(ok, "\"content\"") { return Err("get_orientation must use content envelope"); }
-    let neg: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"summarize_board\",\"arguments\":{\"name\":\"RULES\",\"max_chars\":-1}}}");
+    let neg: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":5,\"method\":\"tools/call\",\"params\":{\"name\":\"summarize_board\",\"arguments\":{\"name\":\"RULES\",\"max_chars\":-1}}}", p);
     if !str_contains(neg, "-32602") { return Err("negative max_chars must return -32602"); }
     let mut s0: McpSession = mcp_session_new();
     s0.phase = mcp_phase_ready();

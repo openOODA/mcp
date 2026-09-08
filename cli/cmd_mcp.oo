@@ -1,6 +1,6 @@
 // # MCP Server CLI Command
 //
-// Logline: Route `mcp [--stdio | --file <path>]` into the transport dispatcher under FsWriteCap+FsReadCap+EnvCap.
+// Logline: Route `mcp [--stdio | --file <path>]` into the transport dispatcher under FsWriteCap+FsReadCap+EnvCap+ProcessCap.
 //
 // Setup: Defaults to stdio. --socket is absent. OODACODEX is required by the server.
 //
@@ -33,7 +33,7 @@ fn cmd_mcp_arg_value(args: List[String], flag: String) -> String {
     return "";
 }
 
-pub fn run_ooda_mcp(fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
+pub fn run_ooda_mcp(fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[String], p: &ProcessCap) -> Result[Int, String] {
     if cmd_mcp_has_flag(args, "--help") || cmd_mcp_has_flag(args, "-h") {
         println("mcp — openOODA MCP stdio|file server");
         println("usage: mcp [--stdio | --file <path>]");
@@ -63,7 +63,7 @@ pub fn run_ooda_mcp(fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[St
     let file_path: String = cmd_mcp_arg_value(args, "--file");
     if chars_len(file_path) > 0 {
         let t: McpTransport = mcp_transport_file(file_path);
-        let out_r: Result[String, String] = mcp_server_run(fw, fr, env, &t);
+        let out_r: Result[String, String] = mcp_server_run(fw, fr, env, &t, p);
         if out_r.is_err() {
             let e: String = match out_r { Ok(_) => "", Err(m) => m };
             return Err("mcp: " + e);
@@ -72,5 +72,5 @@ pub fn run_ooda_mcp(fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[St
         if chars_len(out) > 0 { print(out); }
         return Ok(0);
     }
-    return mcp_stdio_serve(fw, fr, env);
+    return mcp_stdio_serve(fw, fr, env, p);
 }

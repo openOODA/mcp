@@ -22,12 +22,13 @@ import "engine/health/mcp_audit.oo";
 import "engine/tool/mcp_tool_dispatch.oo";
 import "engine/tool/mcp_tool.oo";
 import "engine/tool/mcp_tool_token.oo";
+import "engine/tool/mcp_tool_exec.oo";
 import "engine/resource/mcp_schema.oo";
 import "engine/state/mcp_ooda_state.oo";
 import "engine/state/mcp_graph.oo";
 import "engine/state/mcp_cap.oo";
 
-pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, codex_text: String, body: String) -> String {
+pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, codex_text: String, body: String, p: &ProcessCap) -> String {
     let caps_before: Int = s.caps_held;
     mcp_session_accrue_in(s, bytes_len(body));
     let method: String = mcp_json_extract_method(body);
@@ -146,7 +147,7 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
         } else {
             s.ooda_phase = mcp_ooda_state_act();
             mcp_token_record(s, orient.tool_name, orient.tool_args);
-            let body_str: String = mcp_tool_dispatch(orient.tool_name, orient.tool_args, codex_text, g, s, fs);
+            let body_str: String = mcp_tool_dispatch(orient.tool_name, orient.tool_args, codex_text, g, s, fs, p);
             s.ooda_phase = mcp_ooda_state_idle();
             response = mcp_dispatch_ok(id, body_str);
         }
@@ -179,14 +180,14 @@ fn mcp_server_roots_json(id: String, s: &McpSession) -> String {
     return mcp_dispatch_ok(id, body);
 }
 
-pub fn mcp_server_handle_batch(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, codex_text: String, body: String) -> String {
+pub fn mcp_server_handle_batch(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, codex_text: String, body: String, p: &ProcessCap) -> String {
     let items: List[String] = mcp_batch_split(body);
     let mut responses: List[String] = list_new();
     let n: Int = list_len(items);
     let mut i: Int = 0;
     while i < n {
         let item: String = list_get(items, i);
-        let resp: String = mcp_server_handle_body(fs, s, g, codex_text, item);
+        let resp: String = mcp_server_handle_body(fs, s, g, codex_text, item, p);
         if chars_len(resp) > 0 {
             responses = list_push(responses, resp);
         }
@@ -195,7 +196,7 @@ pub fn mcp_server_handle_batch(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph,
     return mcp_batch_collect(responses);
 }
 
-pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTransport) -> Result[String, String] {
+pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTransport, p: &ProcessCap) -> Result[String, String] {
     if t.kind == mcp_transport_kind_stdio() { return Err("stdio uses mcp_stdio_serve"); }
     let raw: String = match mcp_transport_read(fs, t) { Ok(s) => s, Err(e) => return Err(e); };
     if chars_len(raw) == 0 { return Err("empty input"); }
@@ -203,6 +204,7 @@ pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTran
     let cached: Int = mcp_codex_resolve_cached(fs, env, &mut cache);
     if cached == 0 { return Err("OODACODEX missing or unreadable"); }
     let mut session: McpSession = mcp_session_new();
+    session.exec_oodac = mcp_exec_resolve_compiler(fs, env);
     let mut buf: String = raw;
     let mut out: String = "";
     let mut frames: Int = 0;
@@ -219,7 +221,7 @@ pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTran
             let _: Int = mcp_audit_persist(fw, &session);
             return Err("frame cap 256");
         }
-        let resp: String = if mcp_batch_is_batch(body) { mcp_server_handle_batch(fs, &mut session, &cache.graph, cache.text, body) } else { mcp_server_handle_body(fs, &mut session, &cache.graph, cache.text, body) };
+        let resp: String = if mcp_batch_is_batch(body) { mcp_server_handle_batch(fs, &mut session, &cache.graph, cache.text, body, p) } else { mcp_server_handle_body(fs, &mut session, &cache.graph, cache.text, body, p) };
         if chars_len(resp) > 0 {
             let framed: String = mcp_transport_emit(raw, resp);
             if bytes_len(resp) > 1048576 || bytes_len(out) + bytes_len(framed) > 1048576 {
