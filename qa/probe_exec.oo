@@ -12,6 +12,8 @@
 //   3. oodac_emit with a residual backend fails closed; truncation marker appears on small max_chars.
 //   4. oodac_build produces a binary that runs and prints the fixture line; output file is removed.
 //   5. A session with no compiler path fails closed with exec unavailable.
+//   6. max_chars clamps: 0 behaves as 4000, 1000000 truncates at 65536, negatives
+//      fail schema; unit pins exact clamp boundaries.
 
 import "engine/core/mcp_server.oo";
 import "engine/core/mcp_session.oo";
@@ -52,6 +54,29 @@ pub fn probe_exec_run(p: &ProcessCap, fs: &FsReadCap, fw: &FsWriteCap, env: &Env
     let trunc: String = probe_exec_call(p, fs, &mut s, &g, 6, "oodac_emit", "{\"path\":\"mcp/qa/suite.oo\",\"backend\":\"c\",\"max_chars\":10}");
     if !str_contains(trunc, "\\\"ok\\\":true") { return Err("oodac_emit on suite must return ok true"); }
     if !str_contains(trunc, "[truncated]") { return Err("oodac_emit must truncate to max_chars"); }
+
+    let emit_zero: String = probe_exec_call(p, fs, &mut s, &g, 20, "oodac_emit", "{\"path\":\"mcp/qa/suite.oo\",\"backend\":\"c\",\"max_chars\":0}");
+    if !str_contains(emit_zero, "\\\"ok\\\":true") { return Err("max_chars 0 emit must return ok true"); }
+    if !str_contains(emit_zero, "[truncated]") { return Err("max_chars 0 emit must truncate (suite emit exceeds 4000)"); }
+    if chars_len(emit_zero) < 4000 { return Err("max_chars 0 must behave as 4000 (lower clamp): response too short"); }
+
+    let emit_huge: String = probe_exec_call(p, fs, &mut s, &g, 22, "oodac_emit", "{\"path\":\"mcp/qa/suite.oo\",\"backend\":\"c\",\"max_chars\":1000000}");
+    if !str_contains(emit_huge, "\\\"ok\\\":true") { return Err("max_chars 1000000 emit must return ok true"); }
+    if !str_contains(emit_huge, "[truncated]") { return Err("max_chars 1000000 must truncate at 65536 (upper clamp)"); }
+    if chars_len(emit_huge) > 200000 { return Err("max_chars 1000000 must truncate at 65536, not return full output"); }
+    if chars_len(emit_huge) < 60000 { return Err("max_chars 1000000 must preserve a full 65536-char window"); }
+
+    let neg: String = probe_exec_call(p, fs, &mut s, &g, 24, "oodac_emit", "{\"path\":\"mcp/qa/suite.oo\",\"backend\":\"c\",\"max_chars\":-1}");
+    if !str_contains(neg, "-32602") { return Err("negative max_chars must fail schema with -32602"); }
+
+    if mcp_exec_default_max() != 4000 { return Err("default max must be 4000"); }
+    if mcp_exec_clamp_max(0 - 1) != 4000 { return Err("clamp(-1) must be 4000"); }
+    if mcp_exec_clamp_max(0) != 4000 { return Err("clamp(0) must be 4000"); }
+    if mcp_exec_clamp_max(1) != 1 { return Err("clamp(1) must be 1"); }
+    if mcp_exec_clamp_max(4000) != 4000 { return Err("clamp(4000) must be 4000"); }
+    if mcp_exec_clamp_max(65536) != 65536 { return Err("clamp(65536) must be 65536"); }
+    if mcp_exec_clamp_max(65537) != 65536 { return Err("clamp(65537) must be 65536"); }
+    if mcp_exec_clamp_max(1000000) != 65536 { return Err("clamp(1000000) must be 65536"); }
 
     let out: String = "mcp/qa/probe_exec_out";
     let built: String = probe_exec_call(p, fs, &mut s, &g, 7, "oodac_build", "{\"entry\":\"mcp/qa/fixture_exec.oo\",\"out\":\"" + out + "\"}");

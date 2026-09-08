@@ -18,7 +18,7 @@
 //   10. probe_protocol.oo — batch, prompts, roots, ETag, shutdown, exit.
 //   11. probe_slice.oo — rules slicing by topic.
 //   12. probe_attenuation.oo — capability attenuation tokens.
-//   13. probe_exec.oo — oodac_check/emit/build over a real compiler.
+//   13. probe_exec.oo — oodac_check/emit/build over a real compiler, max_chars clamp edges.
 //   14. suite.oo runs the surface verifier plus all probes (CI entry).
 //   fixture_exec.oo is a runtime victim, never imported (it owns a main).
 
