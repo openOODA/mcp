@@ -18,11 +18,22 @@ OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda-mcp --stdio
     "openooda": {
       "command": "ooda-mcp",
       "args": ["--stdio"],
-      "env": { "OODACODEX": "/path/to/openOODA/NORTHSTAR.oot" }
+      "env": {
+        "OODACODEX": "/path/to/openOODA/NORTHSTAR.oot",
+        "OODA_COMPILER": "/path/to/oodac/bin/oodac",
+        "OODA_FS_READDIR": "/path/to/workspace",
+        "OODA_FS_WRITEDIR": "/path/to/workspace"
+      }
     }
   }
 }
 ```
+
+Governance tools (boards, rules, audit) need only OODACODEX. The
+`oodac_check`, `oodac_emit`, and `oodac_build` tools additionally need
+OODA_COMPILER (else OODAC_BIN) pointing at a compiler binary the server
+can read — without it they fail closed with `exec unavailable`. Reads
+and build temp files stay under OODA_FS_READDIR/OODA_FS_WRITEDIR.
 
 Merge without destroying other keys:
 
