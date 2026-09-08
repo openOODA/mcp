@@ -37,7 +37,7 @@ fn ascii_lower(s: String) -> String {
     while i < n {
         let c: String = char_at(s, i);
         let mut k: Int = 0;
-        let mut found: String = c;
+        let mut found: String = str_slice(c, 0, chars_len(c));
         while k < 26 {
             if char_at(up, k) == c {
                 found = char_at(lo, k);
