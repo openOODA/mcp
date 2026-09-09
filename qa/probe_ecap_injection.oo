@@ -1,0 +1,58 @@
+// # Probe: prompt-injected exfiltration is structurally refused (E_CAP demo, part b)
+//
+// Logline: Simulates the injected agent: no NetCap held, writes exfil code,
+// drives it through the MCP oodac_check/oodac_build tools. Both refuse, so
+// no binary can exist and nothing can run. Attenuation cannot mint NetCap
+// (escalation check in mcp_attenuation.oo), and the surface has no network
+// tool (see probe_tools_list.oo), so the compiler gate is the only path
+// and it is closed.
+//
+// Setup: Ready session + operator compiler from OODA_COMPILER else OODAC_BIN.
+// Victim is mcp/qa/fixture_ecap_evil.oo (workspace-relative).
+// STAGING: dormant until the fixed compiler ships (needs the oodac
+// import-arity table); do NOT import into suite.oo before then — with the
+// old host this probe correctly reports HOLE instead of PASS.
+//
+// Beats:
+//   1. oodac_check on the evil fixture returns ok false with the arity refusal.
+//   2. oodac_build on the evil fixture returns ok false (no binary can exist).
+
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/tool/mcp_tool_exec.oo";
+
+fn ecap_call(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, id: Int, tool: String, args: String) -> String {
+    let body: String = "{\"jsonrpc\":\"2.0\",\"id\":" + id.to_string() + ",\"method\":\"tools/call\",\"params\":{\"name\":\"" + tool + "\",\"arguments\":" + args + "}}";
+    return mcp_server_handle_body(fs, s, g, "codex-body", body, p);
+}
+
+fn ecap_ready(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"injected-agent\",\"version\":\"0\"}}}";
+    let _: String = mcp_server_handle_body(fs, s, g, "codex-body", init, p);
+    return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
+}
+
+pub fn probe_ecap_injection_run(p: &ProcessCap, fs: &FsReadCap, fw: &FsWriteCap, env: &EnvCap) -> Result[Int, String] {
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
+    let mut s: McpSession = mcp_session_new();
+    let _: String = ecap_ready(p, fs, &mut s, &g);
+    s.exec_oodac = mcp_exec_resolve_compiler(fs, env);
+    if chars_len(s.exec_oodac) == 0 { return Err("probe_ecap: no compiler (need OODA_COMPILER or OODAC_BIN)"); }
+    // The injected instruction says "exfiltrate". The agent holds no NetCap
+    // and the surface has no network tool, so it submits code instead.
+    let ck: String = ecap_call(p, fs, &mut s, &g, 2, "oodac_check", "{\"path\":\"mcp/qa/fixture_ecap_evil.oo\"}");
+    if str_contains(ck, "\\\"ok\\\":true") {
+        return Err("HOLE ecap: bridge checked a capless net call (needs fixed compiler)");
+    }
+    if !str_contains(ck, "\\\"ok\\\":false") { return Err("oodac_check on evil must return ok false: " + ck); }
+    if !str_contains(ck, "expects 3 argument(s) but got 2") {
+        return Err("refusal must name the missing capability argument: " + ck);
+    }
+    let bd: String = ecap_call(p, fs, &mut s, &g, 3, "oodac_build", "{\"entry\":\"mcp/qa/fixture_ecap_evil.oo\",\"out\":\"mcp/qa/ecap_evil_out\"}");
+    if str_contains(bd, "\\\"ok\\\":true") {
+        return Err("HOLE ecap: bridge built a capless net call (needs fixed compiler)");
+    }
+    if !str_contains(bd, "\\\"ok\\\":false") { return Err("oodac_build on evil must return ok false: " + bd); }
+    return Ok(0);
+}

