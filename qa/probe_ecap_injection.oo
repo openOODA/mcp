@@ -9,9 +9,8 @@
 //
 // Setup: Ready session + operator compiler from OODA_COMPILER else OODAC_BIN.
 // Victim is mcp/qa/fixture_ecap_evil.oo (workspace-relative).
-// STAGING: dormant until the fixed compiler ships (needs the oodac
-// import-arity table); do NOT import into suite.oo before then — with the
-// old host this probe correctly reports HOLE instead of PASS.
+// Wired into qa/suite.oo since the import-arity compiler shipped: with
+// older hosts this probe reports HOLE instead of PASS.
 //
 // Beats:
 //   1. oodac_check on the evil fixture returns ok false with the arity refusal.

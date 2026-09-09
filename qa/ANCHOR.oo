@@ -1,6 +1,6 @@
 // # MCP QA Index
 //
-// Logline: Index of the thirteen hostile probe drivers. A driver that cannot fail is a defect.
+// Logline: Index of the fourteen hostile probe drivers. A driver that cannot fail is a defect.
 //
 // Setup: Each probe exports probe_*_run. suite.oo is the entry CI builds.
 //
@@ -19,7 +19,8 @@
 //   11. probe_slice.oo — rules slicing by topic.
 //   12. probe_attenuation.oo — capability attenuation tokens.
 //   13. probe_exec.oo — oodac_check/emit/build over a real compiler, max_chars clamp edges.
-//   14. suite.oo runs the surface verifier plus all probes (CI entry).
+//   14. probe_ecap_injection.oo — injected exfiltration refused at oodac_check/build (Task 2b).
+//   15. suite.oo runs the surface verifier plus all probes (CI entry).
 //   fixture_exec.oo is a runtime victim, never imported (it owns a main).
 
 import "suite.oo";
@@ -36,3 +37,4 @@ import "probe_protocol.oo";
 import "probe_slice.oo";
 import "probe_attenuation.oo";
 import "probe_exec.oo";
+import "probe_ecap_injection.oo";
