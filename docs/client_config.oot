@@ -7,8 +7,11 @@ The server is a live stdio binary. It reads one frame, writes one Content-Length
 
 ```sh
 OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda-mcp --stdio
-# or: ooda mcp --stdio  (spawns ooda-mcp)
 ```
+
+`ooda mcp --stdio` also works when OODA_COMPILER is set (the driver
+resolves `ooda-mcp` beside the compiler); otherwise call `ooda-mcp`
+directly.
 
 ## Claude Desktop / Cursor
 

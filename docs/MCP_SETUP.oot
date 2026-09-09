@@ -8,11 +8,13 @@ Version is the git tag. There is no VERSION file.
 ## Launch
 
 ```sh
-OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda mcp
-ooda mcp --stdio
-ooda mcp --file path/to/request.json
+OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda-mcp --stdio
+ooda-mcp --file path/to/request.json
 ooda mcp-merge ~/.config/openooda/agent-config.json
 ```
+
+`ooda mcp` spawns `ooda-mcp` when OODA_COMPILER is set (it resolves
+beside the compiler); otherwise call `ooda-mcp` directly.
 
 `--socket` is not a transport. A file read is not a socket.
 
