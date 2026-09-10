@@ -31,6 +31,15 @@ mcp-merge exit codes: 0 already present, 1 written, 2 error.
 | OODA_FS_READDIR | Jail root for server reads and compiler resolution. |
 | OODA_FS_WRITEDIR | Jail root for build temp files and merge writes. |
 
+## Spawner CWD contract
+
+Spawn the server with its working directory inside OODA_FS_WRITEDIR.
+`oodac check` writes its typed-artifact cache under the server process
+CWD; a CWD outside the writedir fails every `oodac_check`/`oodac_emit`/
+`oodac_build` call. The server maps that poisoned configuration to the
+named `cwd-jail` stage (with the raw compiler output preserved) instead
+of leaking opaque `E_OTHER write failed` noise.
+
 Board reads join `dirname(OODACODEX)` with the relative board path. If the file is absent, the tool returns cannot-read.
 
 ## Transports

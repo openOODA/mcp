@@ -61,7 +61,20 @@ fn mcp_exec_run(p: &ProcessCap, oodac: String, sub: String, extra: String, targe
         return mcp_exec_result(true, out, max_chars);
     }
     let e: String = match r { Ok(_) => "", Err(m) => m };
-    return mcp_exec_result(false, e, max_chars);
+    return mcp_exec_result(false, mcp_exec_name_failure(e), max_chars);
+}
+
+// Name the poisoned-spawner failure: oodac check writes its typed-artifact
+// cache under the server process CWD, so a server spawned with CWD outside
+// OODA_FS_WRITEDIR fails every check with an opaque "write failed". Map it
+// to a named, actionable stage instead of leaking E_OTHER noise. Pure: the
+// cwd probe asserts the rewrite on canned payloads (probe_cwd_jail.oo).
+// Beats: rewrite write-failed noise; pass real diagnostics through untouched.
+pub fn mcp_exec_name_failure(raw: String) -> String {
+    if str_contains(raw, "write failed") {
+        return "ERR\tcwd-jail\tartifact cache unwritable: spawn the MCP server with CWD inside OODA_FS_WRITEDIR (raw: " + raw + ")";
+    }
+    return raw;
 }
 
 pub fn mcp_exec_check(p: &ProcessCap, oodac: String, path: String, max_chars: Int) -> String {
@@ -92,5 +105,5 @@ pub fn mcp_exec_build(p: &ProcessCap, oodac: String, entry: String, out: String,
         return mcp_exec_result(true, ok_out, mcp_exec_clamp_max(max_chars));
     }
     let e: String = match r { Ok(_) => "", Err(m) => m };
-    return mcp_exec_result(false, e, mcp_exec_clamp_max(max_chars));
+    return mcp_exec_result(false, mcp_exec_name_failure(e), mcp_exec_clamp_max(max_chars));
 }

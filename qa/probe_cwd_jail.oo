@@ -1,0 +1,32 @@
+// # MCP CWD-Jail Probe
+//
+// Logline: Hostile test that a poisoned spawner CWD yields a named stage, not E_OTHER noise.
+//
+// Setup: Pure unit on mcp_exec_name_failure with canned compiler payloads. No
+//        compiler needed: the mapping is what fails closed, and the mapping is
+//        what this probe pins. End-to-end (server CWD outside the jail) is
+//        verified manually via the one-shot shim from /tmp.
+//
+// Beats:
+//   1. Canned "write failed" payload rewrites to the cwd-jail stage.
+//   2. Real diagnostics (unreadable file, type errors) pass through untouched.
+//   3. Empty input passes through (no false positive on success paths).
+
+import "engine/tool/mcp_tool_exec.oo";
+
+pub fn probe_cwd_jail_run() -> Result[Int, String] {
+    let canned: String = "[{\"code\":\"E_OTHER\",\"line\":0,\"col\":0,\"msg\":\"write failed\",\"path\":\"mcp/qa/fixture_exec.oo\",\"fix_hint\":\"x\"}]";
+    let named: String = mcp_exec_name_failure(canned);
+    if !str_contains(named, "cwd-jail") { return Err("write-failed payload must rewrite to the cwd-jail stage"); }
+    if !str_contains(named, "OODA_FS_WRITEDIR") { return Err("named stage must name the writedir contract"); }
+    if !str_contains(named, "write failed") { return Err("named stage must preserve the raw payload for debuggability"); }
+
+    let real: String = "ERR\tcheck\tunreadable file: mcp/qa/no_such_file.oo";
+    if mcp_exec_name_failure(real) != real { return Err("real diagnostics must pass through untouched"); }
+
+    let tc: String = "[{\"code\":\"E_TC\",\"line\":3,\"col\":1,\"msg\":\"arity\",\"path\":\"v.oo\",\"fix_hint\":\"x\"}]";
+    if mcp_exec_name_failure(tc) != tc { return Err("type diagnostics must pass through untouched"); }
+
+    if mcp_exec_name_failure("") != "" { return Err("empty input must pass through (no false positive)"); }
+    return Ok(0);
+}

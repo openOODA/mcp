@@ -1,6 +1,6 @@
 // # Test MCP
 //
-// Logline: Run the fourteen probe functions and the surface verifier. Any Err fails the package.
+// Logline: Run the fifteen probe functions and the surface verifier. Any Err fails the package.
 //
 // Setup: In-process. Merge probe needs FsWriteCap. Exec probe needs ProcessCap plus
 //        OODA_COMPILER or OODAC_BIN. Ecap probe drives oodac_check/build over
@@ -24,6 +24,7 @@ import "qa/probe_protocol.oo";
 import "qa/probe_slice.oo";
 import "qa/probe_attenuation.oo";
 import "qa/probe_exec.oo";
+import "qa/probe_cwd_jail.oo";
 import "qa/probe_ecap_injection.oo";
 import "verify_surface.oo";
 
@@ -92,6 +93,14 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     }
     println("PASS: probe_exec");
 
+    let cj: Result[Int, String] = probe_cwd_jail_run();
+    if cj.is_err() {
+        let e_cj: String = match cj { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_cwd_jail: " + e_cj);
+        return cj;
+    }
+    println("PASS: probe_cwd_jail");
+
     let ec: Result[Int, String] = probe_ecap_injection_run(p, fs_r, fw, env);
     if ec.is_err() {
         let e_ec: String = match ec { Ok(_) => "", Err(msg) => msg };
@@ -100,6 +109,6 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     }
     println("PASS: probe_ecap_injection");
 
-    println("test: 14 probes + verify passed");
+    println("test: 15 probes + verify passed");
     return Ok(0);
 }
