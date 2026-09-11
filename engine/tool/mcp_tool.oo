@@ -76,7 +76,16 @@ pub fn mcp_tool_read_board(fs: &FsReadCap, g: &McpGraph, board_name: String) -> 
     while i < n {
         let b: McpBoard = list_get(g.boards, i);
         if b.name == board_name {
-            let path: String = mcp_tool_board_path(g, b.path);
+            let mut path: String = mcp_tool_board_path(g, b.path);
+            if !path_exists(fs, path) {
+                if path_exists(fs, "../" + path) {
+                    path = "../" + path;
+                } else if path_exists(fs, "openOODA/" + b.path) {
+                    path = "openOODA/" + b.path;
+                } else if path_exists(fs, "../openOODA/" + b.path) {
+                    path = "../openOODA/" + b.path;
+                }
+            }
             let rr: Result[String, String] = read_file(fs, path);
             if rr.is_err() { return mcp_tool_wrap("{\"error\":\"cannot read\",\"path\":\"" + path + "\"}"); }
             let text: String = match rr { Ok(s) => s, Err(_) => "" };

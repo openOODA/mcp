@@ -10,7 +10,8 @@
 //   3. client_config.oot — client config.
 //   4. TOOLS.oot — 22 tools. SSoT for the website mcp page.
 
-import "MCP_SETUP.oot";
-import "protocol.oot";
-import "client_config.oot";
-import "TOOLS.oot";
+// Sibling documentation documents (.oot files):
+// - MCP_SETUP.oot
+// - protocol.oot
+// - client_config.oot
+// - TOOLS.oot

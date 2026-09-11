@@ -42,6 +42,7 @@ pub fn probe_merge_run(fr: &FsReadCap, fw: &FsWriteCap) -> Result[Int, String] {
     if !str_contains(disk, "\"keep\":true") { return Err("file merge dropped keep"); }
     if !str_contains(disk, "\"other\"") { return Err("file merge dropped other"); }
     let rc2: Int = safe_mcp_merge_file(fr, fw, path);
+    let _del: Result[Void, String] = oo_fs_remove_file(fw, path);
     if rc2 != 0 { return Err("second file merge must return 0, got " + rc2.to_string()); }
     return Ok(0);
 }

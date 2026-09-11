@@ -38,35 +38,42 @@ pub fn probe_exec_run(p: &ProcessCap, fs: &FsReadCap, fw: &FsWriteCap, env: &Env
     s.exec_oodac = mcp_exec_resolve_compiler(fs, env);
     if chars_len(s.exec_oodac) == 0 { return Err("probe_exec: no compiler (need OODA_COMPILER or OODAC_BIN)"); }
 
+    let has_mcp: Bool = path_exists(fs, "mcp/qa");
+    let pfx: String = if has_mcp { "mcp/qa/" } else { "qa/" };
+    let f_fixture: String = pfx + "fixture_exec.oo";
+    let f_suite: String = pfx + "suite.oo";
+    let f_nosuch: String = pfx + "no_such_file.oo";
+    let f_large: String = if has_mcp { "mcp/engine/core/mcp_transport.oo" } else { "engine/core/mcp_transport.oo" };
+
     let noschema: String = probe_exec_call(p, fs, &mut s, &g, 2, "oodac_check", "{}");
     if !str_contains(noschema, "-32602") { return Err("oodac_check without path must return -32602"); }
 
-    let good: String = probe_exec_call(p, fs, &mut s, &g, 3, "oodac_check", "{\"path\":\"mcp/qa/fixture_exec.oo\"}");
+    let good: String = probe_exec_call(p, fs, &mut s, &g, 3, "oodac_check", "{\"path\":\"" + f_fixture + "\"}");
     if !str_contains(good, "\\\"ok\\\":true") { return Err("oodac_check on fixture must return ok true: " + good); }
 
-    let bad: String = probe_exec_call(p, fs, &mut s, &g, 4, "oodac_check", "{\"path\":\"mcp/qa/no_such_file.oo\"}");
+    let bad: String = probe_exec_call(p, fs, &mut s, &g, 4, "oodac_check", "{\"path\":\"" + f_nosuch + "\"}");
     if !str_contains(bad, "\\\"ok\\\":false") { return Err("oodac_check on missing file must return ok false"); }
     if !str_contains(bad, "unreadable file") { return Err("oodac_check diagnostics must carry the compiler message"); }
 
-    let residual: String = probe_exec_call(p, fs, &mut s, &g, 5, "oodac_emit", "{\"path\":\"mcp/qa/fixture_exec.oo\",\"backend\":\"wasm\"}");
+    let residual: String = probe_exec_call(p, fs, &mut s, &g, 5, "oodac_emit", "{\"path\":\"" + f_fixture + "\",\"backend\":\"wasm\"}");
     if !str_contains(residual, "residual backend") { return Err("oodac_emit with residual backend must fail closed"); }
 
-    let trunc: String = probe_exec_call(p, fs, &mut s, &g, 6, "oodac_emit", "{\"path\":\"mcp/qa/suite.oo\",\"backend\":\"c\",\"max_chars\":10}");
+    let trunc: String = probe_exec_call(p, fs, &mut s, &g, 6, "oodac_emit", "{\"path\":\"" + f_suite + "\",\"backend\":\"c\",\"max_chars\":10}");
     if !str_contains(trunc, "\\\"ok\\\":true") { return Err("oodac_emit on suite must return ok true"); }
     if !str_contains(trunc, "[truncated]") { return Err("oodac_emit must truncate to max_chars"); }
 
-    let emit_zero: String = probe_exec_call(p, fs, &mut s, &g, 20, "oodac_emit", "{\"path\":\"mcp/qa/suite.oo\",\"backend\":\"c\",\"max_chars\":0}");
+    let emit_zero: String = probe_exec_call(p, fs, &mut s, &g, 20, "oodac_emit", "{\"path\":\"" + f_suite + "\",\"backend\":\"c\",\"max_chars\":0}");
     if !str_contains(emit_zero, "\\\"ok\\\":true") { return Err("max_chars 0 emit must return ok true"); }
     if !str_contains(emit_zero, "[truncated]") { return Err("max_chars 0 emit must truncate (suite emit exceeds 4000)"); }
     if chars_len(emit_zero) < 4000 { return Err("max_chars 0 must behave as 4000 (lower clamp): response too short"); }
 
-    let emit_huge: String = probe_exec_call(p, fs, &mut s, &g, 22, "oodac_emit", "{\"path\":\"mcp/qa/suite.oo\",\"backend\":\"c\",\"max_chars\":1000000}");
+    let emit_huge: String = probe_exec_call(p, fs, &mut s, &g, 22, "oodac_emit", "{\"path\":\"" + f_large + "\",\"backend\":\"c\",\"max_chars\":1000000}");
     if !str_contains(emit_huge, "\\\"ok\\\":true") { return Err("max_chars 1000000 emit must return ok true"); }
     if !str_contains(emit_huge, "[truncated]") { return Err("max_chars 1000000 must truncate at 65536 (upper clamp)"); }
     if chars_len(emit_huge) > 200000 { return Err("max_chars 1000000 must truncate at 65536, not return full output"); }
     if chars_len(emit_huge) < 60000 { return Err("max_chars 1000000 must preserve a full 65536-char window"); }
 
-    let neg: String = probe_exec_call(p, fs, &mut s, &g, 24, "oodac_emit", "{\"path\":\"mcp/qa/suite.oo\",\"backend\":\"c\",\"max_chars\":-1}");
+    let neg: String = probe_exec_call(p, fs, &mut s, &g, 24, "oodac_emit", "{\"path\":\"" + f_suite + "\",\"backend\":\"c\",\"max_chars\":-1}");
     if !str_contains(neg, "-32602") { return Err("negative max_chars must fail schema with -32602"); }
 
     if mcp_exec_default_max() != 4000 { return Err("default max must be 4000"); }
@@ -78,8 +85,8 @@ pub fn probe_exec_run(p: &ProcessCap, fs: &FsReadCap, fw: &FsWriteCap, env: &Env
     if mcp_exec_clamp_max(65537) != 65536 { return Err("clamp(65537) must be 65536"); }
     if mcp_exec_clamp_max(1000000) != 65536 { return Err("clamp(1000000) must be 65536"); }
 
-    let out: String = "mcp/qa/probe_exec_out";
-    let built: String = probe_exec_call(p, fs, &mut s, &g, 7, "oodac_build", "{\"entry\":\"mcp/qa/fixture_exec.oo\",\"out\":\"" + out + "\"}");
+    let out: String = pfx + "probe_exec_out";
+    let built: String = probe_exec_call(p, fs, &mut s, &g, 7, "oodac_build", "{\"entry\":\"" + f_fixture + "\",\"out\":\"" + out + "\"}");
     if !str_contains(built, "\\\"ok\\\":true") { return Err("oodac_build on fixture must return ok true: " + built); }
     let rr: Result[String, String] = sys_exec(p, out);
     if rr.is_err() { return Err("probe_exec: built binary did not run"); }
@@ -90,7 +97,7 @@ pub fn probe_exec_run(p: &ProcessCap, fs: &FsReadCap, fw: &FsWriteCap, env: &Env
 
     let mut s0: McpSession = mcp_session_new();
     let _e0: String = probe_exec_ready(p, fs, &mut s0, &g);
-    let nocomp: String = probe_exec_call(p, fs, &mut s0, &g, 8, "oodac_check", "{\"path\":\"mcp/qa/fixture_exec.oo\"}");
+    let nocomp: String = probe_exec_call(p, fs, &mut s0, &g, 8, "oodac_check", "{\"path\":\"" + f_fixture + "\"}");
     if !str_contains(nocomp, "exec unavailable") { return Err("exec tool with no compiler must fail closed"); }
     return Ok(0);
 }

@@ -67,7 +67,11 @@ pub fn mcp_tool_slice_rules(fs: &FsReadCap, g: &McpGraph, topic: String) -> Stri
         return mcp_tool_wrap("{\"error\":\"RULES board not configured\"}");
     }
     if !path_exists(fs, rules_path) {
-        if path_exists(fs, "openOODA/" + rules_path) {
+        if path_exists(fs, "../" + rules_path) {
+            rules_path = "../" + rules_path;
+        } else if path_exists(fs, "../openOODA/RULES.oot") {
+            rules_path = "../openOODA/RULES.oot";
+        } else if path_exists(fs, "openOODA/" + rules_path) {
             rules_path = "openOODA/" + rules_path;
         } else if path_exists(fs, "openOODA/RULES.oot") {
             rules_path = "openOODA/RULES.oot";

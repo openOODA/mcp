@@ -38,9 +38,14 @@ pub fn probe_ecap_injection_run(p: &ProcessCap, fs: &FsReadCap, fw: &FsWriteCap,
     let _: String = ecap_ready(p, fs, &mut s, &g);
     s.exec_oodac = mcp_exec_resolve_compiler(fs, env);
     if chars_len(s.exec_oodac) == 0 { return Err("probe_ecap: no compiler (need OODA_COMPILER or OODAC_BIN)"); }
+    let has_mcp: Bool = path_exists(fs, "mcp/qa");
+    let pfx: String = if has_mcp { "mcp/qa/" } else { "qa/" };
+    let evil_path: String = pfx + "fixture_ecap_evil.oo";
+    let evil_out: String = pfx + "ecap_evil_out";
+
     // The injected instruction says "exfiltrate". The agent holds no NetCap
     // and the surface has no network tool, so it submits code instead.
-    let ck: String = ecap_call(p, fs, &mut s, &g, 2, "oodac_check", "{\"path\":\"mcp/qa/fixture_ecap_evil.oo\"}");
+    let ck: String = ecap_call(p, fs, &mut s, &g, 2, "oodac_check", "{\"path\":\"" + evil_path + "\"}");
     if str_contains(ck, "\\\"ok\\\":true") {
         return Err("HOLE ecap: bridge checked a capless net call (needs fixed compiler)");
     }
@@ -48,7 +53,7 @@ pub fn probe_ecap_injection_run(p: &ProcessCap, fs: &FsReadCap, fw: &FsWriteCap,
     if !str_contains(ck, "expects 3 argument(s) but got 2") {
         return Err("refusal must name the missing capability argument: " + ck);
     }
-    let bd: String = ecap_call(p, fs, &mut s, &g, 3, "oodac_build", "{\"entry\":\"mcp/qa/fixture_ecap_evil.oo\",\"out\":\"mcp/qa/ecap_evil_out\"}");
+    let bd: String = ecap_call(p, fs, &mut s, &g, 3, "oodac_build", "{\"entry\":\"" + evil_path + "\",\"out\":\"" + evil_out + "\"}");
     if str_contains(bd, "\\\"ok\\\":true") {
         return Err("HOLE ecap: bridge built a capless net call (needs fixed compiler)");
     }
