@@ -25,7 +25,7 @@ pub type McpAttenuatedToken = struct {
 };
 
 fn mcp_attenuation_secret() -> String {
-    return "openooda-sovereign-attenuation-secret-2026";
+    return "openooda-primary-attenuation-secret-2026";
 }
 
 fn ascii_lower(s: String) -> String {

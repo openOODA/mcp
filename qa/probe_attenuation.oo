@@ -104,7 +104,7 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, Stri
 
     // 10. Legacy 6-field token backward-compatibility
     let leg_payload: String = "tok-1-1|FsReadCap|8|/home/jeryd/Projects/openOODA|100";
-    let leg_sig: String = crypto_sha256_internal(leg_payload + "|" + "openooda-sovereign-attenuation-secret-2026");
+    let leg_sig: String = crypto_sha256_internal(leg_payload + "|" + "openooda-primary-attenuation-secret-2026");
     let leg_tok: String = "ATTEN.tok-1-1.FsReadCap.8./home/jeryd/Projects/openOODA.100." + leg_sig;
     let v_leg: Result[Bool, String] = mcp_attenuate_verify(&s, leg_tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
     if v_leg.is_err() { return Err("probe_attenuation: legacy 6-field token verification failed"); }
