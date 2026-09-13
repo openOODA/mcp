@@ -12,9 +12,9 @@
 //      (gh-owned; no scripts/ runners); all fail closed.
 //   5. docs/ is the live protocol surface. audit/ is historical only.
 
-import "engine/ANCHOR.oo";
-import "cli/ANCHOR.oo";
-import "qa/ANCHOR.oo";
-import "docs/ANCHOR.oo";
-import "examples/ANCHOR.oo";
-import "audit/ANCHOR.oo";
+import "engine/anchor.oo";
+import "cli/anchor.oo";
+import "qa/anchor.oo";
+import "docs/anchor.oo";
+import "examples/anchor.oo";
+import "audit/anchor.oo";

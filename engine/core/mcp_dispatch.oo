@@ -194,7 +194,7 @@ pub fn mcp_dispatch_act_prompts_list() -> String {
 
 pub fn mcp_dispatch_act_prompt_get(name: String) -> String {
     if name != "orientation" { return ""; }
-    return "{\"description\":\"openOODA agent orientation\",\"messages\":[{\"role\":\"user\",\"content\":{\"type\":\"text\",\"text\":\"Read ANCHOR.oo, RULES.oot, NORTHSTAR.oot, then rfcs/ and practices/. Honor 14 capability tokens. Submit to 8 redteam gates.\"}}]}";
+    return "{\"description\":\"openOODA agent orientation\",\"messages\":[{\"role\":\"user\",\"content\":{\"type\":\"text\",\"text\":\"Read anchor.oo, rules.oot, northstar.oot, then rfcs/ and practices/. Honor 14 capability tokens. Submit to 8 redteam gates.\"}}]}";
 }
 
 pub fn mcp_dispatch_required_caps(method: String) -> Int {

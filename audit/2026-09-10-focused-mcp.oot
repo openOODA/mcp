@@ -10,13 +10,13 @@
 //
 // Setup:  Authored 2026-09-10 15:42 by session
 //         mvs_b464548950d7469bb107a25d68f8bbc8 (Mavis / orchestrator).
-//         Follows the audit-history/ANCHOR.oo + audit/ANCHOR.oo
+//         Follows the audit-history/anchor.oo + audit/anchor.oo
 //         precedent: 4-element Academy header on .oot (per NOTE n2
 //         of the openOODA/openOODA/ focused audit; .oot is treated
 //         as audit-trail surface). Pure structural .oot, file:line
 //         evidence on every claim.
 //         In-scope: mcp/ only (86 files, 60 .oo + 19 qa/ + 13
-//         ANCHOR.oo + 13 prior committed audit reports).
+//         anchor.oo + 13 prior committed audit reports).
 //         Out-of-scope: oodac/ oodar/ std/ install/ opm/ catalog/
 //         lsp/ blackbox/ openOODA/ website/ ooda/.
 //
@@ -36,11 +36,11 @@
 
 // | Pass | Verdict | Note |
 // |------|---------|------|
-// | 0 Pre-flight   | OK     | 86 files, 60 .oo, 19 qa/, 13 ANCHOR.oo, 13 prior audits. Dirty=0. |
+// | 0 Pre-flight   | OK     | 86 files, 60 .oo, 19 qa/, 13 anchor.oo, 13 prior audits. Dirty=0. |
 // | 1 Locks        | PASS   | 4 locks re-derived, double-run, identical. 0 fails. |
-// | 2 File law     | PASS   | 0 over-256 in non-audit tree, 0 missing headers, 0 forbidden exts, 13/13 ANCHOR.oo ALLCAPS. |
+// | 2 File law     | PASS   | 0 over-256 in non-audit tree, 0 missing headers, 0 forbidden exts, 13/13 anchor.oo ALLCAPS. |
 // | 3 Structure    | PASS   | 14/14 prior E- findings re-verified as closed; 13 prior audits inventoried. |
-// | 4 Drift        | PASS   | INDEX.oot:40 + org audit line 156 cross-references match v0.6.28. 10 unreleased reviewed. |
+// | 4 Drift        | PASS   | index.oot:40 + org audit line 156 cross-references match v0.6.28. 10 unreleased reviewed. |
 // | 5 Validator    | PASS   | 8D redteam fully real (F-01 fixed); E-09/E-13/E-14 closed. |
 
 // ## 2. Pass-0 — Pre-flight
@@ -55,9 +55,9 @@
 // | .oo files | 60 | `find -name '*.oo'` |
 // | .oot files | 20 (13 prior audits + 7 docs/other) | `find -name '*.oot'` |
 // | qa/ files | 19 (14 probes + 2 fixtures + suite + verify_surface + ANCHOR) | `ls qa/` |
-// | ANCHOR.oo (root + subs) | 13 | `find -name 'ANCHOR.oo'` |
+// | anchor.oo (root + subs) | 13 | `find -name 'anchor.oo'` |
 // | CI workflow dir | 1 file (`ci.yml`, 200 lines) | `ls .github/workflows/` |
-// | VERSION file | absent (intentional per ANCHOR.oo:5) | `ls VERSION` |
+// | VERSION file | absent (intentional per anchor.oo:5) | `ls VERSION` |
 // | Prior audit reports in `audit/` | 13 (1 REDTEAM_CERT + 11 DEEPDIVE_AUDITs + 1 SUBTRACTIVE_CERT) | `ls audit/*.oot` |
 
 // ## 3. Pass-1 — Lock integrity (re-derived, double-run)
@@ -73,19 +73,19 @@
 // | governance_enforce Rule A (256-line) | 0/70 fail  | 0/70 fail  | PASS (70 product files, 0 over 256) |
 // | governance_enforce Rule B (header)   | 0 fail     | 0 fail     | PASS (60/60 .oo files have `// # ` first line) |
 // | governance_enforce Rule C (exts)     | 0 fail     | 0 fail     | PASS (no .py/.js/.ts/.rb/.pl/.sh) |
-// | governance_enforce Rule D (ANCHOR.oo)| 0 fail     | 0 fail     | PASS (13/13 ALLCAPS; 0 lowercase) |
+// | governance_enforce Rule D (anchor.oo)| 0 fail     | 0 fail     | PASS (13/13 ALLCAPS; 0 lowercase) |
 // | governance_verify (RFC + practice)   | N/A        | N/A        | N/A — mcp/ has no RFCs or practices of its own. |
 // | governance_check_boards              | N/A        | N/A        | N/A — boards live in openOODA/openOODA/. |
-// | proof_of_today moonshot mcp ref      | PASS       | PASS       | PASS — `git describe` = `v0.6.28`; INDEX.oot:40 matches. |
+// | proof_of_today moonshot mcp ref      | PASS       | PASS       | PASS — `git describe` = `v0.6.28`; index.oot:40 matches. |
 
-// ## 4. Pass-2 — File law (RULES.oot §1.8, §1.11, §1.14, §1.19)
+// ## 4. Pass-2 — File law (rules.oot §1.8, §1.11, §1.14, §1.19)
 
 // | Check                          | Result | Detail |
 // |--------------------------------|--------|--------|
 // | 256-line cap (Rule A)          | PASS   | 0 of 70 product files exceed 256. Largest is `engine/core/mcp_json.oo` at 253/256 (3 lines of headroom). |
 // | 4-element header on .oo (Rule B)| PASS  | 60 of 60 .oo files start with `// # `. |
 // | Forbidden extensions (Rule C)  | PASS   | 0 `.py`, 0 `.js`, 0 `.ts`, 0 `.rb`, 0 `.pl`, 0 `.sh` in product tree. |
-// | ANCHOR.oo ALLCAPS (Rule D)     | PASS   | 13/13 ANCHOR.oo are ALLCAPS. 0 lowercase. |
+// | anchor.oo ALLCAPS (Rule D)     | PASS   | 13/13 anchor.oo are ALLCAPS. 0 lowercase. |
 
 // Notable: `engine/core/mcp_json.oo` is at 253/256 (3 lines of headroom).
 // Tracked as MINOR m1.
@@ -96,7 +96,7 @@
 
 // ## 5. Pass-3 — Structure + prior-audit cross-reference
 
-// ### 5a. 13 ANCHOR.oo (4-element header pattern)
+// ### 5a. 13 anchor.oo (4-element header pattern)
 
 // 1 root + 6 engine sub-ANCHOR (core, federation, health, resource,
 // state, tool) + 6 top-level sub-ANCHOR (audit, cli, docs,
@@ -141,8 +141,8 @@
 
 // | Source | Claim | Evidence line | Ground truth | Drift |
 // |--------|-------|---------------|--------------|-------|
-// | `ANCHOR.oo:5` (meta-ref) | "Version is the git tag" | line 5 | `v0.6.28` | OK (meta-ref, no version pin) |
-// | `openOODA/docs/INDEX.oot:40` | `mcp v0.6.28` | line 40 | `v0.6.28` | match ✓ |
+// | `anchor.oo:5` (meta-ref) | "Version is the git tag" | line 5 | `v0.6.28` | OK (meta-ref, no version pin) |
+// | `openOODA/docs/index.oot:40` | `mcp v0.6.28` | line 40 | `v0.6.28` | match ✓ |
 // | `org audit 2026-09-10` | `mcp v0.6.28` | line 156 | `v0.6.28` | match ✓ |
 // | `moonshot_scorecard.oot` | (no direct mcp claim) | — | — | N/A |
 
@@ -167,12 +167,12 @@
 // | 1. 8D redteam (F-01 follow-up) | **PASS** | All 8 `mcp_redteam_fire_e*` call real MCP functions (e.g., `mcp_dispatch_cap_audit` at fire_escalation, `mcp_token_to_bit` at fire_integrity). `ok` from return values, not hardcoded. |
 // | 2. E-09 runtime probe residue | **PASS** | 0 `fn runtime_*` functions. The 7 `return 0 - 1` in cli/safe_merge_core.oo, mcp_json.oo, mcp_cap.oo, mcp_tool.oo are legitimate "not implemented" returns. |
 // | 3. E-13 chars_len cap | **PASS** | `engine/core/mcp_server.oo:227`: `bytes_len(out) + bytes_len(framed) > 1048576` per-frame cap. |
-// | 4. ANCHOR.oo claim | **PASS** | `ANCHOR.oo:5`: "Version is the git tag. There is no VERSION file." Holds. |
+// | 4. anchor.oo claim | **PASS** | `anchor.oo:5`: "Version is the git tag. There is no VERSION file." Holds. |
 
 // ## 8. Findings by severity
 
 // **CRITICAL (0):** none. All 14 E- findings from the 3.0 deep-dive
-// are closed; F-01 redteam-stub is fixed; INDEX.oot:40 and the org
+// are closed; F-01 redteam-stub is fixed; index.oot:40 and the org
 // audit line 156 cross-references match v0.6.28.
 
 // **MAJOR (0):** none. The "kill theater" commit (`7ce4c3e`) and
@@ -232,7 +232,7 @@
 //    pre-existing, excluded from Rule A per scope).
 // 2. **4-element header on .oo:** 60/60 (PASS).
 // 3. **Forbidden extensions:** 0 violations (PASS).
-// 4. **ANCHOR.oo ALLCAPS:** 13/13 (PASS).
+// 4. **anchor.oo ALLCAPS:** 13/13 (PASS).
 // 5. **Lock re-derivations:** 4 locks × 2 runs, identical (PASS).
 // 6. **14/14 prior E- findings closed:** 14 of 14 (PASS; all
 //    re-verified with file:line evidence in Pass 3).
@@ -240,7 +240,7 @@
 //    (PASS; verified in Pass 5).
 // 8. **10 unreleased commits reviewed for new drift:** 0 new
 //    drift found (PASS; documented in Pass 4).
-// 9. **Cross-references match:** INDEX.oot:40 = `mcp v0.6.28`;
+// 9. **Cross-references match:** index.oot:40 = `mcp v0.6.28`;
 //    org audit line 156 = `mcp v0.6.28`; tag = `v0.6.28`. (PASS).
 // 10. **Findings:** 0 CRITICAL, 0 MAJOR, 1 MINOR, 2 NOTE. Every
 //     finding has file:line evidence and a RULES cross-reference

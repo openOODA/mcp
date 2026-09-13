@@ -7,7 +7,7 @@
 // Beats:
 //   1. Deep-dive audits are history.
 //   2. Ghost 13-board and FORMAT.oot claims in these files are obsolete.
-//   3. Use RULES.oot, NORTHSTAR.oot, and docs/protocol.oot for live law.
+//   3. Use rules.oot, northstar.oot, and docs/protocol.oot for live law.
 
 // Historical audit documents (.oot files):
 // - MCP_2.9.2_REDTEAM_CERT.oot

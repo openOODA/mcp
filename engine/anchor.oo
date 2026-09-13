@@ -12,9 +12,9 @@
 //   5. state: graph, caps, session-adjacent telemetry.
 //   6. resource: schema, format, context budget.
 
-import "core/ANCHOR.oo";
-import "tool/ANCHOR.oo";
-import "health/ANCHOR.oo";
-import "federation/ANCHOR.oo";
-import "state/ANCHOR.oo";
-import "resource/ANCHOR.oo";
+import "core/anchor.oo";
+import "tool/anchor.oo";
+import "health/anchor.oo";
+import "federation/anchor.oo";
+import "state/anchor.oo";
+import "resource/anchor.oo";

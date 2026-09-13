@@ -6,7 +6,7 @@ The server is a live stdio binary. It reads one frame, writes one Content-Length
 ## Direct launch
 
 ```sh
-OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda-mcp --stdio
+OODACODEX=/path/to/openOODA/northstar.oot ooda-mcp --stdio
 ```
 
 `ooda mcp --stdio` also works when OODA_COMPILER is set (the driver
@@ -22,7 +22,7 @@ directly.
       "command": "ooda-mcp",
       "args": ["--stdio"],
       "env": {
-        "OODACODEX": "/path/to/openOODA/NORTHSTAR.oot",
+        "OODACODEX": "/path/to/openOODA/northstar.oot",
         "OODA_COMPILER": "/path/to/oodac/bin/oodac",
         "OODA_FS_READDIR": "/path/to/workspace",
         "OODA_FS_WRITEDIR": "/path/to/workspace"

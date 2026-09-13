@@ -1,5 +1,5 @@
 # MCP Server — Setup
-File: mcp/docs/MCP_SETUP.oot
+File: mcp/docs/mcp_setup.oot
 
 The openOODA MCP server speaks protocol `2024-11-05`. Stdio is a live frame loop. `--file` is one-shot. JSON-RPC in, capability-gated dispatch, Content-Length bytes out.
 
@@ -8,7 +8,7 @@ Version is the git tag. There is no VERSION file.
 ## Launch
 
 ```sh
-OODACODEX=/path/to/openOODA/NORTHSTAR.oot ooda-mcp --stdio
+OODACODEX=/path/to/openOODA/northstar.oot ooda-mcp --stdio
 ooda-mcp --file path/to/request.json
 ooda mcp-merge ~/.config/openooda/agent-config.json
 ```
@@ -55,4 +55,4 @@ sampling/createMessage is not offered. Unknown methods return -32601.
 
 ## See also
 
-protocol.oot, client_config.oot, TOOLS.oot.
+protocol.oot, client_config.oot, tools.oot.

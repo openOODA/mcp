@@ -9,7 +9,7 @@
 //   2. mcp_format_validate_codex reports missing header fields and line-cap breach.
 
 pub fn mcp_format_get_constraints() -> String {
-    return "{\"line_cap\":256,\"academy_header\":[\"title\",\"logline\",\"setup\",\"beats\"],\"oot_header\":[\"title\",\"file\"],\"anchor\":\"ANCHOR.oo\",\"banned_names\":[\"util.oo\",\"common.oo\",\"helpers.oo\",\"misc.oo\",\"shared.oo\",\"lib.oo\"],\"rfc\":\"0003\"}";
+    return "{\"line_cap\":256,\"academy_header\":[\"title\",\"logline\",\"setup\",\"beats\"],\"oot_header\":[\"title\",\"file\"],\"anchor\":\"anchor.oo\",\"banned_names\":[\"util.oo\",\"common.oo\",\"helpers.oo\",\"misc.oo\",\"shared.oo\",\"lib.oo\"],\"rfc\":\"0003\"}";
 }
 
 pub fn mcp_format_validate_codex(text: String) -> String {

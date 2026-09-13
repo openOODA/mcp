@@ -125,9 +125,9 @@ pub fn mcp_graph_canonical_substrate_caps() -> List[McpCapability] {
 
 pub fn mcp_graph_canonical_boards() -> List[McpBoard] {
     let mut out: List[McpBoard] = list_new();
-    out = list_push(out, mcp_board_new("ANCHOR",    "ANCHOR.oo",                                  "Agent front door", 1));
-    out = list_push(out, mcp_board_new("RULES",     "RULES.oot",                                   "23 laws", 2));
-    out = list_push(out, mcp_board_new("NORTHSTAR", "NORTHSTAR.oot",                               "Architecture north star", 3));
+    out = list_push(out, mcp_board_new("ANCHOR",    "anchor.oo",                                  "Agent front door", 1));
+    out = list_push(out, mcp_board_new("RULES",     "rules.oot",                                   "23 laws", 2));
+    out = list_push(out, mcp_board_new("NORTHSTAR", "northstar.oot",                               "Architecture north star", 3));
     out = list_push(out, mcp_board_new("RFC-0001",  "rfcs/0001-capability-security.oot",           "Capability security", 4));
     out = list_push(out, mcp_board_new("RFC-0002",  "rfcs/0002-design-by-contract.oot",            "Design by contract", 5));
     out = list_push(out, mcp_board_new("RFC-0003",  "rfcs/0003-file-format.oot",                   "File format", 6));

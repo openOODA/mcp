@@ -5,13 +5,13 @@
 // Setup: RFC-0005. Website Source: openOODA/mcp/docs/.
 //
 // Beats:
-//   1. MCP_SETUP.oot — host over stdio.
+//   1. mcp_setup.oot — host over stdio.
 //   2. protocol.oot — JSON-RPC wire.
 //   3. client_config.oot — client config.
-//   4. TOOLS.oot — 22 tools. SSoT for the website mcp page.
+//   4. tools.oot — 22 tools. SSoT for the website mcp page.
 
 // Sibling documentation documents (.oot files):
-// - MCP_SETUP.oot
+// - mcp_setup.oot
 // - protocol.oot
 // - client_config.oot
-// - TOOLS.oot
+// - tools.oot

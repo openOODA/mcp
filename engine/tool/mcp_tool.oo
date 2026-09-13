@@ -46,8 +46,8 @@ pub fn mcp_tool_list_json(g: &McpGraph) -> String {
     let n: String = mcp_tool_entry(g, "get_session_diagnostics", "Session health snapshot", "{}", "[]");
     let o: String = mcp_tool_entry(g, "get_format_constraints", "RFC-0003 file format rules", "{}", "[]");
     let p: String = mcp_tool_entry(g, "validate_codex_format", "Check Academy header and line cap", "{\"text\":{\"type\":\"string\"}}", "[\"text\"]");
-    let q: String = mcp_tool_entry(g, "get_northstar", "Read NORTHSTAR.oot", "{}", "[]");
-    let r: String = mcp_tool_entry(g, "get_rules", "Read RULES.oot", "{\"topic\":{\"type\":\"string\"}}", "[]");
+    let q: String = mcp_tool_entry(g, "get_northstar", "Read northstar.oot", "{}", "[]");
+    let r: String = mcp_tool_entry(g, "get_rules", "Read rules.oot", "{\"topic\":{\"type\":\"string\"}}", "[]");
     let s: String = mcp_tool_entry(g, "get_rfc", "Read one RFC by board name", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]");
     let t: String = mcp_tool_entry(g, "get_practice", "Read one practice by board name", "{\"name\":{\"type\":\"string\"}}", "[\"name\"]");
     let u: String = mcp_tool_entry(g, "audit_compact", "Keep last N audit entries", "{\"keep_last_n\":{\"type\":\"integer\"}}", "[]");
