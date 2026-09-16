@@ -203,6 +203,8 @@ pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTran
     let mut cache: McpCodexCache = mcp_codex_cache_new();
     let cached: Int = mcp_codex_resolve_cached(fs, env, &mut cache);
     if cached == 0 { return Err("OODACODEX missing or unreadable"); }
+    // LLVM AMP lowers &ident only; &cache.graph is unsupported expr DOT.
+    let graph: McpGraph = cache.graph;
     let mut session: McpSession = mcp_session_new();
     session.exec_oodac = mcp_exec_resolve_compiler(fs, env);
     let mut buf: String = raw;
@@ -221,7 +223,7 @@ pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTran
             let _: Int = mcp_audit_persist(fw, &session);
             return Err("frame cap 256");
         }
-        let resp: String = if mcp_batch_is_batch(body) { mcp_server_handle_batch(fs, &mut session, &cache.graph, cache.text, body, p) } else { mcp_server_handle_body(fs, &mut session, &cache.graph, cache.text, body, p) };
+        let resp: String = if mcp_batch_is_batch(body) { mcp_server_handle_batch(fs, &mut session, &graph, cache.text, body, p) } else { mcp_server_handle_body(fs, &mut session, &graph, cache.text, body, p) };
         if chars_len(resp) > 0 {
             let framed: String = mcp_transport_emit(raw, resp);
             if bytes_len(resp) > 1048576 || bytes_len(out) + bytes_len(framed) > 1048576 {

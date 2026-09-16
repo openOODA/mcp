@@ -53,6 +53,7 @@ jobs:
       - name: run suite proofs
         working-directory: ${{ github.workspace }}
         env:
+          OO_LIST_AMBIENT_QUOTA: "8589934592"
           OODA_COMPILER: ${{ github.workspace }}/oodac/bin/oodac
           OODA_FS_READDIR: ${{ github.workspace }}
           OODA_FS_WRITEDIR: ${{ github.workspace }}
@@ -91,6 +92,7 @@ jobs:
       - name: build native binary
         working-directory: ${{ github.workspace }}
         env:
+          OO_LIST_AMBIENT_QUOTA: "8589934592"
           OODA_COMPILER: ${{ github.workspace }}/oodac/bin/oodac
           OODA_FS_READDIR: ${{ github.workspace }}
           OODA_FS_WRITEDIR: ${{ github.workspace }}
@@ -152,6 +154,7 @@ jobs:
       - name: blackbox double-run on qa/ probes (RULES §1.10)
         working-directory: ${{ github.workspace }}/mcp
         env:
+          OO_LIST_AMBIENT_QUOTA: "8589934592"
           OODA_FS_READDIR: ${{ github.workspace }}
           OODA_FS_WRITEDIR: ${{ github.workspace }}
           OODA_NO_JAIL: '1'

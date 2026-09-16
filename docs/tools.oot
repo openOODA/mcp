@@ -31,7 +31,7 @@ requiresCap 0 uses the session default. requiresCap 1 is FsReadCap.
 | token_ingest | 0 | {text} | Add a JSONL transcript into session totals |
 | attenuate_capability | 0 | {parent_capability, child_mask?} | HMAC-attenuate a child cap |
 | oodac_check | 1 | {path, max_chars?} | oodac check --json-errors on one file |
-| oodac_emit | 1 | {path, backend?, max_chars?} | oodac emit-llvm on one file (backend c residual exit 2) |
+| oodac_emit | 1 | {path, backend?, max_chars?} | oodac emit-llvm (live backend llvm; c residual) |
 | oodac_build | 1 | {entry, out, max_chars?} | oodac build (LLVM default) on one entry |
 
 Boards: ANCHOR, RULES, NORTHSTAR, RFC-0001..RFC-0007, REDTEAM, WORKFLOW, RELEASE.

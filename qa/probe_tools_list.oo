@@ -38,6 +38,8 @@ pub fn probe_tools_list_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, Strin
     if !str_contains(r, "attenuate_capability") { return Err("tools/list missing attenuate_capability"); }
     if !str_contains(r, "oodac_check") { return Err("tools/list missing oodac_check"); }
     if !str_contains(r, "oodac_emit") { return Err("tools/list missing oodac_emit"); }
+    if str_contains(r, "\"enum\":[\"llvm\",\"c\"]") { return Err("oodac_emit must not advertise live backend c"); }
+    if !str_contains(r, "\"enum\":[\"llvm\"]") { return Err("oodac_emit live enum must be llvm"); }
     if !str_contains(r, "oodac_build") { return Err("tools/list missing oodac_build"); }
     if str_contains(r, "estimate_chars") { return Err("ghost tool estimate_chars still listed"); }
     return Ok(0);
