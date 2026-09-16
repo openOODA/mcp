@@ -4,6 +4,7 @@
 //
 // Setup: Pure graph + FsReadCap reads of oodar sec/cap/caps.h, cap_table.json,
 //        and NORTHSTAR 20. 20 subset of 26, SSoT is oodar cap_table.json.
+//
 // Beats:
 //   1. 20 language caps; 26 substrate caps; subset. Bits match caps.h.
 //   2. 13 boards; NORTHSTAR and RFC-0007 present.

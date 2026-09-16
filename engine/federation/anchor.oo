@@ -5,6 +5,6 @@
 // Setup: This directory holds the codex cache only. It is not a federation mesh.
 //
 // Beats:
-//   1. mcp_codex.oo resolves OODACODEX fail-closed.
+//   1. mcp_codex.oo resolves OODA_CODEX else OODACODEX fail-closed.
 
 import "mcp_codex.oo";

@@ -8,7 +8,7 @@
 //
 // Beats:
 //   1. verify surface.
-//   2. Run fourteen probes.
+//   2. Run fifteen probes.
 //   3. Return the first Err.
 
 import "qa/probe_initialize.oo";

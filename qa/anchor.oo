@@ -4,7 +4,6 @@
 //
 // Setup: Each probe exports probe_*_run. suite.oo is the entry CI builds.
 //
-
 // Beats:
 //   1. probe_initialize.oo — initialize, protocolVersion, second init, alias refuse.
 //   2. probe_tools_list.oo — 26 live tools, no ghost names.
@@ -18,11 +17,11 @@
 //   10. probe_protocol.oo — batch, prompts, roots, ETag, shutdown, exit.
 //   11. probe_slice.oo — rules slicing by topic.
 //   12. probe_attenuation.oo — capability attenuation tokens.
-//   13. probe_exec.oo — oodac_check/emit/build over a real compiler, max_chars clamp edges.
+//   13. probe_exec.oo — LLVM oodac_check/emit/build, residual-exit 2, max_chars clamp.
 //   14. probe_ecap_injection.oo — injected exfiltration refused at oodac_check/build (Task 2b).
 //   15. probe_cwd_jail.oo — poisoned spawner CWD maps to the named cwd-jail stage.
-//   15. suite.oo runs the surface verifier plus all probes (CI entry).
-//   fixture_exec.oo is a runtime victim, never imported (it owns a main).
+//   16. suite.oo runs the surface verifier plus all probes (CI entry).
+//   fixture_exec.oo and fixture_ecap_evil.oo are runtime victims, never imported (they own a main).
 
 import "suite.oo";
 import "probe_initialize.oo";

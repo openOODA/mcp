@@ -2,10 +2,10 @@
 //
 // Logline: Resolve $OODACODEX, read it, SHA-256 it, and cache the graph keyed by path and size.
 //
-// Setup: EnvCap for OODACODEX. No path fallback. Missing file fails closed with return 0.
+// Setup: EnvCap for OODA_CODEX else OODACODEX. No path fallback. Missing file fails closed with return 0.
 //
 // Beats:
-//   1. Honour $OODACODEX only.
+//   1. Honour $OODA_CODEX else $OODACODEX.
 //   2. Read under FsReadCap and hash.
 //   3. Cache hit skips re-hash when path and size match.
 

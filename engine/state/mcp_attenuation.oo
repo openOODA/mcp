@@ -69,7 +69,7 @@ pub fn mcp_attenuation_sign(algo: String, payload: String, secret: String) -> Re
         return Ok(blake3(payload + "|" + secret));
     }
     if a == "sha3" {
-        return Ok(crypto_sha3_256_internal(payload + "|" + secret));
+        return Err("residual algorithm: sha3");
     }
     if a == "sha512" {
         return Ok(mcp_hmac_sha512(secret, payload));
@@ -131,7 +131,7 @@ pub fn mcp_attenuate_verify(
     token_str: String,
     required_cap: String,
     target_path: String
-) -> Result[Bool, String] {
+) -> Result[Int, String] {
     if !str_starts_with(token_str, "ATTEN.") {
         return Err("attenuated token invalid format: missing prefix");
     }
@@ -236,6 +236,6 @@ pub fn mcp_attenuate_verify(
         }
     }
 
-    return Ok(true);
+    return Ok(1);
 }
 

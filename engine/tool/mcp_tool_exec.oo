@@ -9,8 +9,8 @@
 //
 // Beats:
 //   1. Empty or missing compiler path fails closed with a JSON error.
-//   2. check runs `oodac check --json-errors`; emit runs emit-c/emit-llvm; build pins --backend c.
-//   3. Emit backend outside {c, llvm} fails closed. Output truncates to max_chars.
+//   2. check runs `oodac check --json-errors`; emit runs emit-llvm; build is LLVM default.
+//   3. Emit backend outside llvm (including c) fails closed as residual. Output truncates to max_chars.
 
 import "engine/core/mcp_json.oo";
 import "std/fs/process/env.oo";
@@ -82,11 +82,10 @@ pub fn mcp_exec_check(p: &ProcessCap, oodac: String, path: String, max_chars: In
 }
 
 pub fn mcp_exec_emit(p: &ProcessCap, oodac: String, path: String, backend: String, max_chars: Int) -> String {
-    if backend != "c" && backend != "llvm" {
+    if backend != "llvm" && backend != "" {
         return "{\"error\":\"residual backend: " + mcp_json_escape(backend) + "\"}";
     }
-    let sub: String = if backend == "llvm" { "emit-llvm" } else { "emit-c" };
-    return mcp_exec_run(p, oodac, sub, "", path, mcp_exec_clamp_max(max_chars));
+    return mcp_exec_run(p, oodac, "emit-llvm", "", path, mcp_exec_clamp_max(max_chars));
 }
 
 pub fn mcp_exec_build(p: &ProcessCap, oodac: String, entry: String, out: String, max_chars: Int) -> String {
@@ -99,7 +98,7 @@ pub fn mcp_exec_build(p: &ProcessCap, oodac: String, entry: String, out: String,
     if chars_len(out) == 0 {
         return "{\"error\":\"missing out\"}";
     }
-    let r: Result[String, String] = sys_exec(p, oodac, "build", "--backend", "c", entry, "-o", out);
+    let r: Result[String, String] = sys_exec(p, oodac, "build", entry, "-o", out);
     if r.is_ok() {
         let ok_out: String = match r { Ok(s) => s, Err(_) => "" };
         return mcp_exec_result(true, ok_out, mcp_exec_clamp_max(max_chars));

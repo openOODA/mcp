@@ -17,6 +17,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      OO_LIST_AMBIENT_QUOTA: "8589934592"
     steps:
       - name: checkout mcp
         uses: actions/checkout@v4
@@ -46,7 +48,8 @@ jobs:
         run: |
           test -x oodac/bin/oodac || chmod +x oodac/bin/oodac
           test -f oodar/core/blackbox/blackbox.c || { echo "missing oodar/core/blackbox/blackbox.c"; exit 1; }
-          test -f openOODA/rules.oot || test -f openOODA/rules.oot || { echo "missing openOODA/rules.oot"; exit 1; }
+          test -f openOODA/rules.oot || { echo "missing openOODA/rules.oot"; exit 1; }
+          command -v clang >/dev/null || { echo "clang required for oodac build (LLVM IR + oodar)"; exit 1; }
       - name: run suite proofs
         working-directory: ${{ github.workspace }}
         env:
@@ -54,10 +57,12 @@ jobs:
           OODA_FS_READDIR: ${{ github.workspace }}
           OODA_FS_WRITEDIR: ${{ github.workspace }}
         run: |
-          "${OODA_COMPILER}" build --backend c mcp/qa/suite.oo -o /tmp/mcp_suite
+          "${OODA_COMPILER}" build mcp/qa/suite.oo -o /tmp/mcp_suite
           /tmp/mcp_suite
   build:
     runs-on: ubuntu-latest
+    env:
+      OO_LIST_AMBIENT_QUOTA: "8589934592"
     steps:
       - name: checkout mcp
         uses: actions/checkout@v4
@@ -82,6 +87,7 @@ jobs:
         run: |
           test -x oodac/bin/oodac || chmod +x oodac/bin/oodac
           test -f oodar/core/blackbox/blackbox.c || { echo "missing oodar/core/blackbox/blackbox.c"; exit 1; }
+          command -v clang >/dev/null || { echo "clang required for oodac build (LLVM IR + oodar)"; exit 1; }
       - name: build native binary
         working-directory: ${{ github.workspace }}
         env:
@@ -90,7 +96,7 @@ jobs:
           OODA_FS_WRITEDIR: ${{ github.workspace }}
         run: |
           mkdir -p dist
-          "${OODA_COMPILER}" build --backend c mcp/cli/main.oo -o dist/ooda-mcp-linux-x86_64
+          "${OODA_COMPILER}" build mcp/cli/main.oo -o dist/ooda-mcp-linux-x86_64
           chmod +x dist/ooda-mcp-linux-x86_64
           (cd dist && sha256sum ooda-mcp-linux-x86_64 > ooda-mcp-linux-x86_64.sha256)
           ls -lh dist/
@@ -105,6 +111,8 @@ jobs:
     needs: [test]
     if: always()
     runs-on: ubuntu-latest
+    env:
+      OO_LIST_AMBIENT_QUOTA: "8589934592"
     steps:
       - name: checkout mcp
         uses: actions/checkout@v4

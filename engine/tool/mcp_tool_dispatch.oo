@@ -82,7 +82,7 @@ pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &Mcp
         return mcp_tool_wrap(mcp_exec_check(p, s.exec_oodac, mcp_tool_arg_string(args, "path", ""), mcp_tool_arg_int(args, "max_chars", mcp_exec_default_max())));
     }
     if name == "oodac_emit" {
-        return mcp_tool_wrap(mcp_exec_emit(p, s.exec_oodac, mcp_tool_arg_string(args, "path", ""), mcp_tool_arg_string(args, "backend", "c"), mcp_tool_arg_int(args, "max_chars", mcp_exec_default_max())));
+        return mcp_tool_wrap(mcp_exec_emit(p, s.exec_oodac, mcp_tool_arg_string(args, "path", ""), mcp_tool_arg_string(args, "backend", "llvm"), mcp_tool_arg_int(args, "max_chars", mcp_exec_default_max())));
     }
     if name == "oodac_build" {
         return mcp_tool_wrap(mcp_exec_build(p, s.exec_oodac, mcp_tool_arg_string(args, "entry", ""), mcp_tool_arg_string(args, "out", ""), mcp_tool_arg_int(args, "max_chars", mcp_exec_default_max())));

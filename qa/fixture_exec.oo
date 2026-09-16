@@ -6,7 +6,7 @@
 //
 // Beats:
 //   1. oodac check passes on this file.
-//   2. oodac emit-c prints this file's C translation.
+//   2. oodac emit-llvm prints this file's LLVM IR.
 //   3. oodac build produces a runnable binary from this file.
 
 pub fn main() -> Result[Int, String] {

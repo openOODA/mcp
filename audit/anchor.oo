@@ -10,16 +10,17 @@
 //   3. Use rules.oot, northstar.oot, and docs/protocol.oot for live law.
 
 // Historical audit documents (.oot files):
-// - MCP_2.9.2_REDTEAM_CERT.oot
-// - MCP_3.0_DEEPDIVE_AUDIT.oot
-// - MCP_3.0_SUBTRACTIVE_CERT.oot
-// - MCP_3.1_DEEPDIVE_AUDIT.oot
-// - MCP_3.2_DEEPDIVE_AUDIT.oot
-// - MCP_3.3_DEEPDIVE_AUDIT.oot
-// - MCP_3.4_DEEPDIVE_AUDIT.oot
-// - MCP_3.5_DEEPDIVE_AUDIT.oot
-// - MCP_3.6_DEEPDIVE_AUDIT.oot
-// - MCP_3.7_DEEPDIVE_AUDIT.oot
-// - MCP_3.8_DEEPDIVE_AUDIT.oot
-// - MCP_3.9_DEEPDIVE_AUDIT.oot
-// - MCP_4.0_DEEPDIVE_AUDIT.oot
+// - 2026-09-10-focused-mcp.oot
+// - mcp_2.9.2_redteam_cert.oot
+// - mcp_3.0_deepdive_audit.oot
+// - mcp_3.0_subtractive_cert.oot
+// - mcp_3.1_deepdive_audit.oot
+// - mcp_3.2_deepdive_audit.oot
+// - mcp_3.3_deepdive_audit.oot
+// - mcp_3.4_deepdive_audit.oot
+// - mcp_3.5_deepdive_audit.oot
+// - mcp_3.6_deepdive_audit.oot
+// - mcp_3.7_deepdive_audit.oot
+// - mcp_3.8_deepdive_audit.oot
+// - mcp_3.9_deepdive_audit.oot
+// - mcp_4.0_deepdive_audit.oot
