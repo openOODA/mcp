@@ -1,0 +1,38 @@
+// # MCP Audit Log Entry
+//
+// Logline: Data structure and serialization for a hash-chained audit entry.
+//
+// Setup: Bound to SHA-256 canonical body.
+//
+// Beats:
+//   1. Define McpAuditEntry struct.
+//   2. Entry constructor.
+//   3. Canonical body serialization for hash chaining.
+//   4. JSON serialization.
+
+import "engine/core/mcp_json.oo";
+
+pub type McpAuditEntry = struct {
+    epoch: Int,
+    method: String,
+    id: String,
+    decision: Int,
+    code: Int,
+    caps_before: Int,
+    caps_after: Int,
+    revoked: String,
+    prev_sha: String,
+    sha: String
+};
+
+pub fn mcp_audit_entry_new(epoch: Int, method: String, id: String, decision: Int, code: Int, caps_before: Int, caps_after: Int, revoked: String, prev_sha: String, sha: String) -> McpAuditEntry {
+    return McpAuditEntry { epoch: epoch, method: method, id: id, decision: decision, code: code, caps_before: caps_before, caps_after: caps_after, revoked: revoked, prev_sha: prev_sha, sha: sha };
+}
+
+pub fn mcp_audit_entry_body(entry: &McpAuditEntry) -> String {
+    return entry.epoch.to_string() + "|" + entry.method + "|" + entry.id + "|" + entry.decision.to_string() + "|" + entry.code.to_string() + "|" + entry.caps_before.to_string() + "|" + entry.caps_after.to_string() + "|" + entry.revoked + "|" + entry.prev_sha + "|" + entry.sha;
+}
+
+pub fn mcp_audit_entry_to_json(entry: &McpAuditEntry) -> String {
+    return "{\"epoch\":" + entry.epoch.to_string() + ",\"method\":\"" + mcp_json_escape(entry.method) + "\",\"id\":\"" + mcp_json_escape(entry.id) + "\",\"decision\":" + entry.decision.to_string() + ",\"code\":" + entry.code.to_string() + ",\"caps_before\":" + entry.caps_before.to_string() + ",\"caps_after\":" + entry.caps_after.to_string() + ",\"revoked\":\"" + mcp_json_escape(entry.revoked) + "\",\"prev_sha\":\"" + entry.prev_sha + "\",\"sha\":\"" + entry.sha + "\"}";
+}

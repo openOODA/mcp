@@ -11,36 +11,13 @@
 //   4. Verify the on-disk chain fail-closed.
 
 import "engine/core/mcp_json.oo";
+import "engine/health/mcp_audit_entry.oo";
+import "engine/core/mcp_session.oo";
 import "std/fs/file/file_writer.oo";
 import "std/fs/file/file_reader.oo";
 
-pub type McpAuditEntry = struct {
-    epoch: Int,
-    method: String,
-    id: String,
-    decision: Int,
-    code: Int,
-    caps_before: Int,
-    caps_after: Int,
-    revoked: String,
-    prev_sha: String,
-    sha: String
-};
-
 pub fn mcp_audit_log_path() -> String {
     return ".ooda-cache/mcp-audit.jsonl";
-}
-
-pub fn mcp_audit_entry_new(epoch: Int, method: String, id: String, decision: Int, code: Int, caps_before: Int, caps_after: Int, revoked: String, prev_sha: String, sha: String) -> McpAuditEntry {
-    return McpAuditEntry { epoch: epoch, method: method, id: id, decision: decision, code: code, caps_before: caps_before, caps_after: caps_after, revoked: revoked, prev_sha: prev_sha, sha: sha };
-}
-
-pub fn mcp_audit_entry_body(entry: &McpAuditEntry) -> String {
-    return entry.epoch.to_string() + "|" + entry.method + "|" + entry.id + "|" + entry.decision.to_string() + "|" + entry.code.to_string() + "|" + entry.caps_before.to_string() + "|" + entry.caps_after.to_string() + "|" + entry.revoked + "|" + entry.prev_sha + "|" + entry.sha;
-}
-
-pub fn mcp_audit_entry_to_json(entry: &McpAuditEntry) -> String {
-    return "{\"epoch\":" + entry.epoch.to_string() + ",\"method\":\"" + mcp_json_escape(entry.method) + "\",\"id\":\"" + mcp_json_escape(entry.id) + "\",\"decision\":" + entry.decision.to_string() + ",\"code\":" + entry.code.to_string() + ",\"caps_before\":" + entry.caps_before.to_string() + ",\"caps_after\":" + entry.caps_after.to_string() + ",\"revoked\":\"" + mcp_json_escape(entry.revoked) + "\",\"prev_sha\":\"" + entry.prev_sha + "\",\"sha\":\"" + entry.sha + "\"}";
 }
 
 pub fn mcp_audit_record(s: &mut McpSession, epoch: Int, method: String, id: String, decision: Int, code: Int, caps_before: Int, caps_after: Int, revoked: String) -> String {

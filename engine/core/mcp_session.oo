@@ -11,7 +11,7 @@
 //   4. seen_ids rejects duplicates. cancelled_ids is per request id, cap 256.
 //   5. Rate window: 100 requests per 1000 seq.
 
-import "engine/health/mcp_audit.oo";
+import "engine/health/mcp_audit_entry.oo";
 import "engine/core/mcp_json.oo";
 import "engine/state/mcp_graph.oo";
 
