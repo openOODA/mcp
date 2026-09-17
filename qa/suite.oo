@@ -70,7 +70,11 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     println("PASS: probe_token");
 
     let pr: Result[Int, String] = probe_protocol_run(p, fs_r);
-    if pr.is_err() { println("FAIL: probe_protocol"); return pr; }
+    if pr.is_err() {
+        let e_pr: String = match pr { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_protocol: " + e_pr);
+        return pr;
+    }
     println("PASS: probe_protocol");
 
     let ps: Result[Int, String] = probe_slice_run(p, fs_r);

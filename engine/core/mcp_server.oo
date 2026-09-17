@@ -36,7 +36,8 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
     let params: String = mcp_json_extract_params(body);
     mcp_session_next_seq(s);
     if method == "" {
-        if chars_len(s.pending_roots_id) > 0 && id == s.pending_roots_id {
+        let id_match: Bool = id == s.pending_roots_id || id == "\"" + s.pending_roots_id + "\"" || "\"" + id + "\"" == s.pending_roots_id;
+        if chars_len(s.pending_roots_id) > 0 && (id_match || str_contains(id, "mcp-roots-")) {
             mcp_roots_apply_result(s, mcp_json_extract_raw(body, "result"));
             s.pending_roots_id = "";
             return "";

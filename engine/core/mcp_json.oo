@@ -76,7 +76,7 @@ fn mcp_json_take_value(json: String, start: Int) -> String {
     }
     if c0 == "{" || c0 == "[" {
         let open: String = c0;
-        let close: String = if c0 == "{" { "}" } else { "]"; };
+        let close: String = if c0 == "{" { "}" } else { "]" };
         let mut depth: Int = 0;
         let mut in_str: Bool = false;
         let mut esc: Bool = false;
