@@ -7,7 +7,7 @@
 //
 // Beats:
 //   1. 20 language caps; 26 substrate caps; subset. Bits match caps.h.
-//   2. 13 boards; NORTHSTAR and RFC-0007 present.
+//   2. 14 boards; NORTHSTAR, RFC-0007, and SPEC present.
 //   3. 26 tools.
 
 import "engine/state/mcp_graph.oo";
@@ -58,15 +58,17 @@ pub fn mcp_verify_surface() -> Result[Int, String] {
         i = i + 1;
     }
     let brds: List[McpBoard] = mcp_graph_canonical_boards();
-    if list_len(brds) != 13 { return Err("board count drifted"); }
+    if list_len(brds) != 14 { return Err("board count drifted"); }
     let mut has_ns: Bool = false;
     let mut has_bb: Bool = false;
+    let mut has_spec: Bool = false;
     let mut j: Int = 0;
     while j < list_len(brds) {
         let b: McpBoard = list_get(brds, j);
         let n: String = b.name;
         if n == "NORTHSTAR" { has_ns = true; }
         if n == "RFC-0007" { has_bb = true; }
+        if n == "SPEC" { has_spec = true; }
         if n == "ROADMAP" || n == "SHIPPED" || n == "START" || n == "FORMAT" || n == "MOONSHOTS" {
             return Err("ghost board still present: " + n);
         }
@@ -74,6 +76,7 @@ pub fn mcp_verify_surface() -> Result[Int, String] {
     }
     if !has_ns { return Err("NORTHSTAR board missing"); }
     if !has_bb { return Err("RFC-0007 board missing"); }
+    if !has_spec { return Err("SPEC board missing"); }
     if mcp_tool_count() != 26 { return Err("tool count drifted"); }
     let g: McpGraph = mcp_graph_canonical("", "");
     if mcp_tool_required_caps(&g, "read_board") != 8 { return Err("read_board must require FsReadCap mask 8"); }
@@ -87,5 +90,16 @@ pub fn mcp_verify_surface() -> Result[Int, String] {
     if mcp_tool_required_caps(&g, "attenuate_capability") != 0 { return Err("attenuate_capability must require 0"); }
     if mcp_tool_required_caps(&g, "estimate_chars") != 0 - 1 { return Err("estimate_chars must be unknown"); }
     if mcp_tool_required_caps(&g, "get_milestone_status") != 0 - 1 { return Err("get_milestone_status must be unknown"); }
+    return Ok(0);
+}
+
+pub fn main() -> Result[Int, String] {
+    let r: Result[Int, String] = mcp_verify_surface();
+    if r.is_err() {
+        let e: String = match r { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: surface: " + e);
+        return Err(e);
+    }
+    println("PASS: surface");
     return Ok(0);
 }

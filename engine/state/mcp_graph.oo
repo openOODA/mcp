@@ -1,13 +1,13 @@
 // # MCP Typed Capability Graph
 //
-// Logline: Build the capability graph: 20 NORTHSTAR tokens, 13 live governance boards, 8 redteam gates.
+// Logline: Build the capability graph: 20 NORTHSTAR tokens, 14 live governance boards, 8 redteam gates.
 //
 // Setup: Pure constants. Board paths are relative to the codex directory. Ghost boards are absent.
 //
 // Beats:
 //   1. Declare graph records.
 //   2. Emit 20 NORTHSTAR tokens. Bits match oodar cap_table.json.
-//   3. Emit 13 boards that exist in openOODA governance.
+//   3. Emit 14 boards that exist in openOODA governance.
 //   4. Emit 8 redteam gates.
 //   5. Emit per-tool cap bits and serialize JSON.
 
@@ -57,6 +57,11 @@ pub fn mcp_protocol_accepted(v: String) -> Bool {
     return v == "2024-11-05" || v == "2025-03-26" || v == "2025-06-18";
 }
 
+pub fn mcp_cap_push(l: List[McpCapability], token: String, kind: String, layer: String, params: Int, init_req: Bool, desc: String) -> List[McpCapability] {
+    let c: McpCapability = McpCapability { token: token, kind: kind, layer: layer, param_count: params, init_required: init_req, description: desc };
+    return list_push(l, c);
+}
+
 pub fn mcp_cap_new(token: String, kind: String, layer: String, params: Int, init_req: Bool, desc: String) -> McpCapability {
     return McpCapability { token: token, kind: kind, layer: layer, param_count: params, init_required: init_req, description: desc };
 }
@@ -88,39 +93,39 @@ pub fn mcp_graph_push_gate(g: &mut McpGraph, r: McpRedteamGate) { g.redteam_gate
 pub fn mcp_graph_push_tool_cap(g: &mut McpGraph, t: McpToolCap) { g.tool_caps = list_push(g.tool_caps, t); }
 
 pub fn mcp_graph_canonical_caps() -> List[McpCapability] {
-    let mut out: List[McpCapability] = list_new();
-    out = list_push(out, mcp_cap_new("FsReadCap",  "fs",   "core", 1, true, "Read filesystem"));
-    out = list_push(out, mcp_cap_new("FsWriteCap", "fs",   "core", 1, true, "Write filesystem"));
-    out = list_push(out, mcp_cap_new("NetCap",     "net",  "core", 0, true, "Raw network"));
-    out = list_push(out, mcp_cap_new("TcpCap",     "net",  "core", 2, true, "TCP"));
-    out = list_push(out, mcp_cap_new("UdpCap",     "net",  "core", 1, true, "UDP"));
-    out = list_push(out, mcp_cap_new("SysCap",     "sys",  "core", 0, true, "System command"));
-    out = list_push(out, mcp_cap_new("ProcessCap", "proc", "core", 0, true, "Spawn process"));
-    out = list_push(out, mcp_cap_new("EnvCap",     "env",  "core", 0, true, "Environment"));
-    out = list_push(out, mcp_cap_new("TimeCap",    "time", "core", 0, true, "Clock"));
-    out = list_push(out, mcp_cap_new("RandCap",    "rand", "core", 0, true, "Randomness"));
-    out = list_push(out, mcp_cap_new("AllocCap",   "mem",  "core", 0, true, "Heap"));
-    out = list_push(out, mcp_cap_new("ThreadCap",  "thr",  "core", 0, true, "Threads"));
-    out = list_push(out, mcp_cap_new("GpuCap",          "gpu",  "hw",   0, true, "GPU"));
-    out = list_push(out, mcp_cap_new("FfiCap",          "ffi",  "core", 0, true, "Foreign function"));
-    out = list_push(out, mcp_cap_new("FsCap",           "fs",   "core", 1, true, "Filesystem (subsumes read/write)"));
-    out = list_push(out, mcp_cap_new("ArenaCap",        "mem",  "core", 1, true, "Arena"));
-    out = list_push(out, mcp_cap_new("MetricsCap",      "met",  "core", 1, true, "Metrics"));
-    out = list_push(out, mcp_cap_new("SignCap",         "sec",  "core", 1, true, "Sign"));
-    out = list_push(out, mcp_cap_new("BindCap",         "net",  "core", 1, true, "Bind"));
-    out = list_push(out, mcp_cap_new("CompilerReadCap", "cmp",  "core", 1, true, "Compiler read"));
-    return out;
+    let mut caps: List[McpCapability] = list_new();
+    caps = mcp_cap_push(caps, "FsReadCap",  "fs",   "core", 1, true, "Read filesystem");
+    caps = mcp_cap_push(caps, "FsWriteCap", "fs",   "core", 1, true, "Write filesystem");
+    caps = mcp_cap_push(caps, "NetCap",     "net",  "core", 0, true, "Raw network");
+    caps = mcp_cap_push(caps, "TcpCap",     "net",  "core", 2, true, "TCP");
+    caps = mcp_cap_push(caps, "UdpCap",     "net",  "core", 1, true, "UDP");
+    caps = mcp_cap_push(caps, "SysCap",     "sys",  "core", 0, true, "System command");
+    caps = mcp_cap_push(caps, "ProcessCap", "proc", "core", 0, true, "Spawn process");
+    caps = mcp_cap_push(caps, "EnvCap",     "env",  "core", 0, true, "Environment");
+    caps = mcp_cap_push(caps, "TimeCap",    "time", "core", 0, true, "Clock");
+    caps = mcp_cap_push(caps, "RandCap",    "rand", "core", 0, true, "Randomness");
+    caps = mcp_cap_push(caps, "AllocCap",   "mem",  "core", 0, true, "Heap");
+    caps = mcp_cap_push(caps, "ThreadCap",  "thr",  "core", 0, true, "Threads");
+    caps = mcp_cap_push(caps, "GpuCap",          "gpu",  "hw",   0, true, "GPU");
+    caps = mcp_cap_push(caps, "FfiCap",          "ffi",  "core", 0, true, "Foreign function");
+    caps = mcp_cap_push(caps, "FsCap",           "fs",   "core", 1, true, "Filesystem (subsumes read/write)");
+    caps = mcp_cap_push(caps, "ArenaCap",        "mem",  "core", 1, true, "Arena");
+    caps = mcp_cap_push(caps, "MetricsCap",      "met",  "core", 1, true, "Metrics");
+    caps = mcp_cap_push(caps, "SignCap",         "sec",  "core", 1, true, "Sign");
+    caps = mcp_cap_push(caps, "BindCap",         "net",  "core", 1, true, "Bind");
+    caps = mcp_cap_push(caps, "CompilerReadCap", "cmp",  "core", 1, true, "Compiler read");
+    return caps;
 }
 
 pub fn mcp_graph_canonical_substrate_caps() -> List[McpCapability] {
-    let mut out: List[McpCapability] = mcp_graph_canonical_caps();
-    out = list_push(out, mcp_cap_new("AudioCap",        "aud",  "app",  1, true, "Audio (future)"));
-    out = list_push(out, mcp_cap_new("CameraCap",       "cam",  "app",  1, true, "Camera (future)"));
-    out = list_push(out, mcp_cap_new("UsbCap",          "usb",  "app",  1, true, "USB (future)"));
-    out = list_push(out, mcp_cap_new("HidCap",          "hid",  "app",  1, true, "HID (future)"));
-    out = list_push(out, mcp_cap_new("WindowCap",       "win",  "app",  1, true, "Window (future)"));
-    out = list_push(out, mcp_cap_new("FrameCap",        "frm",  "app",  1, true, "Frame (future)"));
-    return out;
+    let mut subs: List[McpCapability] = mcp_graph_canonical_caps();
+    subs = mcp_cap_push(subs, "AudioCap",        "aud",  "app",  1, true, "Audio (future)");
+    subs = mcp_cap_push(subs, "CameraCap",       "cam",  "app",  1, true, "Camera (future)");
+    subs = mcp_cap_push(subs, "UsbCap",          "usb",  "app",  1, true, "USB (future)");
+    subs = mcp_cap_push(subs, "HidCap",          "hid",  "app",  1, true, "HID (future)");
+    subs = mcp_cap_push(subs, "WindowCap",       "win",  "app",  1, true, "Window (future)");
+    subs = mcp_cap_push(subs, "FrameCap",        "frm",  "app",  1, true, "Frame (future)");
+    return subs;
 }
 
 pub fn mcp_graph_canonical_boards() -> List[McpBoard] {
@@ -138,6 +143,7 @@ pub fn mcp_graph_canonical_boards() -> List[McpBoard] {
     out = list_push(out, mcp_board_new("REDTEAM",   "practices/8d-red-team.oot",                   "8D red team", 11));
     out = list_push(out, mcp_board_new("WORKFLOW",  "practices/ooda-workflow.oot",                 "OODA workflow", 12));
     out = list_push(out, mcp_board_new("RELEASE",   "practices/release.oot",                       "Release practice", 13));
+    out = list_push(out, mcp_board_new("SPEC",      "spec.oot",                                    "Language specification", 14));
     return out;
 }
 
@@ -187,18 +193,14 @@ pub fn mcp_graph_canonical_tool_caps() -> List[McpToolCap] {
 
 pub fn mcp_graph_canonical(gold_sha: String, board_root: String) -> McpGraph {
     let mut g: McpGraph = mcp_graph_new(gold_sha, board_root);
-    let caps: List[McpCapability] = mcp_graph_canonical_caps();
-    let mut i: Int = 0;
-    while i < list_len(caps) { mcp_graph_push_cap(&mut g, list_get(caps, i)); i = i + 1; }
+    g.capabilities = mcp_graph_canonical_caps();
     let brds: List[McpBoard] = mcp_graph_canonical_boards();
     let mut j: Int = 0;
     while j < list_len(brds) { mcp_graph_push_board(&mut g, list_get(brds, j)); j = j + 1; }
     let gts: List[McpRedteamGate] = mcp_graph_canonical_gates();
     let mut k: Int = 0;
     while k < list_len(gts) { mcp_graph_push_gate(&mut g, list_get(gts, k)); k = k + 1; }
-    let tcs: List[McpToolCap] = mcp_graph_canonical_tool_caps();
-    let mut m: Int = 0;
-    while m < list_len(tcs) { mcp_graph_push_tool_cap(&mut g, list_get(tcs, m)); m = m + 1; }
+    g.tool_caps = mcp_graph_canonical_tool_caps();
     return g;
 }
 
