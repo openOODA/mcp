@@ -48,6 +48,10 @@ jobs:
         run: |
           test -x oodac/bin/oodac || chmod +x oodac/bin/oodac
           test -f oodar/core/blackbox/blackbox.c || { echo "missing oodar/core/blackbox/blackbox.c"; exit 1; }
+      - name: clang
+        run: sudo apt-get update && sudo apt-get install -y clang
+      - name: build oodar libs
+        run: make -C oodar/scripts -f Makefile modular
           test -f openOODA/rules.oot || { echo "missing openOODA/rules.oot"; exit 1; }
           command -v clang >/dev/null || { echo "clang required for oodac build (LLVM IR + oodar)"; exit 1; }
       - name: run suite proofs
@@ -88,6 +92,10 @@ jobs:
         run: |
           test -x oodac/bin/oodac || chmod +x oodac/bin/oodac
           test -f oodar/core/blackbox/blackbox.c || { echo "missing oodar/core/blackbox/blackbox.c"; exit 1; }
+      - name: clang
+        run: sudo apt-get update && sudo apt-get install -y clang
+      - name: build oodar libs
+        run: make -C oodar/scripts -f Makefile modular
           command -v clang >/dev/null || { echo "clang required for oodac build (LLVM IR + oodar)"; exit 1; }
       - name: build native binary
         working-directory: ${{ github.workspace }}
