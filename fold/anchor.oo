@@ -1,0 +1,23 @@
+// # MCP Crash Fold
+//
+// Logline: Front door for the crash-to-diagnosis fold: one crashed process in, one TSV report out.
+//
+// Setup: Seven units. Pure units carry no caps. Capped IO stays in run and
+//        fault. The tool is self-contained: no imports outside fold/ but std.
+//
+// Beats:
+//   1. fold_exit.oo is the pure exit classifier.
+//   2. fold_stderr.oo is the pure tail and escape formatter.
+//   3. fold_probe.oo is the pure next-probe decision table.
+//   4. fold_fault.oo locates file:line:col under FsReadCap.
+//   5. fold_run.oo spawns argv and captures under ProcessCap.
+//   6. fold_emit.oo validates and prints the OK plus RPT block.
+//   7. fold_tool.oo wires the crash_report tool to tools/call.
+
+import "fold_exit.oo";
+import "fold_stderr.oo";
+import "fold_probe.oo";
+import "fold_fault.oo";
+import "fold_run.oo";
+import "fold_emit.oo";
+import "fold_tool.oo";

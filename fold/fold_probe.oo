@@ -1,0 +1,61 @@
+// # MCP Crash Fold: Next-Probe Decision Table
+//
+// Logline: Pure map from exit, fault, and stderr values to the probe value.
+//
+// Setup: No IO. No caps. Fixed precedence: signal rows, then code 1, code 2,
+//        clean exit, and unknown. Reason tokens stay lowercase kebab.
+//
+// Beats:
+//   1. Signal rows key on the fault frame.
+//   2. Code rows key on stderr presence.
+//   3. Unknown exits fall through to a reason.
+//   4. Validate the probe value grammar for the emitter.
+
+pub fn fold_probe_suggest(exit_val: String, fault_val: String, stderr_val: String) -> String {
+    if str_starts_with(exit_val, "sig:") {
+        if fault_val != "-" {
+            return "probe_fold_fault " + fault_val;
+        }
+        return "none:no-fault-frame";
+    }
+    if exit_val == "code:1" {
+        if stderr_val != "-" {
+            return "probe_fold_stderr";
+        }
+        return "none:clean-stderr";
+    }
+    if exit_val == "code:2" {
+        return "probe_fold_run";
+    }
+    if exit_val == "code:0" {
+        return "none:clean-exit";
+    }
+    return "none:unknown-exit";
+}
+
+pub fn fold_probe_is_none(probe_val: String) -> Bool {
+    return str_starts_with(probe_val, "none:");
+}
+
+pub fn fold_probe_valid(probe_val: String) -> Bool {
+    if chars_len(probe_val) == 0 { return false; }
+    if str_contains(probe_val, "\t") { return false; }
+    if str_contains(probe_val, "\n") { return false; }
+    if str_contains(probe_val, "\r") { return false; }
+    if fold_probe_is_none(probe_val) {
+        return chars_len(probe_val) > 5;
+    }
+    let c0: String = char_at(probe_val, 0);
+    if !char_is_alpha(c0) && c0 != "_" { return false; }
+    let n: Int = chars_len(probe_val);
+    let mut i: Int = 1;
+    while i < n {
+        let c: String = char_at(probe_val, i);
+        if c == " " {
+            return i + 1 < n && char_at(probe_val, i + 1) != " ";
+        }
+        if !char_is_alpha(c) && !char_is_digit(c) && c != "_" { return false; }
+        i = i + 1;
+    }
+    return true;
+}

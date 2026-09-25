@@ -1,0 +1,130 @@
+// # MCP Fold Tool Probe
+//
+// Logline: Hostile test for crash_report: parse, caps, schema, and TSV-only text.
+//
+// Setup: Direct fold_tool_run rows plus live tools/call rows on a Ready session.
+//        initialize grants FsReadCap; ProcessCap needs an explicit grant.
+//
+// Beats:
+//   1. Wrap, JSON scalars, and the args array parse.
+//   2. Bad args refuse with no-spawn in the envelope.
+//   3. echo folds to an exact TSV block with no prose outside it.
+//   4. Cap gates deny 8 and 2 but admit 10; schema denies empty cmd.
+//   5. tools/list advertises crash_report.
+
+import "fold/fold_tool.oo";
+import "engine/core/mcp_server.oo";
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+
+fn probe_fold_tool_ready(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {
+    let init: String = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"clientInfo\":{\"name\":\"probe\",\"version\":\"0\"}}}";
+    let _: String = mcp_server_handle_body(fs, s, g, "codex-body", init, p);
+    return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
+}
+
+fn probe_fold_tool_call(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, id: Int, tool: String, args: String) -> String {
+    let body: String = "{\"jsonrpc\":\"2.0\",\"id\":" + id.to_string() + ",\"method\":\"tools/call\",\"params\":{\"name\":\"" + tool + "\",\"arguments\":" + args + "}}";
+    return mcp_server_handle_body(fs, s, g, "codex-body", body, p);
+}
+
+fn probe_fold_tool_nl_count(s: String) -> Int {
+    let mut c: Int = 0;
+    let mut rest: String = s;
+    while true {
+        let at: Int = str_index_of(rest, "\\n");
+        if at < 0 { break; }
+        c = c + 1;
+        rest = str_slice(rest, at + 2, chars_len(rest));
+    }
+    return c;
+}
+
+fn probe_fold_tool_big() -> String {
+    let mut s: String = "x";
+    let mut d: Int = 0;
+    while d < 12 {
+        s = s + s;
+        d = d + 1;
+    }
+    return str_slice(s, 0, 3000);
+}
+
+pub fn probe_fold_tool_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, String] {
+    if fold_tool_wrap("a\tb") != "{\"content\":[{\"type\":\"text\",\"text\":\"a\\tb\"}]}" { return Err("wrap bytes"); }
+    if fold_tool_json_str("{\"cmd\":\"/bin/echo\"}", "cmd") != "/bin/echo" { return Err("json cmd"); }
+    if fold_tool_json_str("{\"cmd\":\"a\\\"b\"}", "cmd") != "a\"b" { return Err("json unescape"); }
+    if fold_tool_json_str("{}", "cmd") != "" { return Err("json missing"); }
+    if fold_tool_json_int("{\"stderr_tail_bytes\":16}", "stderr_tail_bytes", 2048) != 16 { return Err("json int"); }
+    if fold_tool_json_int("{}", "stderr_tail_bytes", 2048) != 2048 { return Err("json int default"); }
+    if fold_tool_json_int("{\"stderr_tail_bytes\":-1}", "stderr_tail_bytes", 2048) != 2048 { return Err("json int negative"); }
+    if fold_tool_json_int("{\"stderr_tail_bytes\":\"16\"}", "stderr_tail_bytes", 2048) != 16 { return Err("json int quoted coerces"); }
+    if fold_tool_args_seek("{\"cmd\":\"x\"}") != 0 - 1 { return Err("seek absent"); }
+    if fold_tool_args_seek("{\"args\":\"x\"}") != 0 - 1 { return Err("seek non-array"); }
+    let at0: Int = fold_tool_args_seek("{\"args\":[\"a\",\"b\"]}");
+    if at0 < 0 { return Err("seek array"); }
+    let el0: List[String] = fold_tool_args_elems("{\"args\":[\"a\",\"b\"]}", at0);
+    if list_len(el0) != 2 { return Err("elem count"); }
+    if list_get(el0, 0) != "a" || list_get(el0, 1) != "b" { return Err("elem values"); }
+    let at1: Int = fold_tool_args_seek("{\"args\":[]}");
+    if at1 < 0 { return Err("seek empty array"); }
+    if list_len(fold_tool_args_elems("{\"args\":[]}", at1)) != 0 { return Err("empty array"); }
+    let at2: Int = fold_tool_args_seek("{\"args\":[\"a\\\"b\"]}");
+    let el2: List[String] = fold_tool_args_elems("{\"args\":[\"a\\\"b\"]}", at2);
+    if list_len(el2) != 1 || list_get(el2, 0) != "a\"b" { return Err("elem unescape"); }
+    let at3: Int = fold_tool_args_seek("{\"args\":[[\"x\"]]}");
+    if at3 < 0 { return Err("seek nested"); }
+    let el3: List[String] = fold_tool_args_elems("{\"args\":[[\"x\"]]}", at3);
+    if list_len(el3) != 1 || list_get(el3, 0) != "__fold_nested__" { return Err("nested marker"); }
+    let at4: Int = fold_tool_args_seek("{\"args\":[\"a}");
+    let el4: List[String] = fold_tool_args_elems("{\"args\":[\"a}", at4);
+    if list_len(el4) != 1 || list_get(el4, 0) != "__fold_nested__" { return Err("unterminated marker"); }
+    let at5: Int = fold_tool_args_seek("{\"args\":[\"a\",1]}");
+    let el5: List[String] = fold_tool_args_elems("{\"args\":[\"a\",1]}", at5);
+    if list_len(el5) != 2 || list_get(el5, 1) != "__fold_nested__" { return Err("scalar marker"); }
+    let nsp0: String = fold_tool_run(p, fs, "{}", 1);
+    if !str_contains(nsp0, "ERR\\tfold\\tno-spawn") { return Err("missing cmd must no-spawn"); }
+    let nsp1: String = fold_tool_run(p, fs, "{\"cmd\":\"/bin/echo\",\"args\":[\"a\",\"\",\"b\"]}", 1);
+    if !str_contains(nsp1, "ERR\\tfold\\tno-spawn") { return Err("empty element must no-spawn"); }
+    let nsp2: String = fold_tool_run(p, fs, "{\"cmd\":\"/bin/echo\",\"args\":[\"a\",\"b\",\"c\",\"d\",\"e\"]}", 1);
+    if !str_contains(nsp2, "ERR\\tfold\\tno-spawn") { return Err("five args must no-spawn"); }
+    let nsp3: String = fold_tool_run(p, fs, "{\"cmd\":\"/bin/echo\",\"args\":[[\"x\"]]}", 1);
+    if !str_contains(nsp3, "ERR\\tfold\\tno-spawn") { return Err("nested args must no-spawn"); }
+    if !str_starts_with(nsp0, "{\"content\":[{\"type\":\"text\",\"text\":\"") { return Err("error must wrap"); }
+    let good: String = fold_tool_run(p, fs, "{\"cmd\":\"/bin/echo\",\"args\":[\"-n\",\"hello\"]}", 9);
+    if !str_contains(good, "OK\\treport\\tr") { return Err("report must open with OK"); }
+    if !str_contains(good, "-9\\nRPT") { return Err("report must carry seq 9"); }
+    if !str_contains(good, "RPT\\trun\\t/bin/echo -n hello") { return Err("report run value"); }
+    if !str_contains(good, "RPT\\texit\\tcode:0") { return Err("report exit value"); }
+    if !str_contains(good, "RPT\\tfault\\t-") { return Err("report fault value"); }
+    if !str_contains(good, "RPT\\tstderr\\thello\\nRPT") { return Err("report stderr value"); }
+    if !str_contains(good, "RPT\\tprobe\\tnone:clean-exit") { return Err("report probe value"); }
+    if probe_fold_tool_nl_count(good) != 5 { return Err("report must hold exactly six lines"); }
+    if !str_starts_with(good, "{\"content\":[{\"type\":\"text\",\"text\":\"OK") { return Err("report must wrap"); }
+    if !str_ends_with(good, "\"}]}") { return Err("report must close the envelope"); }
+    let wide: String = fold_tool_run(p, fs, "{\"cmd\":\"/bin/echo\",\"args\":[\"-n\",\"" + probe_fold_tool_big() + "\"]}", 10);
+    if !str_contains(wide, "RPT\\tstderr\\t...") { return Err("wide stderr must cut"); }
+    let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "");
+    let mut s: McpSession = mcp_session_new();
+    let _: String = probe_fold_tool_ready(p, fs, &mut s, &g);
+    if s.caps_held != 8 { return Err("initialize must grant FsReadCap only"); }
+    let denied: String = probe_fold_tool_call(p, fs, &mut s, &g, 2, "crash_report", "{\"cmd\":\"/bin/echo\",\"args\":[\"-n\",\"srv\"]}");
+    if !str_contains(denied, "-32603") { return Err("default session must deny crash_report"); }
+    mcp_session_grant_cap(&mut s, 1 << 1);
+    if s.caps_held != 10 { return Err("grant must hold 10"); }
+    let srv: String = probe_fold_tool_call(p, fs, &mut s, &g, 3, "crash_report", "{\"cmd\":\"/bin/echo\",\"args\":[\"-n\",\"srv\"]}");
+    if !str_contains(srv, "RPT\\texit\\tcode:0") { return Err("granted session must fold"); }
+    if !str_contains(srv, "\"content\"") { return Err("server fold must wrap"); }
+    let noschema: String = probe_fold_tool_call(p, fs, &mut s, &g, 4, "crash_report", "{}");
+    if !str_contains(noschema, "-32602") { return Err("missing cmd must fail schema"); }
+    let neg: String = probe_fold_tool_call(p, fs, &mut s, &g, 5, "crash_report", "{\"cmd\":\"/bin/echo\",\"stderr_tail_bytes\":-1}");
+    if !str_contains(neg, "-32602") { return Err("negative budget must fail schema"); }
+    let mut s0: McpSession = mcp_session_new();
+    let _: String = probe_fold_tool_ready(p, fs, &mut s0, &g);
+    s0.caps_held = 2;
+    let denied0: String = probe_fold_tool_call(p, fs, &mut s0, &g, 2, "crash_report", "{\"cmd\":\"/bin/echo\"}");
+    if !str_contains(denied0, "-32603") { return Err("process-only session must deny crash_report"); }
+    let listed: String = mcp_server_handle_body(fs, &mut s, &g, "codex-body", "{\"jsonrpc\":\"2.0\",\"id\":6,\"method\":\"tools/list\",\"params\":{}}", p);
+    if !str_contains(listed, "crash_report") { return Err("tools/list must advertise crash_report"); }
+    return Ok(0);
+}

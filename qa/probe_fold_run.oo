@@ -1,0 +1,97 @@
+// # MCP Fold Run Probe
+//
+// Logline: Hostile test for spawn and capture: echo, exit 1, and a dump-and-fail victim.
+//
+// Setup: Needs ProcessCap plus FsReadCap, FsWriteCap for the autopsy lifecycle,
+//        and EnvCap to resolve OODA_COMPILER for the victim build. The fixed
+//        autopsy path is backed up before and restored after.
+//
+// Beats:
+//   1. Argv quoting pins display bytes.
+//   2. Empty commands and arg gaps refuse with no-spawn.
+//   3. echo yields code 0 with its capture; double-run is identical.
+//   4. A stale autopsy never promotes exit 1 to a signal.
+//   5. A dump-and-fail victim yields sig 11 with its exact fault.
+
+import "fold/fold_run.oo";
+import "fold/fold_fault.oo";
+import "engine/tool/mcp_tool_exec.oo";
+
+fn probe_fold_run_restore(fw: &FsWriteCap, fs: &FsReadCap, ap: String, bak: String, had: Bool) -> Result[Int, String] {
+    if had {
+        let rd: Result[String, String] = read_file(fs, bak);
+        if rd.is_err() { return Err("run restore unreadable"); }
+        let saved: String = match rd { Ok(s) => s, Err(_) => "" };
+        let w: Result[Void, String] = write_file(fw, ap, saved);
+        if w.is_err() { return Err("run restore failed"); }
+        let _rb: Result[Void, String] = oo_fs_remove_file(fw, bak);
+        return Ok(0);
+    }
+    let _rm: Result[Void, String] = oo_fs_remove_file(fw, ap);
+    let _rb2: Result[Void, String] = oo_fs_remove_file(fw, bak);
+    return Ok(0);
+}
+
+fn probe_fold_run_fail(fw: &FsWriteCap, fs: &FsReadCap, ap: String, bak: String, had: Bool, out_bin: String, msg: String) -> Result[Int, String] {
+    let _rmb: Result[Void, String] = oo_fs_remove_file(fw, out_bin);
+    let _rb: Result[Int, String] = probe_fold_run_restore(fw, fs, ap, bak, had);
+    return Err(msg);
+}
+
+pub fn probe_fold_run_run(p: &ProcessCap, fs: &FsReadCap, fw: &FsWriteCap, env: &EnvCap) -> Result[Int, String] {
+    let oodac: String = mcp_exec_resolve_compiler(fs, env);
+    if chars_len(oodac) == 0 { return Err("probe_fold_run: no compiler (need OODA_COMPILER or OODAC_BIN)"); }
+    if fold_run_argv("oodac", "check", "main.oo", "", "") != "oodac check main.oo" { return Err("argv join"); }
+    if fold_run_argv("bb", "run", "two words", "", "") != "bb run \"two words\"" { return Err("argv quote"); }
+    if fold_run_quote("a\"b") != "\"a\\\"b\"" { return Err("quote escape"); }
+    if fold_run_quote("plain") != "plain" { return Err("quote plain"); }
+    let ap: String = fold_fault_autopsy_path();
+    let bak: String = ".blackbox/autopsy.fold.bak";
+    let has_mcp: Bool = path_exists(fs, "mcp/qa");
+    let pfx: String = if has_mcp { "mcp/qa/" } else { "qa/" };
+    let f_fixture: String = pfx + "fixture_fold_crash.oo";
+    let out_bin: String = pfx + "probe_fold_crash_out";
+    if !path_exists(fs, f_fixture) { return Err("probe_fold_run: victim fixture missing"); }
+    let _mk: Result[Void, String] = oo_fs_mkdir(fw, ".blackbox");
+    let had: Bool = path_exists(fs, ap);
+    if had {
+        let rd0: Result[String, String] = read_file(fs, ap);
+        if rd0.is_err() { return Err("run setup unreadable"); }
+        let saved0: String = match rd0 { Ok(s) => s, Err(_) => "" };
+        let wb: Result[Void, String] = write_file(fw, bak, saved0);
+        if wb.is_err() { return Err("run backup failed"); }
+    }
+    let e1: FoldRun = fold_run_capture(p, fs, "", "", "", "", "");
+    if e1.err != "no-spawn" { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "empty cmd must refuse"); }
+    let e2: FoldRun = fold_run_capture(p, fs, "/bin/echo", "a", "", "b", "");
+    if e2.err != "no-spawn" { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "arg gap must refuse"); }
+    let c1: FoldRun = fold_run_capture(p, fs, "/bin/echo", "hello", "", "", "");
+    if chars_len(c1.err) > 0 { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "echo must spawn"); }
+    if c1.exit_val != "code:0" { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "echo must exit code:0"); }
+    if !str_contains(c1.captured, "hello") { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "echo must capture"); }
+    if c1.argv != "/bin/echo hello" { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "echo argv"); }
+    let c2: FoldRun = fold_run_capture(p, fs, "/bin/echo", "hello", "", "", "");
+    if chars_len(c2.err) > 0 { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "echo rerun must spawn"); }
+    if c2.exit_val != c1.exit_val || c2.captured != c1.captured || c2.argv != c1.argv { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "double-run drift on echo"); }
+    let stale: String = "{\"crash_signal\": 11, \"signal_name\": \"SIGSEGV\", \"failure_coordinate\": \"old/crash.oo:1:1:fn\"}";
+    let ws: Result[Void, String] = write_file(fw, ap, stale);
+    if ws.is_err() { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "stale autopsy write failed"); }
+    let c3: FoldRun = fold_run_capture(p, fs, "/bin/false", "", "", "", "");
+    if chars_len(c3.err) > 0 { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "false must spawn"); }
+    if c3.exit_val != "code:1" { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "stale autopsy must not promote exit 1, got " + c3.exit_val); }
+    if chars_len(c3.captured) != 0 { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "false must capture empty"); }
+    let _rms: Result[Void, String] = oo_fs_remove_file(fw, ap);
+    let bb: Result[String, String] = sys_exec(p, oodac, "build", f_fixture, "-o", out_bin);
+    if bb.is_err() { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "victim build failed"); }
+    if !path_exists(fs, out_bin) { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "victim binary missing"); }
+    let _rm0: Result[Void, String] = oo_fs_remove_file(fw, ap);
+    let c4: FoldRun = fold_run_capture(p, fs, out_bin, "", "", "", "");
+    if chars_len(c4.err) > 0 { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "victim run must spawn"); }
+    if c4.exit_val != "sig:11:SIGSEGV" { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "victim must attribute sig:11:SIGSEGV, got " + c4.exit_val); }
+    if !path_exists(fs, ap) { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "victim must write fresh autopsy"); }
+    if !str_contains(c4.captured, "fold-crash-victim alive") { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "victim must capture liveness"); }
+    let flt: String = fold_fault_locate(fs, ap, c4.captured);
+    if flt != "mcp/qa/fixture_fold_crash.oo:18:5" { return probe_fold_run_fail(fw, fs, ap, bak, had, out_bin, "victim fault must be exact, got " + flt); }
+    let _rmb2: Result[Void, String] = oo_fs_remove_file(fw, out_bin);
+    return probe_fold_run_restore(fw, fs, ap, bak, had);
+}

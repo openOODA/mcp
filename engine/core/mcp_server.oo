@@ -95,7 +95,8 @@ pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, 
     if method == "notifications/roots/list_changed" {
         if s.phase != mcp_phase_negot() && s.phase != mcp_phase_ready() { return ""; }
         let rid: String = mcp_session_next_server_id(s);
-        s.pending_roots_id = rid;
+        // Store a copy: the backend aliases a named local into the field.
+        s.pending_roots_id = str_slice(rid, 0, chars_len(rid));
         return mcp_roots_list_request(rid);
     }
 

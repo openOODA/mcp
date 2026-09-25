@@ -1,0 +1,63 @@
+// # MCP Fold Stderr Probe
+//
+// Logline: Hostile test for the tail cut, truncation mark, escapes, and empty dash.
+//
+// Setup: Pure. Cuts are byte-exact. The 2048 boundary carries no mark.
+//
+// Beats:
+//   1. Empty input emits dash, short input passes through.
+//   2. Escapes land backslash-first in one pass.
+//   3. Over-budget cuts carry the ... mark inside the budget.
+//   4. Budget clamp pins and grammar validation.
+
+import "fold/fold_stderr.oo";
+
+fn probe_fold_stderr_big(n: Int) -> String {
+    let mut s: String = "x";
+    let mut d: Int = 0;
+    while d < n {
+        s = s + s;
+        d = d + 1;
+    }
+    return s;
+}
+
+pub fn probe_fold_stderr_run() -> Result[Int, String] {
+    if fold_stderr_format("") != "-" { return Err("empty must emit dash"); }
+    if fold_stderr_format("hi") != "hi" { return Err("short input must pass through"); }
+    if fold_stderr_escape("a\tb\nc\rd\\e") != "a\\tb\\nc\\rd\\\\e" { return Err("escape order wrong"); }
+    if fold_stderr_escape("\\") != "\\\\" { return Err("lone backslash must double"); }
+    if fold_stderr_escape("plain") != "plain" { return Err("plain text must survive"); }
+    let big: String = probe_fold_stderr_big(12);
+    if bytes_len(big) != 4096 { return Err("doubling setup drifted"); }
+    let cut: String = fold_stderr_tail(big, 2048);
+    if bytes_len(cut) != 2048 { return Err("cut must fill the budget"); }
+    if !str_starts_with(cut, "...") { return Err("cut must carry the mark"); }
+    if cut != "..." + byte_slice(big, 2051, 4096) { return Err("cut must keep the tail bytes"); }
+    let exact: String = byte_slice(big, 0, 2048);
+    if fold_stderr_tail(exact, 2048) != exact { return Err("exact budget must carry no mark"); }
+    let over: String = byte_slice(big, 0, 2049);
+    if !str_starts_with(fold_stderr_tail(over, 2048), "...") { return Err("one over must mark"); }
+    if fold_stderr_clamp_budget(0) != 2048 { return Err("clamp 0"); }
+    if fold_stderr_clamp_budget(0 - 5) != 2048 { return Err("clamp negative"); }
+    if fold_stderr_clamp_budget(1) != 4 { return Err("clamp 1"); }
+    if fold_stderr_clamp_budget(3) != 4 { return Err("clamp 3"); }
+    if fold_stderr_clamp_budget(4) != 4 { return Err("clamp 4"); }
+    if fold_stderr_clamp_budget(16) != 16 { return Err("clamp 16"); }
+    if fold_stderr_clamp_budget(2048) != 2048 { return Err("clamp 2048"); }
+    if fold_stderr_clamp_budget(65536) != 65536 { return Err("clamp 65536"); }
+    if fold_stderr_clamp_budget(70000) != 65536 { return Err("clamp 70000"); }
+    let small: String = fold_stderr_tail(byte_slice(big, 0, 100), 16);
+    if bytes_len(small) != 16 { return Err("small budget must fill"); }
+    if !str_starts_with(small, "...") { return Err("small budget must mark"); }
+    if fold_stderr_format_budget("", 16) != "-" { return Err("budget empty must emit dash"); }
+    if fold_stderr_format_budget("hi", 16) != "hi" { return Err("budget short must pass"); }
+    if fold_stderr_format("a\nb") != "a\\nb" { return Err("format must escape"); }
+    if !fold_stderr_valid("-") { return Err("valid dash"); }
+    if !fold_stderr_valid("x") { return Err("valid text"); }
+    if fold_stderr_valid("") { return Err("valid empty"); }
+    if fold_stderr_valid("a\tb") { return Err("valid raw tab"); }
+    if fold_stderr_valid("a\nb") { return Err("valid raw newline"); }
+    if fold_stderr_valid("a\rb") { return Err("valid raw cr"); }
+    return Ok(0);
+}

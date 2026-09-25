@@ -47,7 +47,8 @@ pub fn mcp_dispatch_orient(method: String, params: String) -> McpOrient {
         o.tool_name = mcp_json_extract_string(params, "name");
         let args: String = mcp_json_extract_raw(params, "arguments");
         if chars_len(args) > 0 {
-            o.tool_args = args;
+            // Store a copy: the backend aliases a named local into the field.
+            o.tool_args = str_slice(args, 0, chars_len(args));
         }
         if chars_len(o.tool_name) > 0 { o.extracted = true; }
         return o;

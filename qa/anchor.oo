@@ -1,12 +1,12 @@
 // # MCP QA Index
 //
-// Logline: Index of the fifteen hostile probe drivers. A driver that cannot fail is a defect.
+// Logline: Index of the twenty-two hostile probe drivers. A driver that cannot fail is a defect.
 //
 // Setup: Each probe exports probe_*_run. suite.oo is the entry CI builds.
 //
 // Beats:
 //   1. probe_initialize.oo — initialize, protocolVersion, second init, alias refuse.
-//   2. probe_tools_list.oo — 26 live tools, no ghost names.
+//   2. probe_tools_list.oo — 27 live tools, no ghost names.
 //   3. probe_tool_call.oo — schema, unknown tool, missing FsReadCap.
 //   4. probe_resources_list.oo — list, read, file URI, em/metrics tier.
 //   5. probe_ping.oo — ping, cancel, rate window.
@@ -14,14 +14,23 @@
 //   7. probe_merge.oo — config splice and real-file write.
 //   8. probe_redteam.oo — eight gates pass.
 //   9. probe_token.oo — estimate_tokens, token_status, token_ingest.
+//   24. probe_fuzz_ingest.oo — 200 seeded mutations; bad input never accrues.
 //   10. probe_protocol.oo — batch, prompts, roots, ETag, shutdown, exit.
 //   11. probe_slice.oo — rules slicing by topic.
 //   12. probe_attenuation.oo — capability attenuation tokens.
 //   13. probe_exec.oo — LLVM oodac_check/emit/build, residual-exit 2, max_chars clamp.
 //   14. probe_ecap_injection.oo — injected exfiltration refused at oodac_check/build (Task 2b).
 //   15. probe_cwd_jail.oo — poisoned spawner CWD maps to the named cwd-jail stage.
-//   16. suite.oo runs the surface verifier plus all probes (CI entry).
-//   fixture_exec.oo and fixture_ecap_evil.oo are runtime victims, never imported (they own a main).
+//   16. probe_fold_run.oo — spawn echo, exit 1, stale guard, real SEGV.
+//   17. probe_fold_exit.oo — code vs sig grammar, 128+N preserved.
+//   18. probe_fold_fault.oo — autopsy path, stderr match, unknown dash.
+//   19. probe_fold_stderr.oo — tail cut, 2048 budget, escapes, empty dash.
+//   20. probe_fold_probe.oo — decision table rows including none reasons.
+//   21. probe_fold_emit.oo — fixed order, reject extra and missing lines.
+//   22. probe_fold_tool.oo — tools/call schema, cap gate, TSV-only text.
+//   23. suite.oo runs the surface verifier plus all probes (CI entry).
+//   fixture_exec.oo, fixture_ecap_evil.oo, and fixture_fold_crash.oo are runtime
+//   victims, never imported (they own a main).
 
 import "suite.oo";
 import "probe_initialize.oo";
@@ -39,3 +48,10 @@ import "probe_attenuation.oo";
 import "probe_exec.oo";
 import "probe_cwd_jail.oo";
 import "probe_ecap_injection.oo";
+import "probe_fold_run.oo";
+import "probe_fold_exit.oo";
+import "probe_fold_fault.oo";
+import "probe_fold_stderr.oo";
+import "probe_fold_probe.oo";
+import "probe_fold_emit.oo";
+import "probe_fold_tool.oo";

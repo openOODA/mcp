@@ -1,6 +1,6 @@
 // # MCP Tools List Probe
 //
-// Logline: Hostile test that tools/list advertises the live 26 tools and not deleted names.
+// Logline: Hostile test that tools/list advertises the live 27 tools and not deleted names.
 //
 // Setup: Session must reach Ready. Ghost tools must be absent.
 //
@@ -31,7 +31,7 @@ pub fn probe_tools_list_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, Strin
     if str_contains(r, "get_milestone_status") { return Err("ghost tool get_milestone_status still listed"); }
     if str_contains(r, "ooda.northstar") { return Err("ghost tool ooda.northstar still listed"); }
     if str_contains(r, "get_em_swarm") { return Err("ghost tool get_em_swarm still listed"); }
-    if mcp_tool_count() != 26 { return Err("tool count drifted from 26"); }
+    if mcp_tool_count() != 27 { return Err("tool count drifted from 27"); }
     if !str_contains(r, "estimate_tokens") { return Err("tools/list missing estimate_tokens"); }
     if !str_contains(r, "token_status") { return Err("tools/list missing token_status"); }
     if !str_contains(r, "token_ingest") { return Err("tools/list missing token_ingest"); }
@@ -41,6 +41,7 @@ pub fn probe_tools_list_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, Strin
     if str_contains(r, "\"enum\":[\"llvm\",\"c\"]") { return Err("oodac_emit must not advertise live backend c"); }
     if !str_contains(r, "\"enum\":[\"llvm\"]") { return Err("oodac_emit live enum must be llvm"); }
     if !str_contains(r, "oodac_build") { return Err("tools/list missing oodac_build"); }
+    if !str_contains(r, "crash_report") { return Err("tools/list missing crash_report"); }
     if str_contains(r, "estimate_chars") { return Err("ghost tool estimate_chars still listed"); }
     return Ok(0);
 }

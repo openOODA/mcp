@@ -1,0 +1,105 @@
+// # MCP Fold Fault Probe
+//
+// Logline: Hostile test for the fault locator: autopsy first, stderr scan, unknown dash.
+//
+// Setup: Canned autopsy JSON plus one real-file roundtrip with backup and restore.
+//
+// Beats:
+//   1. Autopsy coordinates normalize with and without fn tails.
+//   2. Missing and unknown coordinates fall through to stderr.
+//   3. The stderr scan takes the first file:line:col and skips timestamps.
+//   4. Traversal paths skip the autopsy leg; the fixed path reads the file.
+
+import "fold/fold_fault.oo";
+
+fn probe_fold_fault_restore(fw: &FsWriteCap, fs: &FsReadCap, ap: String, bak: String, had: Bool) -> Result[Int, String] {
+    if had {
+        let rd: Result[String, String] = read_file(fs, bak);
+        if rd.is_err() { return Err("fault restore unreadable"); }
+        let saved: String = match rd { Ok(s) => s, Err(_) => "" };
+        let w: Result[Void, String] = write_file(fw, ap, saved);
+        if w.is_err() { return Err("fault restore failed"); }
+        let _rb: Result[Void, String] = oo_fs_remove_file(fw, bak);
+        return Ok(0);
+    }
+    let _rm: Result[Void, String] = oo_fs_remove_file(fw, ap);
+    let _rb2: Result[Void, String] = oo_fs_remove_file(fw, bak);
+    return Ok(0);
+}
+
+fn probe_fold_fault_file(fs: &FsReadCap, fw: &FsWriteCap) -> Result[Int, String] {
+    let ap: String = fold_fault_autopsy_path();
+    let bak: String = ".blackbox/autopsy.fold.bak";
+    let _mk: Result[Void, String] = oo_fs_mkdir(fw, ".blackbox");
+    let had: Bool = path_exists(fs, ap);
+    if had {
+        let rd0: Result[String, String] = read_file(fs, ap);
+        if rd0.is_err() { return Err("fault setup unreadable"); }
+        let saved0: String = match rd0 { Ok(s) => s, Err(_) => "" };
+        let wb: Result[Void, String] = write_file(fw, bak, saved0);
+        if wb.is_err() { return Err("fault backup failed"); }
+    }
+    let w1: Result[Void, String] = write_file(fw, ap, "{\"crash_signal\": 11, \"failure_coordinate\": \"w.oo:3:4:fn\"}");
+    if w1.is_err() {
+        let _rb1: Result[Int, String] = probe_fold_fault_restore(fw, fs, ap, bak, had);
+        return Err("fault autopsy write failed");
+    }
+    let got: String = fold_fault_locate(fs, ap, "clean");
+    if got != "w.oo:3:4" {
+        let _rb2: Result[Int, String] = probe_fold_fault_restore(fw, fs, ap, bak, had);
+        return Err("fixed path must locate, got " + got);
+    }
+    let _rm: Result[Void, String] = oo_fs_remove_file(fw, ap);
+    let gone: String = fold_fault_locate(fs, ap, "clean");
+    if gone != "-" {
+        let _rb3: Result[Int, String] = probe_fold_fault_restore(fw, fs, ap, bak, had);
+        return Err("missing autopsy must fall to dash");
+    }
+    return probe_fold_fault_restore(fw, fs, ap, bak, had);
+}
+
+pub fn probe_fold_fault_run(fs: &FsReadCap, fw: &FsWriteCap) -> Result[Int, String] {
+    if fold_fault_autopsy_path() != ".blackbox/autopsy.json" { return Err("fixed path drifted"); }
+    let j1: String = "{\"crash_signal\": 11, \"signal_name\": \"SIGSEGV\", \"failure_coordinate\": \"core/alloc/arena.oo:42:5:arena_alloc\"}";
+    if fold_fault_from_text(j1, "clean") != "core/alloc/arena.oo:42:5" { return Err("fn tail must drop"); }
+    let j2: String = "{\"failure_coordinate\": \"emit/llvm/ll_emit.oo:142:8\"}";
+    if fold_fault_from_text(j2, "clean") != "emit/llvm/ll_emit.oo:142:8" { return Err("bare triple must survive"); }
+    let j3: String = "{\"failure_coordinate\": \"unknown:0:0:unknown\"}";
+    if fold_fault_from_text(j3, "ERR main.oo:9:3: mismatch") != "main.oo:9:3" { return Err("unknown must fall to stderr"); }
+    if fold_fault_from_text("{}", "ERR main.oo:9:3: mismatch") != "main.oo:9:3" { return Err("missing must fall to stderr"); }
+    if fold_fault_from_text("", "") != "-" { return Err("empty must emit dash"); }
+    if fold_fault_from_text("{}", "clean output") != "-" { return Err("no match must emit dash"); }
+    if fold_fault_from_text("{}", "at 12:30:45 failed") != "-" { return Err("timestamp must not match"); }
+    if fold_fault_from_text("{}", "b.oo:1:1 then a.oo:2:2") != "b.oo:1:1" { return Err("first match must win"); }
+    if fold_fault_from_text("{}", "addr 0x00:11:22 oops") != "-" { return Err("hex must not match"); }
+    if fold_fault_from_text("{}", "x/bad:1:2:3 tail") != "x/bad:1:2" { return Err("stderr fn tail must drop"); }
+    let jtrap: String = "{\"note\": \"see \"failure_coordinate\" docs\", \"failure_coordinate\": \"q.oo:7:7\"}";
+    if fold_fault_from_text(jtrap, "clean") != "-" { return Err("quoted key must miss soft, not confuse"); }
+    if fold_fault_json_str(j1, "signal_name") != "SIGSEGV" { return Err("json string"); }
+    if fold_fault_json_str(j1, "crash_signal") != "11" { return Err("json number"); }
+    if fold_fault_json_str(j1, "nope") != "" { return Err("json missing"); }
+    if fold_fault_json_str("", "k") != "" { return Err("json empty"); }
+    if fold_fault_parse_int("11") != 11 { return Err("parse 11"); }
+    if fold_fault_parse_int("-3") != 0 - 3 { return Err("parse negative"); }
+    if fold_fault_parse_int("0-3") != 0 { return Err("parse stops at junk"); }
+    if fold_fault_parse_int("0") != 0 { return Err("parse 0"); }
+    if fold_fault_parse_int("") != 0 { return Err("parse empty"); }
+    if fold_fault_parse_int("12x") != 12 { return Err("parse prefix"); }
+    if fold_fault_parse_int("x") != 0 { return Err("parse junk"); }
+    if fold_fault_norm_coord("a.oo:1:2") != "a.oo:1:2" { return Err("norm triple"); }
+    if fold_fault_norm_coord("a.oo:1:2:fn") != "a.oo:1:2" { return Err("norm fn tail"); }
+    if fold_fault_norm_coord("unknown:0:0:unknown") != "" { return Err("norm unknown"); }
+    if fold_fault_norm_coord("no-colons") != "" { return Err("norm flat"); }
+    if fold_fault_norm_coord("12:30:45") != "" { return Err("norm timestamp"); }
+    if fold_fault_norm_coord("a.oo:0:2") != "" { return Err("norm zero line"); }
+    if fold_fault_norm_coord("a.oo:007:2") != "" { return Err("norm leading zeros"); }
+    if fold_fault_norm_coord("/abs/path.oo:3:4") != "/abs/path.oo:3:4" { return Err("norm absolute"); }
+    if fold_fault_locate(fs, "../evil.json", "x.oo:1:1 oops") != "x.oo:1:1" { return Err("traversal must skip autopsy leg"); }
+    if fold_fault_locate(fs, "other.json", "clean") != "-" { return Err("non-fixed must skip autopsy leg"); }
+    if !fold_fault_valid("-") { return Err("valid dash"); }
+    if !fold_fault_valid("a.oo:1:2") { return Err("valid triple"); }
+    if fold_fault_valid("") { return Err("valid empty"); }
+    if fold_fault_valid("a.oo:1:2:fn") { return Err("valid fn tail"); }
+    if fold_fault_valid("12:30:45") { return Err("valid timestamp"); }
+    return probe_fold_fault_file(fs, fw);
+}

@@ -1,13 +1,14 @@
 // # MCP Tool Dispatch
 //
-// Logline: Route tools/call to one of 26 typed tools and wrap the result. Unknown tool fails closed.
+// Logline: Route tools/call to one of 27 typed tools and wrap the result. Unknown tool fails closed.
 //
 // Setup: Schema first. Board tools call mcp_tool_read_board. Exec tools (oodac_*) run under
-//        the operator ProcessCap against s.exec_oodac. No health alias. No deleted-board tools.
+//        the operator ProcessCap against s.exec_oodac. crash_report folds argv into TSV.
+//        No health alias. No deleted-board tools.
 //
 // Beats:
 //   1. Validate schema.
-//   2. Dispatch the 26 names.
+//   2. Dispatch the 27 names.
 //   3. Unknown name returns an error object.
 
 import "engine/core/mcp_json.oo";
@@ -22,6 +23,7 @@ import "engine/tool/mcp_tool_token.oo";
 import "engine/tool/mcp_tool_slice.oo";
 import "engine/tool/mcp_tool_exec.oo";
 import "engine/state/mcp_attenuation.oo";
+import "fold/fold_tool.oo";
 
 pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &McpGraph, s: &mut McpSession, fs: &FsReadCap, p: &ProcessCap) -> String {
     if name == "get_capability_graph" {
@@ -86,6 +88,9 @@ pub fn mcp_tool_dispatch(name: String, args: String, codex_text: String, g: &Mcp
     }
     if name == "oodac_build" {
         return mcp_tool_wrap(mcp_exec_build(p, s.exec_oodac, mcp_tool_arg_string(args, "entry", ""), mcp_tool_arg_string(args, "out", ""), mcp_tool_arg_int(args, "max_chars", mcp_exec_default_max())));
+    }
+    if name == "crash_report" {
+        return fold_tool_run(p, fs, args, s.request_seq);
     }
     return "{\"error\":\"unknown tool: " + name + "\"}";
 }

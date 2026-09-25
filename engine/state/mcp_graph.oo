@@ -188,6 +188,7 @@ pub fn mcp_graph_canonical_tool_caps() -> List[McpToolCap] {
     out = list_push(out, McpToolCap { tool: "oodac_check",              required_caps: 8 });
     out = list_push(out, McpToolCap { tool: "oodac_emit",               required_caps: 8 });
     out = list_push(out, McpToolCap { tool: "oodac_build",              required_caps: 8 });
+    out = list_push(out, McpToolCap { tool: "crash_report",             required_caps: 10 });
     return out;
 }
 

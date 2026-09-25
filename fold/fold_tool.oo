@@ -1,0 +1,166 @@
+// # MCP Crash Fold: crash_report Tool
+//
+// Logline: tools/call wiring for crash_report: parse args, run the fold, wrap TSV.
+//
+// Setup: Self-contained: local JSON scan and content envelope, because fold
+//        imports nothing outside fold/ but std. Operator ProcessCap plus
+//        FsReadCap; required mask is 10. A missing or mistyped top-level args
+//        value means absent; a present array with a bad element refuses with
+//        no-spawn. Run id is r<date-ms>-<seq>; a date failure falls back to
+//        r0-<seq> without failing the report. bad-autopsy is reserved: corrupt
+//        autopsy input degrades leg by leg, so every spawn folds into a report.
+//
+// Beats:
+//   1. Parse cmd, the args array, and the budget.
+//   2. Unescape JSON strings and wrap the envelope.
+//   3. Run spawn, fault, stderr, probe, and emit.
+//   4. Map every failure to one ERR fold line in the envelope.
+
+import "fold_run.oo";
+import "fold_fault.oo";
+import "fold_stderr.oo";
+import "fold_probe.oo";
+import "fold_emit.oo";
+
+fn fold_tool_unescape(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "\\" && i + 1 < n {
+            let e2: String = char_at(s, i + 1);
+            if e2 == "n" { out = out + "\n"; } else if e2 == "t" { out = out + "\t"; } else if e2 == "r" { out = out + "\r"; } else { out = out + e2; }
+            i = i + 2;
+            continue;
+        }
+        out = out + c;
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn fold_tool_json_str(args: String, key: String) -> String {
+    return fold_tool_unescape(fold_fault_json_str(args, key));
+}
+
+pub fn fold_tool_json_int(args: String, key: String, default: Int) -> Int {
+    let raw: String = fold_fault_json_str(args, key);
+    if chars_len(raw) == 0 { return default; }
+    let mut i: Int = 0;
+    while i < chars_len(raw) {
+        if !char_is_digit(char_at(raw, i)) { return default; }
+        i = i + 1;
+    }
+    return fold_fault_parse_int(raw);
+}
+
+pub fn fold_tool_args_seek(args: String) -> Int {
+    let pat: String = "\"args\"";
+    let at: Int = str_index_of(args, pat);
+    if at < 0 { return 0 - 1; }
+    let n: Int = chars_len(args);
+    let mut j: Int = at + chars_len(pat);
+    while j < n {
+        let w: String = char_at(args, j);
+        if w != " " && w != "\t" && w != "\n" && w != "\r" { break; }
+        j = j + 1;
+    }
+    if j >= n || char_at(args, j) != ":" { return 0 - 1; }
+    j = j + 1;
+    while j < n {
+        let w2: String = char_at(args, j);
+        if w2 != " " && w2 != "\t" && w2 != "\n" && w2 != "\r" { break; }
+        j = j + 1;
+    }
+    if j >= n || char_at(args, j) != "[" { return 0 - 1; }
+    return j + 1;
+}
+
+pub fn fold_tool_args_elems(args: String, start: Int) -> List[String] {
+    let mut out: List[String] = list_new();
+    let n: Int = chars_len(args);
+    let mut j: Int = start;
+    let mut count: Int = 0;
+    while j < n && count < 6 {
+        while j < n {
+            let w: String = char_at(args, j);
+            if w != " " && w != "\t" && w != "\n" && w != "\r" && w != "," { break; }
+            j = j + 1;
+        }
+        if j >= n { break; }
+        let c0: String = char_at(args, j);
+        if c0 == "]" { break; }
+        if c0 != "\"" {
+            out = list_push(out, "__fold_nested__");
+            return out;
+        }
+        let mut k: Int = j + 1;
+        let mut esc: Bool = false;
+        let mut done: Bool = false;
+        while k < n {
+            let c: String = char_at(args, k);
+            if esc { esc = false; } else if c == "\\" { esc = true; } else if c == "\"" { done = true; break; }
+            k = k + 1;
+        }
+        if !done {
+            out = list_push(out, "__fold_nested__");
+            return out;
+        }
+        out = list_push(out, fold_tool_unescape(str_slice(args, j + 1, k)));
+        count = count + 1;
+        j = k + 1;
+    }
+    return out;
+}
+
+pub fn fold_tool_wrap(text: String) -> String {
+    let n: Int = chars_len(text);
+    let mut esc: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(text, i);
+        if c == "\\" { esc = esc + "\\\\"; } else if c == "\"" { esc = esc + "\\\""; } else if c == "\n" { esc = esc + "\\n"; } else if c == "\r" { esc = esc + "\\r"; } else if c == "\t" { esc = esc + "\\t"; } else { esc = esc + c; }
+        i = i + 1;
+    }
+    return "{\"content\":[{\"type\":\"text\",\"text\":\"" + esc + "\"}]}";
+}
+
+pub fn fold_tool_run(p: &ProcessCap, fs: &FsReadCap, args: String, seq: Int) -> String {
+    let cmd: String = fold_tool_json_str(args, "cmd");
+    if chars_len(cmd) == 0 { return fold_tool_wrap("ERR\tfold\tno-spawn"); }
+    let mut al: List[String] = list_new();
+    let at: Int = fold_tool_args_seek(args);
+    if at >= 0 { al = fold_tool_args_elems(args, at); }
+    if list_len(al) > 4 { return fold_tool_wrap("ERR\tfold\tno-spawn"); }
+    let mut i: Int = 0;
+    while i < list_len(al) {
+        let e: String = list_get(al, i);
+        if chars_len(e) == 0 || e == "__fold_nested__" { return fold_tool_wrap("ERR\tfold\tno-spawn"); }
+        i = i + 1;
+    }
+    let a1: String = if list_len(al) > 0 { list_get(al, 0) } else { "" };
+    let a2: String = if list_len(al) > 1 { list_get(al, 1) } else { "" };
+    let a3: String = if list_len(al) > 2 { list_get(al, 2) } else { "" };
+    let a4: String = if list_len(al) > 3 { list_get(al, 3) } else { "" };
+    let budget: Int = fold_tool_json_int(args, "stderr_tail_bytes", 2048);
+    let cap: FoldRun = fold_run_capture(p, fs, cmd, a1, a2, a3, a4);
+    if chars_len(cap.err) > 0 {
+        return fold_tool_wrap("ERR\tfold\t" + cap.err);
+    }
+    let fault_v: String = fold_fault_locate(fs, fold_fault_autopsy_path(), cap.captured);
+    let stderr_v: String = fold_stderr_format_budget(cap.captured, budget);
+    let probe_v: String = fold_probe_suggest(cap.exit_val, fault_v, stderr_v);
+    let run_v: String = fold_stderr_escape(cap.argv);
+    let ms_r: Result[String, String] = sys_exec(p, "date", "+%s%3N");
+    let mut ms: String = match ms_r { Ok(s) => s, Err(_) => "" };
+    if str_ends_with(ms, "\n") { ms = str_slice(ms, 0, chars_len(ms) - 1); }
+    let rid: String = fold_emit_run_id(ms, seq);
+    let blk: Result[String, String] = fold_emit_block(rid, run_v, cap.exit_val, fault_v, stderr_v, probe_v);
+    if blk.is_err() {
+        let e3: String = match blk { Ok(_) => "", Err(m) => m };
+        return fold_tool_wrap("ERR\tfold\t" + e3);
+    }
+    let text: String = match blk { Ok(b) => b, Err(_) => "" };
+    return fold_tool_wrap(text);
+}

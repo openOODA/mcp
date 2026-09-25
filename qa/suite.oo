@@ -1,14 +1,15 @@
 // # Test MCP
 //
-// Logline: Run the fifteen probe functions and the surface verifier. Any Err fails the package.
+// Logline: Run the twenty-two probe functions and the surface verifier. Any Err fails the package.
 //
 // Setup: In-process. Merge probe needs FsWriteCap. Exec probe needs ProcessCap plus
 //        OODA_COMPILER or OODAC_BIN. Ecap probe drives oodac_check/build over
-//        the same compiler. No fake passed++.
+//        the same compiler. Fold run probe builds a crash victim over the same
+//        compiler. No fake passed++.
 //
 // Beats:
 //   1. verify surface.
-//   2. Run fifteen probes.
+//   2. Run twenty-two probes.
 //   3. Return the first Err.
 
 import "qa/probe_initialize.oo";
@@ -20,12 +21,20 @@ import "qa/probe_double_run.oo";
 import "qa/probe_merge.oo";
 import "qa/probe_redteam.oo";
 import "qa/probe_token.oo";
+import "qa/probe_fuzz_ingest.oo";
 import "qa/probe_protocol.oo";
 import "qa/probe_slice.oo";
 import "qa/probe_attenuation.oo";
 import "qa/probe_exec.oo";
 import "qa/probe_cwd_jail.oo";
 import "qa/probe_ecap_injection.oo";
+import "qa/probe_fold_run.oo";
+import "qa/probe_fold_exit.oo";
+import "qa/probe_fold_fault.oo";
+import "qa/probe_fold_stderr.oo";
+import "qa/probe_fold_probe.oo";
+import "qa/probe_fold_emit.oo";
+import "qa/probe_fold_tool.oo";
 import "verify_surface.oo";
 
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
@@ -68,6 +77,14 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     let t: Result[Int, String] = probe_token_run(p, fs_r);
     if t.is_err() { println("FAIL: probe_token"); return t; }
     println("PASS: probe_token");
+
+    let fz: Result[Int, String] = probe_fuzz_ingest_run();
+    if fz.is_err() {
+        let e_fz: String = match fz { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_fuzz_ingest: " + e_fz);
+        return fz;
+    }
+    println("PASS: probe_fuzz_ingest");
 
     let pr: Result[Int, String] = probe_protocol_run(p, fs_r);
     if pr.is_err() {
@@ -113,6 +130,62 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     }
     println("PASS: probe_ecap_injection");
 
-    println("test: 15 probes + verify passed");
+    let fr: Result[Int, String] = probe_fold_run_run(p, fs_r, fw, env);
+    if fr.is_err() {
+        let e_fr: String = match fr { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_fold_run: " + e_fr);
+        return fr;
+    }
+    println("PASS: probe_fold_run");
+
+    let fe: Result[Int, String] = probe_fold_exit_run();
+    if fe.is_err() {
+        let e_fe: String = match fe { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_fold_exit: " + e_fe);
+        return fe;
+    }
+    println("PASS: probe_fold_exit");
+
+    let ff: Result[Int, String] = probe_fold_fault_run(fs_r, fw);
+    if ff.is_err() {
+        let e_ff: String = match ff { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_fold_fault: " + e_ff);
+        return ff;
+    }
+    println("PASS: probe_fold_fault");
+
+    let fs2: Result[Int, String] = probe_fold_stderr_run();
+    if fs2.is_err() {
+        let e_fs2: String = match fs2 { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_fold_stderr: " + e_fs2);
+        return fs2;
+    }
+    println("PASS: probe_fold_stderr");
+
+    let fp: Result[Int, String] = probe_fold_probe_run();
+    if fp.is_err() {
+        let e_fp: String = match fp { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_fold_probe: " + e_fp);
+        return fp;
+    }
+    println("PASS: probe_fold_probe");
+
+    let fe2: Result[Int, String] = probe_fold_emit_run();
+    if fe2.is_err() {
+        let e_fe2: String = match fe2 { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_fold_emit: " + e_fe2);
+        return fe2;
+    }
+    println("PASS: probe_fold_emit");
+
+    let ft: Result[Int, String] = probe_fold_tool_run(p, fs_r);
+    if ft.is_err() {
+        let e_ft: String = match ft { Ok(_) => "", Err(msg) => msg };
+        println("FAIL: probe_fold_tool: " + e_ft);
+        return ft;
+    }
+    println("PASS: probe_fold_tool");
+
+    println("test: 22 probes + verify passed");
     return Ok(0);
 }

@@ -1,0 +1,54 @@
+// # MCP Crash Fold: Stderr Tail Formatter
+//
+// Logline: Pure tail cut, truncation mark, and TSV escaping for the stderr value.
+//
+// Setup: No IO. No caps. Cuts are byte-exact and may split multibyte chars.
+//        Escapes match the 07_machine_wire TEXT column. Empty input emits -.
+//
+// Beats:
+//   1. Own the tail budget and its clamp.
+//   2. Cut the last N bytes with the ... mark.
+//   3. Escape TSV controls in one pass.
+//   4. Format the stderr value or - when empty.
+
+pub fn fold_stderr_default_budget() -> Int { return 2048; }
+
+pub fn fold_stderr_clamp_budget(budget: Int) -> Int {
+    if budget <= 0 { return fold_stderr_default_budget(); }
+    if budget < 4 { return 4; }
+    if budget > 65536 { return 65536; }
+    return budget;
+}
+
+pub fn fold_stderr_tail(raw: String, budget: Int) -> String {
+    let lim: Int = fold_stderr_clamp_budget(budget);
+    let n: Int = bytes_len(raw);
+    if n <= lim { return raw; }
+    return "..." + byte_slice(raw, n - (lim - 3), n);
+}
+
+pub fn fold_stderr_escape(s: String) -> String {
+    let n: Int = chars_len(s);
+    let mut out: String = "";
+    let mut i: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if c == "\\" { out = out + "\\\\"; } else if c == "\t" { out = out + "\\t"; } else if c == "\n" { out = out + "\\n"; } else if c == "\r" { out = out + "\\r"; } else { out = out + c; }
+        i = i + 1;
+    }
+    return out;
+}
+
+pub fn fold_stderr_format(raw: String) -> String {
+    return fold_stderr_format_budget(raw, fold_stderr_default_budget());
+}
+
+pub fn fold_stderr_format_budget(raw: String, budget: Int) -> String {
+    if chars_len(raw) == 0 { return "-"; }
+    return fold_stderr_escape(fold_stderr_tail(raw, budget));
+}
+
+pub fn fold_stderr_valid(val: String) -> Bool {
+    if chars_len(val) == 0 { return false; }
+    return !str_contains(val, "\t") && !str_contains(val, "\n") && !str_contains(val, "\r");
+}

@@ -8,11 +8,18 @@
 // Beats:
 //   1. 20 language caps; 26 substrate caps; subset. Bits match caps.h.
 //   2. 14 boards; NORTHSTAR, RFC-0007, and SPEC present.
-//   3. 26 tools.
+//   3. 27 tools; fold surface is 7 units plus crash_report.
 
 import "engine/state/mcp_graph.oo";
 import "engine/state/mcp_cap.oo";
 import "engine/tool/mcp_tool.oo";
+import "fold/fold_exit.oo";
+import "fold/fold_stderr.oo";
+import "fold/fold_probe.oo";
+import "fold/fold_fault.oo";
+import "fold/fold_run.oo";
+import "fold/fold_emit.oo";
+import "fold/fold_tool.oo";
 
 pub fn mcp_verify_surface_zero_trust(fs: &FsReadCap) -> Result[Int, String] {
     let t: Result[String, String] = read_file(fs, "oodar/sec/cap/cap_table.json");
@@ -77,7 +84,7 @@ pub fn mcp_verify_surface() -> Result[Int, String] {
     if !has_ns { return Err("NORTHSTAR board missing"); }
     if !has_bb { return Err("RFC-0007 board missing"); }
     if !has_spec { return Err("SPEC board missing"); }
-    if mcp_tool_count() != 26 { return Err("tool count drifted"); }
+    if mcp_tool_count() != 27 { return Err("tool count drifted"); }
     let g: McpGraph = mcp_graph_canonical("", "");
     if mcp_tool_required_caps(&g, "read_board") != 8 { return Err("read_board must require FsReadCap mask 8"); }
     if mcp_tool_required_caps(&g, "oodac_check") != 8 { return Err("oodac_check must require FsReadCap mask 8"); }
@@ -90,16 +97,13 @@ pub fn mcp_verify_surface() -> Result[Int, String] {
     if mcp_tool_required_caps(&g, "attenuate_capability") != 0 { return Err("attenuate_capability must require 0"); }
     if mcp_tool_required_caps(&g, "estimate_chars") != 0 - 1 { return Err("estimate_chars must be unknown"); }
     if mcp_tool_required_caps(&g, "get_milestone_status") != 0 - 1 { return Err("get_milestone_status must be unknown"); }
-    return Ok(0);
-}
-
-pub fn main() -> Result[Int, String] {
-    let r: Result[Int, String] = mcp_verify_surface();
-    if r.is_err() {
-        let e: String = match r { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: surface: " + e);
-        return Err(e);
-    }
-    println("PASS: surface");
+    if mcp_tool_required_caps(&g, "crash_report") != 10 { return Err("crash_report must require mask 10"); }
+    if fold_exit_format(false, 1, 0) != "code:1" { return Err("fold exit unit drifted"); }
+    if fold_stderr_format("") != "-" { return Err("fold stderr unit drifted"); }
+    if fold_probe_suggest("code:0", "-", "-") != "none:clean-exit" { return Err("fold probe unit drifted"); }
+    if fold_fault_autopsy_path() != ".blackbox/autopsy.json" { return Err("fold fault unit drifted"); }
+    if fold_run_argv("a", "", "", "", "") != "a" { return Err("fold run unit drifted"); }
+    if fold_emit_run_id("1", 2) != "r1-2" { return Err("fold emit unit drifted"); }
+    if fold_tool_json_str("{\"cmd\":\"x\"}", "cmd") != "x" { return Err("fold tool unit drifted"); }
     return Ok(0);
 }

@@ -1,0 +1,67 @@
+// # MCP Fold Emit Probe
+//
+// Logline: Hostile test for the report block: exact bytes, fixed order, and rejects.
+//
+// Setup: Pure. Six lines joined by LF with no trailing newline. Bad values name
+//        their key. Double-run must be byte-identical.
+//
+// Beats:
+//   1. Run id minting and fallbacks.
+//   2. Exact six-line block bytes and fixed order.
+//   3. Every bad-field key rejects.
+//   4. Double-run determinism.
+
+import "fold/fold_emit.oo";
+
+pub fn probe_fold_emit_run() -> Result[Int, String] {
+    if fold_emit_run_id("1727046600123", 4182) != "r1727046600123-4182" { return Err("run id shape"); }
+    if fold_emit_run_id("abc", 1) != "r0-1" { return Err("run id bad ms"); }
+    if fold_emit_run_id("", 7) != "r0-7" { return Err("run id empty ms"); }
+    if fold_emit_run_id("12", 0 - 3) != "r12-0" { return Err("run id negative seq"); }
+    let blk_r: Result[String, String] = fold_emit_block("r1-2", "oodac check main.oo", "code:1", "main.oo:9:3", "ERR\\tmismatch", "probe_fold_stderr");
+    if blk_r.is_err() { return Err("canned block must build"); }
+    let blk: String = match blk_r { Ok(b) => b, Err(_) => "" };
+    let want: String = "OK\treport\tr1-2\nRPT\trun\toodac check main.oo\nRPT\texit\tcode:1\nRPT\tfault\tmain.oo:9:3\nRPT\tstderr\tERR\\tmismatch\nRPT\tprobe\tprobe_fold_stderr";
+    if blk != want { return Err("block bytes mismatch: " + blk); }
+    let p_run: Int = str_index_of(blk, "RPT\trun\t");
+    let p_exit: Int = str_index_of(blk, "RPT\texit\t");
+    let p_fault: Int = str_index_of(blk, "RPT\tfault\t");
+    let p_err: Int = str_index_of(blk, "RPT\tstderr\t");
+    let p_probe: Int = str_index_of(blk, "RPT\tprobe\t");
+    if p_run < 0 || p_exit < 0 || p_fault < 0 || p_err < 0 || p_probe < 0 { return Err("block must hold all five keys"); }
+    if p_run >= p_exit { return Err("run must precede exit"); }
+    if p_exit >= p_fault { return Err("exit must precede fault"); }
+    if p_fault >= p_err { return Err("fault must precede stderr"); }
+    if p_err >= p_probe { return Err("stderr must precede probe"); }
+    if !str_starts_with(blk, "OK\treport\tr1-2\n") { return Err("block must open with the envelope"); }
+    let bad_exit: Result[String, String] = fold_emit_block("r1-2", "run", "bogus", "-", "-", "none:x");
+    if bad_exit.is_ok() { return Err("bogus exit must reject"); }
+    let e_exit: String = match bad_exit { Ok(_) => "", Err(m) => m };
+    if e_exit != "bad-field:exit" { return Err("exit key name"); }
+    let bad_fault: Result[String, String] = fold_emit_block("r1-2", "run", "code:1", "a:1", "-", "none:x");
+    let e_fault: String = match bad_fault { Ok(_) => "", Err(m) => m };
+    if e_fault != "bad-field:fault" { return Err("fault key name"); }
+    let bad_stamp: Result[String, String] = fold_emit_block("r1-2", "run", "code:1", "12:30:45", "-", "none:x");
+    let e_stamp: String = match bad_stamp { Ok(_) => "", Err(m) => m };
+    if e_stamp != "bad-field:fault" { return Err("timestamp fault must reject"); }
+    let bad_run: Result[String, String] = fold_emit_block("r1-2", "", "code:1", "-", "-", "none:x");
+    let e_run: String = match bad_run { Ok(_) => "", Err(m) => m };
+    if e_run != "bad-field:run" { return Err("run key name"); }
+    let bad_probe: Result[String, String] = fold_emit_block("r1-2", "run", "code:1", "-", "-", "x\ty");
+    let e_probe: String = match bad_probe { Ok(_) => "", Err(m) => m };
+    if e_probe != "bad-field:probe" { return Err("probe key name"); }
+    let bad_id: Result[String, String] = fold_emit_block("zzz", "run", "code:1", "-", "-", "none:x");
+    let e_id: String = match bad_id { Ok(_) => "", Err(m) => m };
+    if e_id != "bad-field:run-id" { return Err("run-id key name"); }
+    let bad_err: Result[String, String] = fold_emit_block("r1-2", "run", "code:1", "-", "a\nb", "none:x");
+    let e_err: String = match bad_err { Ok(_) => "", Err(m) => m };
+    if e_err != "bad-field:stderr" { return Err("stderr key name"); }
+    let again_r: Result[String, String] = fold_emit_block("r1-2", "oodac check main.oo", "code:1", "main.oo:9:3", "ERR\\tmismatch", "probe_fold_stderr");
+    let again: String = match again_r { Ok(b) => b, Err(_) => "" };
+    if again != blk { return Err("double-run drift on block"); }
+    if chars_len(blk) == 0 { return Err("block must be non-empty"); }
+    if !fold_emit_run_valid("x") { return Err("valid run"); }
+    if fold_emit_run_valid("") { return Err("valid empty run"); }
+    if fold_emit_run_valid("a\tb") { return Err("valid raw tab run"); }
+    return Ok(0);
+}

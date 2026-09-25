@@ -66,6 +66,11 @@ pub fn mcp_schema_validate(name: String, args: String) -> Int {
         if r_bo != 0 { return r_bo; }
         return mcp_schema_optional_int_nonneg(args, "max_chars");
     }
+    if name == "crash_report" {
+        let r_cc: Int = mcp_schema_require_string(args, "cmd");
+        if r_cc != 0 { return r_cc; }
+        return mcp_schema_optional_int_nonneg(args, "stderr_tail_bytes");
+    }
     return mcp_schema_err_kind();
 }
 

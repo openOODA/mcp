@@ -1,0 +1,19 @@
+// # Fold Crash Fixture: dump-and-fail victim for probe_fold_run
+//
+// Logline: Prints, writes a blackbox-format autopsy, then fails.
+//
+// Setup: Needs FsWriteCap. No imports. Neither toolchain dumps on external
+//        signals, so the victim writes the dump itself in the exact writer
+//        format; oodac owns dumper proofs and bb owns identical fixtures.
+//
+// Beats:
+//   1. Print a liveness line for the capture.
+//   2. Write the fixed autopsy path in writer format.
+//   3. Fail so the fold attributes the fresh dump.
+
+pub fn main(fw: &FsWriteCap) -> Result[Int, String] {
+    println("fold-crash-victim alive");
+    let w: Result[Void, String] = write_file(fw, ".blackbox/autopsy.json", "{\"schema_version\": \"1.0.0\", \"crash_type\": \"SIGNAL\", \"crash_signal\": 11, \"signal_name\": \"SIGSEGV\", \"signal\": \"SIGSEGV\", \"fault_address\": \"0x0000000000000000\", \"failure_coordinate\": \"mcp/qa/fixture_fold_crash.oo:18:5\", \"root_cause\": \"MEMORY_ACCESS_VIOLATION\", \"remediation\": \"Verify buffer boundaries.\", \"call_stack\": [], \"flight_events\": [], \"flight_log\": []}");
+    if w.is_err() { return Err("victim autopsy write failed"); }
+    return Err("boom");
+}

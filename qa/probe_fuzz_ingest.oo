@@ -1,0 +1,117 @@
+// # MCP Ingest Fuzz Probe
+//
+// Logline: Deterministic mutation fuzz over token_ingest; bad input never accrues.
+//
+// Setup: Fixed-seed LCG (no RandCap; double-run identical). 200 mutated
+// JSONL inputs across flip/truncate/dup/swap/inject/drop-nl.
+//
+// Beats:
+//   1. Every result carries an "ok" verdict.
+//   2. ok:false inputs leave session totals untouched.
+//   3. ok:true inputs accrue exactly lines_parsed calls.
+
+import "engine/core/mcp_session.oo";
+import "engine/tool/mcp_tool_token.oo";
+
+fn fuzz_next(s: Int) -> Int {
+    return (s * 1103515245 + 12345) & 1048575;
+}
+
+fn fuzz_range(s: Int, lo: Int, span: Int) -> Int {
+    if span <= 0 { return lo; }
+    let r: Int = (s / 64) & 32767;
+    return lo + (r - (r / span) * span);
+}
+
+fn fuzz_mutate(s: Int, line: String) -> String {
+    let n: Int = chars_len(line);
+    if n == 0 { return line; }
+    let which: Int = fuzz_range(s, 0, 6);
+    let at: Int = fuzz_range(s / 131071 + 7, 0, n);
+    if which == 0 {
+        let byteset: String = "ab01\"\\{}:, \n";
+        let bi: Int = fuzz_range(s / 7919 + 13, 0, 12);
+        return str_slice(line, 0, at) + str_slice(byteset, bi, bi + 1) + str_slice(line, at + 1, n);
+    }
+    if which == 1 {
+        return str_slice(line, 0, at);
+    }
+    if which == 2 {
+        return line + line;
+    }
+    if which == 3 {
+        if at + 1 >= n { return line; }
+        return str_slice(line, 0, at) + str_slice(line, at + 1, at + 2) + str_slice(line, at, at + 1) + str_slice(line, at + 2, n);
+    }
+    if which == 4 {
+        let mut inj: String = "\"";
+        if fuzz_range(s / 104729 + 29, 0, 2) == 0 { inj = "\\"; }
+        return str_slice(line, 0, at) + inj + str_slice(line, at, n);
+    }
+    if n > 0 && str_slice(line, n - 1, n) == "\n" {
+        return str_slice(line, 0, n - 1);
+    }
+    return line + "\n";
+}
+
+fn fuzz_parse_count(out: String) -> Int {
+    let needle: String = "\"lines_parsed\":";
+    let n: Int = chars_len(out);
+    let m: Int = chars_len(needle);
+    let mut at: Int = 0 - 1;
+    let mut i: Int = 0;
+    while i + m <= n {
+        if str_slice(out, i, i + m) == needle {
+            at = i + m;
+            i = n;
+        }
+        i = i + 1;
+    }
+    if at < 0 { return 0 - 1; }
+    let mut v: Int = 0;
+    let mut k: Int = at;
+    while k < n {
+        let c: String = char_at(out, k);
+        if c == "0" || c == "1" || c == "2" || c == "3" || c == "4" || c == "5" || c == "6" || c == "7" || c == "8" || c == "9" {
+            v = v * 10 + (byte_at(c, 0) - 48);
+            k = k + 1;
+        } else {
+            k = n;
+        }
+    }
+    return v;
+}
+
+pub fn probe_fuzz_ingest_run() -> Result[Int, String] {
+    let mut s: McpSession = mcp_session_new();
+    let mut st: Int = 20260924;
+    let mut i: Int = 0;
+    while i < 200 {
+        st = fuzz_next(st);
+        let pick: Int = fuzz_range(st, 0, 4);
+        let mut line: String = "{\"role\":\"user\",\"content\":\"hi\"}\n";
+        if pick == 1 { line = "{\"role\":\"assistant\",\"content\":\"hello there\"}\n"; }
+        if pick == 2 { line = "{\"role\":\"user\",\"content\":\"\"}\n"; }
+        if pick == 3 { line = "{\"role\":\"system\",\"content\":\"a-z 0-9 !@#\"}\n"; }
+        st = fuzz_next(st);
+        let mut input: String = fuzz_mutate(st, line);
+        let bt: Int = s.token_prompt_tokens;
+        let bc: Int = s.token_calls;
+        let out: String = mcp_token_ingest(&mut s, input);
+        if !str_contains(out, "\"ok\"") {
+            return Err("fuzz iter " + i.to_string() + " missing verdict: " + out);
+        }
+        if str_contains(out, "\"ok\":true") {
+            let lp: Int = fuzz_parse_count(out);
+            if lp < 1 || s.token_calls != bc + lp {
+                return Err("fuzz iter " + i.to_string() + " ok:true must accrue parsed lines");
+            }
+        } else {
+            if s.token_prompt_tokens != bt || s.token_calls != bc {
+                return Err("fuzz iter " + i.to_string() + " ok:false must not accrue");
+            }
+        }
+        i = i + 1;
+    }
+    return Ok(0);
+}

@@ -1,0 +1,157 @@
+// # MCP Crash Fold: Fault Locator
+//
+// Logline: Locate file:line:col from the fixed autopsy path, else the first stderr match.
+//
+// Setup: FsReadCap. Fixed path only: any other path skips the autopsy leg and
+//        falls through to the stderr scan. JSON lookup is single-shot and
+//        colon-gated: a key occurrence not followed by a colon yields "",
+//        which fails soft to the next leg. Never guesses.
+//
+// Beats:
+//   1. Name the fixed autopsy path.
+//   2. Scan flat JSON for string and int values.
+//   3. Normalize file:line:col with an optional fn tail.
+//   4. Scan stderr for the first file:line:col.
+//   5. Locate with the fixed-path gate.
+
+pub fn fold_fault_autopsy_path() -> String { return ".blackbox/autopsy.json"; }
+
+pub fn fold_fault_json_str(json: String, key: String) -> String {
+    let pat: String = "\"" + key + "\"";
+    let at: Int = str_index_of(json, pat);
+    if at < 0 { return ""; }
+    let n: Int = chars_len(json);
+    let mut j: Int = at + chars_len(pat);
+    while j < n {
+        let w: String = char_at(json, j);
+        if w != " " && w != "\t" && w != "\n" && w != "\r" { break; }
+        j = j + 1;
+    }
+    if j >= n || char_at(json, j) != ":" { return ""; }
+    j = j + 1;
+    while j < n {
+        let w2: String = char_at(json, j);
+        if w2 != " " && w2 != "\t" && w2 != "\n" && w2 != "\r" { break; }
+        j = j + 1;
+    }
+    if j >= n { return ""; }
+    if char_at(json, j) == "\"" {
+        let mut k: Int = j + 1;
+        let mut esc: Bool = false;
+        while k < n {
+            let c: String = char_at(json, k);
+            if esc { esc = false; } else if c == "\\" { esc = true; } else if c == "\"" { return str_slice(json, j + 1, k); }
+            k = k + 1;
+        }
+        return "";
+    }
+    let mut e: Int = j;
+    while e < n {
+        let d: String = char_at(json, e);
+        if d == "," || d == "}" || d == "]" || d == " " || d == "\t" || d == "\n" || d == "\r" { break; }
+        e = e + 1;
+    }
+    return str_slice(json, j, e);
+}
+
+pub fn fold_fault_parse_int(s: String) -> Int {
+    let n: Int = chars_len(s);
+    if n == 0 { return 0; }
+    let mut i: Int = 0;
+    let mut neg: Bool = false;
+    if char_at(s, 0) == "-" { neg = true; i = 1; }
+    let mut acc: Int = 0;
+    while i < n {
+        let c: String = char_at(s, i);
+        if !char_is_digit(c) { break; }
+        acc = acc * 10 + (byte_at(c, 0) - 48);
+        i = i + 1;
+    }
+    if neg { return 0 - acc; }
+    return acc;
+}
+
+pub fn fold_fault_norm_coord(raw: String) -> String {
+    let parts: List[String] = str_split(raw, ":");
+    let mut n: Int = list_len(parts);
+    if n < 3 { return ""; }
+    let last: String = list_get(parts, n - 1);
+    if last != fold_fault_parse_int(last).to_string() {
+        n = n - 1;
+        if n < 3 { return ""; }
+    }
+    let col_s: String = list_get(parts, n - 1);
+    let line_s: String = list_get(parts, n - 2);
+    if col_s != fold_fault_parse_int(col_s).to_string() { return ""; }
+    if line_s != fold_fault_parse_int(line_s).to_string() { return ""; }
+    let line: Int = fold_fault_parse_int(line_s);
+    let col: Int = fold_fault_parse_int(col_s);
+    if line < 1 || col < 1 { return ""; }
+    let mut file: String = list_get(parts, 0);
+    let mut i: Int = 1;
+    while i < n - 2 {
+        file = file + ":" + list_get(parts, i);
+        i = i + 1;
+    }
+    if chars_len(file) == 0 { return ""; }
+    let mut has_letter: Bool = false;
+    let mut has_mark: Bool = false;
+    let mut k: Int = 0;
+    while k < chars_len(file) {
+        let fc: String = char_at(file, k);
+        if char_is_alpha(fc) { has_letter = true; }
+        if fc == "." || fc == "/" { has_mark = true; }
+        k = k + 1;
+    }
+    if !has_letter || !has_mark { return ""; }
+    return file + ":" + line.to_string() + ":" + col.to_string();
+}
+
+pub fn fold_fault_scan_stderr(text: String) -> String {
+    let n: Int = chars_len(text);
+    let mut i: Int = 0;
+    while i < n {
+        if char_at(text, i) == ":" && i + 1 < n && char_is_digit(char_at(text, i + 1)) {
+            let mut a: Int = i + 1;
+            while a < n && char_is_digit(char_at(text, a)) { a = a + 1; }
+            if a < n && char_at(text, a) == ":" && a + 1 < n && char_is_digit(char_at(text, a + 1)) {
+                let mut b: Int = a + 1;
+                while b < n && char_is_digit(char_at(text, b)) { b = b + 1; }
+                let mut s: Int = i - 1;
+                while s >= 0 {
+                    let pc: String = char_at(text, s);
+                    if !char_is_alpha(pc) && !char_is_digit(pc) && pc != "." && pc != "/" && pc != "_" && pc != "-" && pc != "+" { break; }
+                    s = s - 1;
+                }
+                let cand: String = str_slice(text, s + 1, b);
+                let norm: String = fold_fault_norm_coord(cand);
+                if chars_len(norm) > 0 { return norm; }
+            }
+        }
+        i = i + 1;
+    }
+    return "";
+}
+
+pub fn fold_fault_from_text(autopsy_json: String, stderr_text: String) -> String {
+    let coord: String = fold_fault_norm_coord(fold_fault_json_str(autopsy_json, "failure_coordinate"));
+    if chars_len(coord) > 0 { return coord; }
+    let hit: String = fold_fault_scan_stderr(stderr_text);
+    if chars_len(hit) > 0 { return hit; }
+    return "-";
+}
+
+pub fn fold_fault_locate(fs: &FsReadCap, autopsy_path: String, stderr_text: String) -> String {
+    let mut json: String = "";
+    if autopsy_path == fold_fault_autopsy_path() {
+        let rd: Result[String, String] = read_file(fs, autopsy_path);
+        if rd.is_ok() { json = match rd { Ok(s) => s, Err(_) => "" }; }
+    }
+    return fold_fault_from_text(json, stderr_text);
+}
+
+pub fn fold_fault_valid(val: String) -> Bool {
+    if val == "-" { return true; }
+    if chars_len(val) == 0 { return false; }
+    return fold_fault_norm_coord(val) == val;
+}

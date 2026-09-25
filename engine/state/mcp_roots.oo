@@ -37,7 +37,8 @@ pub fn mcp_roots_apply_result(s: &mut McpSession, result: String) {
         if chars_len(uri) > 0 { next = list_push(next, uri); }
         i = i + 1;
     }
-    s.client_roots = next;
+    // Store a copy: the backend aliases a named local into the field.
+    s.client_roots = list_slice(next, 0, list_len(next));
 }
 
 pub fn mcp_roots_list_request(id_raw: String) -> String {

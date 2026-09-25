@@ -1,6 +1,6 @@
 // # Mcp Tool Interface
 //
-// Logline: Tool catalog and tools/call dispatch for 26 typed tools.
+// Logline: Tool catalog and tools/call dispatch for 27 typed tools.
 //
 // Setup: One catalog in mcp_tool.oo. Dispatch in mcp_tool_dispatch.oo. Token tools in mcp_tool_token.oo.
 //        Exec tools in mcp_tool_exec.oo. Topic slice in mcp_tool_slice.oo.

@@ -1,0 +1,54 @@
+// # MCP Fold Exit Probe
+//
+// Logline: Hostile test for the exit classifier: grammar, precedence, and 128+N.
+//
+// Setup: Pure. A signal always wins. Kernel codes pass through untouched.
+//
+// Beats:
+//   1. code rows for 0, 1, 2, 3, and 139.
+//   2. sig rows for the six design signals plus common POSIX.
+//   3. Signal precedence and unknown-signal fallback.
+//   4. Back-classification and grammar validation.
+
+import "fold/fold_exit.oo";
+
+pub fn probe_fold_exit_run() -> Result[Int, String] {
+    if fold_exit_format(true, 0, 0) != "code:0" { return Err("ok must format code:0"); }
+    if fold_exit_format(false, 1, 0) != "code:1" { return Err("fail must format code:1"); }
+    if fold_exit_format(false, 2, 0) != "code:2" { return Err("code 2 must survive"); }
+    if fold_exit_format(false, 3, 0) != "code:3" { return Err("code 3 must survive"); }
+    if fold_exit_format(false, 139, 0) != "code:139" { return Err("128+N must stay code"); }
+    if fold_exit_format(false, 0, 11) != "sig:11:SIGSEGV" { return Err("sig 11"); }
+    if fold_exit_format(false, 0, 6) != "sig:6:SIGABRT" { return Err("sig 6"); }
+    if fold_exit_format(false, 0, 7) != "sig:7:SIGBUS" { return Err("sig 7"); }
+    if fold_exit_format(false, 0, 4) != "sig:4:SIGILL" { return Err("sig 4"); }
+    if fold_exit_format(false, 0, 5) != "sig:5:SIGTRAP" { return Err("sig 5"); }
+    if fold_exit_format(false, 0, 8) != "sig:8:SIGFPE" { return Err("sig 8"); }
+    if fold_exit_format(false, 0, 9) != "sig:9:SIGKILL" { return Err("sig 9"); }
+    if fold_exit_format(false, 0, 15) != "sig:15:SIGTERM" { return Err("sig 15"); }
+    if fold_exit_format(false, 1, 11) != "sig:11:SIGSEGV" { return Err("signal must win over code"); }
+    if fold_exit_format(true, 0, 6) != "sig:6:SIGABRT" { return Err("signal must win over ok"); }
+    if fold_exit_format(false, 0, 99) != "sig:99:SIGNAL_99" { return Err("unknown signal fallback"); }
+    if !fold_exit_is_crash("sig:11:SIGSEGV") { return Err("is_crash sig"); }
+    if fold_exit_is_crash("code:1") { return Err("is_crash code"); }
+    if fold_exit_code_of("code:139") != 139 { return Err("code_of 139"); }
+    if fold_exit_code_of("code:0") != 0 { return Err("code_of 0"); }
+    if fold_exit_code_of("code:") != 0 - 1 { return Err("code_of empty"); }
+    if fold_exit_code_of("code:1x") != 0 - 1 { return Err("code_of junk"); }
+    if fold_exit_code_of("sig:11:SIGSEGV") != 0 - 1 { return Err("code_of sig"); }
+    if fold_exit_signal_of("sig:11:SIGSEGV") != 11 { return Err("signal_of 11"); }
+    if fold_exit_signal_of("sig:11") != 0 - 1 { return Err("signal_of short"); }
+    if fold_exit_signal_of("code:1") != 0 - 1 { return Err("signal_of code"); }
+    if !fold_exit_valid("code:0") { return Err("valid code:0"); }
+    if !fold_exit_valid("code:139") { return Err("valid code:139"); }
+    if !fold_exit_valid("sig:11:SIGSEGV") { return Err("valid sig"); }
+    if fold_exit_valid("") { return Err("valid empty"); }
+    if fold_exit_valid("code:") { return Err("valid code:"); }
+    if fold_exit_valid("code:x") { return Err("valid code:x"); }
+    if fold_exit_valid("sig:11") { return Err("valid sig:11"); }
+    if fold_exit_valid("sig:x:SIGSEGV") { return Err("valid sig:x"); }
+    if fold_exit_valid("sig:0:SIGX") { return Err("valid sig:0"); }
+    if fold_exit_valid("sig:11:xx") { return Err("valid short name"); }
+    if fold_exit_valid("CODE:1") { return Err("valid upper"); }
+    return Ok(0);
+}

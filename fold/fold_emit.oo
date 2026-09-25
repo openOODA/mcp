@@ -1,0 +1,63 @@
+// # MCP Crash Fold: Report Emitter
+//
+// Logline: Validate the five values and print the OK envelope plus five RPT lines.
+//
+// Setup: Pure block builder plus a printing shell. Values arrive preformatted;
+//        any bad value rejects the whole block with bad-field:<key>.
+//
+// Beats:
+//   1. Mint run ids from wall ms and sequence.
+//   2. Validate the run value grammar locally.
+//   3. Build the exact six-line block.
+//   4. Print OK plus RPT or one ERR fold line.
+
+import "fold_exit.oo";
+import "fold_fault.oo";
+import "fold_stderr.oo";
+import "fold_probe.oo";
+
+pub fn fold_emit_run_id(ms: String, seq: Int) -> String {
+    let mut clean: String = "0";
+    if chars_len(ms) > 0 {
+        let mut ok: Bool = true;
+        let mut i: Int = 0;
+        while i < chars_len(ms) {
+            if !char_is_digit(char_at(ms, i)) { ok = false; break; }
+            i = i + 1;
+        }
+        if ok { clean = ms; }
+    }
+    let s: Int = if seq < 0 { 0 } else { seq };
+    return "r" + clean + "-" + s.to_string();
+}
+
+fn fold_emit_has_ctl(s: String) -> Bool {
+    return str_contains(s, "\t") || str_contains(s, "\n") || str_contains(s, "\r");
+}
+
+pub fn fold_emit_run_valid(val: String) -> Bool {
+    if chars_len(val) == 0 { return false; }
+    return !fold_emit_has_ctl(val);
+}
+
+pub fn fold_emit_block(run_id: String, run_v: String, exit_v: String, fault_v: String, stderr_v: String, probe_v: String) -> Result[String, String] {
+    if chars_len(run_id) < 4 || char_at(run_id, 0) != "r" || !str_contains(run_id, "-") || fold_emit_has_ctl(run_id) { return Err("bad-field:run-id"); }
+    if !fold_emit_run_valid(run_v) { return Err("bad-field:run"); }
+    if !fold_exit_valid(exit_v) { return Err("bad-field:exit"); }
+    if !fold_fault_valid(fault_v) { return Err("bad-field:fault"); }
+    if !fold_stderr_valid(stderr_v) { return Err("bad-field:stderr"); }
+    if !fold_probe_valid(probe_v) { return Err("bad-field:probe"); }
+    return Ok("OK\treport\t" + run_id + "\nRPT\trun\t" + run_v + "\nRPT\texit\t" + exit_v + "\nRPT\tfault\t" + fault_v + "\nRPT\tstderr\t" + stderr_v + "\nRPT\tprobe\t" + probe_v);
+}
+
+pub fn fold_emit_print(run_id: String, run_v: String, exit_v: String, fault_v: String, stderr_v: String, probe_v: String) -> Result[Int, String] {
+    let blk: Result[String, String] = fold_emit_block(run_id, run_v, exit_v, fault_v, stderr_v, probe_v);
+    if blk.is_err() {
+        let e: String = match blk { Ok(_) => "", Err(m) => m };
+        println("ERR\tfold\t" + e);
+        return Err(e);
+    }
+    let text: String = match blk { Ok(b) => b, Err(_) => "" };
+    println(text);
+    return Ok(0);
+}

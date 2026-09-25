@@ -1,0 +1,97 @@
+// # MCP Crash Fold: Exit Classifier
+//
+// Logline: Pure map from wait evidence to the exit value grammar code:N or sig:N:NAME.
+//
+// Setup: No IO. No caps. A signal always wins over a code. Codes pass through
+//        verbatim: 128+N kernel codes are never rewritten to signals.
+//
+// Beats:
+//   1. Canonicalize signal numbers to POSIX names.
+//   2. Format code:N and sig:N:NAME values.
+//   3. Classify an exit value back to crash, code, or signal.
+//   4. Validate the exit value grammar for the emitter.
+
+pub fn fold_exit_signal_name(sig: Int) -> String {
+    if sig == 1 { return "SIGHUP"; }
+    if sig == 2 { return "SIGINT"; }
+    if sig == 4 { return "SIGILL"; }
+    if sig == 5 { return "SIGTRAP"; }
+    if sig == 6 { return "SIGABRT"; }
+    if sig == 7 { return "SIGBUS"; }
+    if sig == 8 { return "SIGFPE"; }
+    if sig == 9 { return "SIGKILL"; }
+    if sig == 11 { return "SIGSEGV"; }
+    if sig == 13 { return "SIGPIPE"; }
+    if sig == 14 { return "SIGALRM"; }
+    if sig == 15 { return "SIGTERM"; }
+    return "SIGNAL_" + sig.to_string();
+}
+
+pub fn fold_exit_format(ok: Bool, code: Int, sig: Int) -> String {
+    if sig > 0 {
+        return "sig:" + sig.to_string() + ":" + fold_exit_signal_name(sig);
+    }
+    if ok {
+        return "code:0";
+    }
+    return "code:" + code.to_string();
+}
+
+pub fn fold_exit_is_crash(exit_val: String) -> Bool {
+    return str_starts_with(exit_val, "sig:");
+}
+
+fn fold_exit_digits(val: String, start: Int, end: Int) -> Int {
+    if start >= end { return 0 - 1; }
+    let mut acc: Int = 0;
+    let mut i: Int = start;
+    while i < end {
+        let c: String = char_at(val, i);
+        if !char_is_digit(c) { return 0 - 1; }
+        acc = acc * 10 + (byte_at(c, 0) - 48);
+        i = i + 1;
+    }
+    return acc;
+}
+
+pub fn fold_exit_code_of(exit_val: String) -> Int {
+    if !str_starts_with(exit_val, "code:") { return 0 - 1; }
+    return fold_exit_digits(exit_val, 5, chars_len(exit_val));
+}
+
+pub fn fold_exit_signal_of(exit_val: String) -> Int {
+    if !str_starts_with(exit_val, "sig:") { return 0 - 1; }
+    let n: Int = chars_len(exit_val);
+    let mut i: Int = 4;
+    while i < n {
+        if char_at(exit_val, i) == ":" { break; }
+        i = i + 1;
+    }
+    if i >= n { return 0 - 1; }
+    return fold_exit_digits(exit_val, 4, i);
+}
+
+pub fn fold_exit_valid(exit_val: String) -> Bool {
+    if str_starts_with(exit_val, "code:") {
+        return fold_exit_code_of(exit_val) >= 0;
+    }
+    if !str_starts_with(exit_val, "sig:") { return false; }
+    let sig: Int = fold_exit_signal_of(exit_val);
+    if sig <= 0 { return false; }
+    let n: Int = chars_len(exit_val);
+    let mut i: Int = 4;
+    while i < n {
+        if char_at(exit_val, i) == ":" { break; }
+        i = i + 1;
+    }
+    let name: String = str_slice(exit_val, i + 1, n);
+    if !str_starts_with(name, "SIG") { return false; }
+    if chars_len(name) < 4 { return false; }
+    let mut j: Int = 3;
+    while j < chars_len(name) {
+        let c: String = char_at(name, j);
+        if !char_is_digit(c) && !char_is_alpha(c) && c != "_" { return false; }
+        j = j + 1;
+    }
+    return true;
+}

@@ -1,0 +1,41 @@
+// # MCP Fold Probe-Table Probe
+//
+// Logline: Hostile test for the next-probe decision table and its reason tokens.
+//
+// Setup: Pure. Signal rows first, then code 1, code 2, clean, and unknown.
+//
+// Beats:
+//   1. Signal rows key on the fault frame.
+//   2. Code 1 rows key on stderr presence.
+//   3. Code 2, code 0, and unknown rows.
+//   4. Grammar validation and the none predicate.
+
+import "fold/fold_probe.oo";
+
+pub fn probe_fold_probe_run() -> Result[Int, String] {
+    if fold_probe_suggest("sig:11:SIGSEGV", "a.oo:1:2", "-") != "probe_fold_fault a.oo:1:2" { return Err("signal plus frame"); }
+    if fold_probe_suggest("sig:6:SIGABRT", "-", "ERR\\tx") != "none:no-fault-frame" { return Err("signal minus frame"); }
+    if fold_probe_suggest("code:1", "-", "ERR\\tx") != "probe_fold_stderr" { return Err("code 1 with stderr"); }
+    if fold_probe_suggest("code:1", "-", "-") != "none:clean-stderr" { return Err("code 1 clean stderr"); }
+    if fold_probe_suggest("code:1", "a.oo:1:2", "ERR\\tx") != "probe_fold_stderr" { return Err("code 1 ignores fault"); }
+    if fold_probe_suggest("code:2", "-", "-") != "probe_fold_run" { return Err("code 2"); }
+    if fold_probe_suggest("code:2", "a.oo:1:2", "ERR\\tx") != "probe_fold_run" { return Err("code 2 ignores rest"); }
+    if fold_probe_suggest("code:0", "-", "-") != "none:clean-exit" { return Err("code 0"); }
+    if fold_probe_suggest("code:3", "-", "-") != "none:unknown-exit" { return Err("code 3"); }
+    if fold_probe_suggest("bogus", "-", "-") != "none:unknown-exit" { return Err("bogus exit"); }
+    if fold_probe_suggest("", "-", "-") != "none:unknown-exit" { return Err("empty exit"); }
+    if !fold_probe_is_none("none:no-fault-frame") { return Err("is_none true"); }
+    if fold_probe_is_none("probe_fold_run") { return Err("is_none false"); }
+    if !fold_probe_valid("probe_fold_fault a.oo:1:2") { return Err("valid probe plus args"); }
+    if !fold_probe_valid("probe_fold_run") { return Err("valid bare probe"); }
+    if !fold_probe_valid("none:clean-exit") { return Err("valid none"); }
+    if fold_probe_valid("") { return Err("valid empty"); }
+    if fold_probe_valid("none:") { return Err("valid bare none"); }
+    if fold_probe_valid("9probe") { return Err("valid digit start"); }
+    if !fold_probe_valid("probe with  double") { return Err("args pass through verbatim"); }
+    if fold_probe_valid(" probe") { return Err("valid leading space"); }
+    if fold_probe_valid("probe ") { return Err("valid trailing space"); }
+    if fold_probe_valid("a\tb") { return Err("valid raw tab"); }
+    if fold_probe_valid("a\nb") { return Err("valid raw newline"); }
+    return Ok(0);
+}

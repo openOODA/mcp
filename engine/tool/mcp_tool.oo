@@ -1,12 +1,12 @@
 // # MCP Tool Catalog
 //
-// Logline: Name, schema, cap bitmask, list JSON, wrap envelope, and board read for the 26 tools.
+// Logline: Name, schema, cap bitmask, list JSON, wrap envelope, and board read for the 27 tools.
 //
 // Setup: One catalog. Dispatch calls required_caps and wrap. Board paths join graph.board_root.
 //
 // Beats:
 //   1. mcp_tool_required_caps reads the graph table; unknown is -1.
-//   2. mcp_tool_list_json advertises the 26 tools.
+//   2. mcp_tool_list_json advertises the 27 tools.
 //   3. mcp_tool_wrap builds the MCP content envelope.
 //   4. mcp_tool_read_board reads one board under FsReadCap.
 
@@ -24,7 +24,7 @@ pub fn mcp_tool_required_caps(g: &McpGraph, tool_name: String) -> Int {
     return 0 - 1;
 }
 
-pub fn mcp_tool_count() -> Int { return 26; }
+pub fn mcp_tool_count() -> Int { return 27; }
 
 fn mcp_tool_entry(g: &McpGraph, name: String, desc: String, props: String, req: String) -> String {
     let cap: Int = mcp_tool_required_caps(g, name);
@@ -58,7 +58,8 @@ pub fn mcp_tool_list_json(g: &McpGraph) -> String {
     let z1: String = mcp_tool_entry(g, "oodac_check", "Run oodac check --json-errors on one file", "{\"path\":{\"type\":\"string\"},\"max_chars\":{\"type\":\"integer\"}}", "[\"path\"]");
     let z2: String = mcp_tool_entry(g, "oodac_emit", "Run oodac emit-llvm on one file (live backend llvm; c residual)", "{\"path\":{\"type\":\"string\"},\"backend\":{\"type\":\"string\",\"enum\":[\"llvm\"]},\"max_chars\":{\"type\":\"integer\"}}", "[\"path\"]");
     let z3: String = mcp_tool_entry(g, "oodac_build", "Run oodac build on one entry point", "{\"entry\":{\"type\":\"string\"},\"out\":{\"type\":\"string\"},\"max_chars\":{\"type\":\"integer\"}}", "[\"entry\",\"out\"]");
-    return "{\"tools\":[" + a + "," + b + "," + c + "," + d + "," + e + "," + f + "," + h + "," + i + "," + k + "," + l + "," + m + "," + n + "," + o + "," + p + "," + q + "," + r + "," + s + "," + t + "," + u + "," + v + "," + w + "," + x + "," + y + "," + z1 + "," + z2 + "," + z3 + "]}";
+    let z4: String = mcp_tool_entry(g, "crash_report", "Run argv and fold the crash into a TSV report", "{\"cmd\":{\"type\":\"string\"},\"args\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"stderr_tail_bytes\":{\"type\":\"integer\"}}", "[\"cmd\"]");
+    return "{\"tools\":[" + a + "," + b + "," + c + "," + d + "," + e + "," + f + "," + h + "," + i + "," + k + "," + l + "," + m + "," + n + "," + o + "," + p + "," + q + "," + r + "," + s + "," + t + "," + u + "," + v + "," + w + "," + x + "," + y + "," + z1 + "," + z2 + "," + z3 + "," + z4 + "]}";
 }
 
 pub fn mcp_tool_wrap(text: String) -> String {

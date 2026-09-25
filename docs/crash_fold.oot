@@ -1,0 +1,192 @@
+# MCP Crash Fold — Report Format and Module Layout
+File: mcp/docs/crash_fold.oot
+
+Design only. This document specifies the crash-to-diagnosis fold.
+No product code changes ship with this document.
+
+## 1. Scope
+
+The fold turns one crashed process into one machine-readable report.
+The report states what ran, how it died, where it died, what stderr
+said, and which probe runs next. No prose. Parsers split on tabs.
+
+## 2. Report wire format (normative)
+
+A report is exactly 5 TSV lines in fixed order. Each line has exactly
+2 tabs and 3 non-empty fields, per 07_machine_wire.oot section 1.2:
+
+```tsv
+RPT\trun\t<argv>
+RPT\texit\t<code:N|sig:N:NAME>
+RPT\tfault\t<path:line:col|->
+RPT\tstderr\t<escaped-tail|->
+RPT\tprobe\t<probe-id args|none:reason>
+```
+
+Tag `RPT` marks report lines. Key is one of run, exit, fault, stderr,
+probe. Value follows the per-field grammar below. Order is fixed.
+Extra lines are rejected. Missing lines are rejected.
+
+### 2.1 Field: run (what ran)
+
+Value is the spawned argv joined by single spaces. Each argv element is
+shell-quoted only when it holds whitespace or a quote. The joined
+string then takes TSV escapes from section 2.6.
+
+Example: `RPT\trun\toodac check main.oo`
+Example: `RPT\trun\tbb run --record /tmp/cap -- ./a.out "two words"`
+
+### 2.2 Field: exit (exit code or signal)
+
+Grammar: `code:N` for normal exit, `sig:N:NAME` for death by signal.
+N is decimal. NAME is the canonical POSIX name without the `SIG`
+prefix stripped: SIGSEGV, SIGABRT, SIGBUS, SIGILL, SIGTRAP, SIGFPE.
+
+- Normal exit 1: `RPT\texit\tcode:1`
+- Segfault: `RPT\texit\tsig:11:SIGSEGV`
+- Exit codes 0..3 keep the 07_machine_wire.oot matrix meaning.
+- Kernel 128+N codes are preserved as `code:N`, never rewritten.
+
+### 2.3 Field: fault (fault location)
+
+Grammar: `<path>:<line>:<col>` or `-` when unknown.
+Path is repo-relative when the file sits under the jail root.
+Otherwise path is absolute. Line and col are 1-indexed decimals.
+
+- Known: `RPT\tfault\temit/llvm/ll_emit.oo:142:8`
+- Unknown: `RPT\tfault\t-`
+- The locator prefers `.blackbox/autopsy.json` coordinate, then the
+  first `file:line:col` match in stderr, else `-`. No guessing.
+
+### 2.4 Field: stderr (stderr tail)
+
+Value is the last 2048 bytes of captured stderr with TSV escapes
+applied (section 2.6). Empty stderr emits `-`, never an empty field.
+
+- Tail: `RPT\tstderr\tERR\\ttype\\tmain.oo:9:3: mismatch\\n`
+- Empty: `RPT\tstderr\t-`
+- Truncation cuts at a byte boundary and prefixes `...` when the
+  stream exceeded 2048 bytes. Prefix counts inside the 2048 budget.
+
+### 2.5 Field: probe (suggested next probe)
+
+Grammar: `<probe-id>[ <args>]` or `none:<reason>`.
+probe-id names a runnable qa probe file without path or extension.
+Args pass through to that probe verbatim after one space.
+
+- Suggest: `RPT\tprobe\tprobe_exec -- ./a.out`
+- Suggest: `RPT\tprobe\tprobe_fold_fault emit/llvm/ll_emit.oo:142:8`
+- None: `RPT\tprobe\tnone:no-fault-frame`
+- Decision table: signal crash with fault frame suggests
+  probe_fold_fault; exit 1 with stderr suggests probe_fold_stderr;
+  exit 2 suggests probe_fold_run; else none with a reason token.
+
+### 2.6 Escapes (shared with token TEXT)
+
+Tab becomes `\t`. Line feed becomes `\n`. Carriage return becomes
+`\r`. Backslash becomes `\\`. Escapes apply to run and stderr values
+only. exit, fault, and probe values never hold raw tabs or newlines.
+
+### 2.7 Envelope and errors
+
+The emitter follows the OK/ERR envelope around the report block:
+
+```tsv
+OK\treport\t<run-id>
+ERR\tfold\t<reason>
+```
+
+- Success prints `OK\treport\t<run-id>`, then the 5 RPT lines.
+- run-id is `r<unix-ms>-<pid>`, e.g. `r1727046600123-4182`.
+- Emitter failure prints one `ERR\tfold\t<reason>` line and exits
+  nonzero. Reason tokens: no-spawn, no-capture, bad-autopsy.
+- Category `fold` joins the standard category set for this tool.
+
+## 3. Module layout inside mcp (normative)
+
+The fold lives in its own directory: `mcp/fold/`.
+One unit per file. Each file holds at most 8 functions.
+Each function holds at most 40 lines. anchor.oo is the front door.
+
+```text
+mcp/fold/anchor.oo        front door, re-exports 7 units
+mcp/fold/fold_run.oo      spawn argv, capture stdout/stderr/exit
+mcp/fold/fold_exit.oo     classify exit vs signal, format exit value
+mcp/fold/fold_fault.oo    locate file:line:col from autopsy or stderr
+mcp/fold/fold_stderr.oo   tail cut, truncation mark, TSV escaping
+mcp/fold/fold_probe.oo    decision table, format probe value
+mcp/fold/fold_emit.oo     validate and print OK + 5 RPT lines
+mcp/fold/fold_tool.oo     MCP tools/call wiring for crash_report
+```
+
+### 3.1 Unit contracts
+
+- fold_run.oo: takes argv plus caps (ProcessCap, FsReadCap). Returns
+  the captured triple (exit-kind, code-or-signal, stderr bytes).
+  Never prints. Fails closed when spawn is denied.
+- fold_exit.oo: pure classifier. Maps wait status to `code:N` or
+  `sig:N:NAME`. No IO. No caps.
+- fold_fault.oo: takes autopsy path plus stderr text. Needs FsReadCap.
+  Returns `path:line:col` or `-`. Reads only the fixed autopsy path.
+- fold_stderr.oo: pure formatter. Takes raw bytes, returns the escaped
+  tail or `-`. Owns the 2048 budget and the `...` mark.
+- fold_probe.oo: pure decision table. Takes exit value plus fault
+  value. Returns the probe value string. No IO. No caps.
+- fold_emit.oo: takes the 5 values. Validates field grammars, then
+  prints `OK\treport\t<run-id>` plus the 5 RPT lines. Rejects bad
+  values with `ERR\tfold\tbad-field:<key>`.
+- fold_tool.oo: registers the `crash_report` tool. Input schema is
+  `{cmd, args?, stderr_tail_bytes?}`. Requires ProcessCap plus
+  FsReadCap. Output wraps the TSV block in the standard content/text
+  envelope from tools.oot. No prose outside the TSV block.
+
+### 3.2 Shape law compliance
+
+Each unit file: 1 unit, at most 8 functions, at most 40 lines per
+function, at most 256 lines per file, 4-element Academy header.
+anchor.oo lists the 7 units in its Beats and imports each sibling.
+No file imports outside mcp/fold/ except std and cap types.
+No parent import escapes. No generic file names.
+
+## 4. Probes (normative)
+
+The fold owns its probes. Probes live with the mcp suite at
+`mcp/qa/probe_fold_<unit>.oo`, one probe per unit, registered in
+`mcp/qa/suite.oo`. Single suite runner. No second runner.
+
+```text
+mcp/qa/probe_fold_run.oo     spawn echo/exit-1/killed-by-signal
+mcp/qa/probe_fold_exit.oo    code vs sig grammar, 128+N preserved
+mcp/qa/probe_fold_fault.oo   autopsy path, stderr match, unknown -
+mcp/qa/probe_fold_stderr.oo  tail cut, 2048 budget, escapes, empty -
+mcp/qa/probe_fold_probe.oo   decision table rows incl. none reasons
+mcp/qa/probe_fold_emit.oo    fixed order, reject extra/missing lines
+mcp/qa/probe_fold_tool.oo    tools/call schema, cap gate, TSV-only text
+```
+
+Each probe follows the hostile style of probe_ping.oo: drive the
+unit through failure inputs first, assert exact TSV bytes, return
+Err on first mismatch. `verify_surface.oo` gains the fold surface:
+7 units plus 7 probes plus 1 tool registration.
+
+## 5. Build order
+
+1. fold_exit.oo, fold_stderr.oo, fold_probe.oo (pure, no caps).
+2. fold_fault.oo, fold_run.oo (capped IO).
+3. fold_emit.oo (validation plus printing).
+4. fold_tool.oo (MCP wiring).
+5. The 7 probes plus suite.oo registration.
+6. Double-run determinism check: same crash twice yields byte-equal
+   RPT lines except the run-id in the OK envelope line.
+
+## 6. Non-goals
+
+- No JSON report variant. TSV is the report.
+- No repair or patch application. bb owns heal.
+- No new transports. The tool rides tools/call.
+- No product edits ship with this design document.
+
+## See also
+
+protocol.oot, tools.oot, mcp_setup.oot.
+07_machine_wire.oot sections 1, 3. bb/docs/bb.oot section 4.

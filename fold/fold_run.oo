@@ -1,0 +1,130 @@
+// # MCP Crash Fold: Spawn and Capture
+//
+// Logline: Spawn argv once under ProcessCap, capture combined output, attribute fresh autopsy signals.
+//
+// Setup: Single spawn via sys_exec. The capture pipe erases the exact code, so a
+//        nonzero exit without a fresh autopsy folds to code:1; a second spawn
+//        would rerun side effects and, via sys_exec_wait, pollute stdio. An
+//        autopsy older than the spawn is stale and ignored. Callers clean the
+//        fixed autopsy path between runs when byte-identical repeats are needed.
+//        Results carry an err field instead of a Result wrapper: empty means
+//        the spawn ran and the exit value classifies it.
+//
+// Beats:
+//   1. Join and quote argv for the run value.
+//   2. Spawn with fixed arity, gap refusal, and NUL refusal.
+//   3. Attribute fresh autopsy signals only.
+//   4. Capture the exit, output, argv, and err record.
+
+import "fold_exit.oo";
+import "fold_fault.oo";
+
+pub type FoldSpawn = struct {
+    ok: Bool,
+    captured: String,
+    err: String
+};
+
+pub type FoldRun = struct {
+    exit_val: String,
+    captured: String,
+    argv: String,
+    err: String
+};
+
+pub fn fold_run_quote(s: String) -> String {
+    let mut need: Bool = false;
+    let mut i: Int = 0;
+    while i < chars_len(s) {
+        let c: String = char_at(s, i);
+        if c == " " || c == "\t" || c == "\n" || c == "\r" || c == "\"" || c == "'" { need = true; break; }
+        i = i + 1;
+    }
+    if !need { return s; }
+    let mut out: String = "\"";
+    let mut j: Int = 0;
+    while j < chars_len(s) {
+        let c2: String = char_at(s, j);
+        if c2 == "\\" { out = out + "\\\\"; } else if c2 == "\"" { out = out + "\\\""; } else { out = out + c2; }
+        j = j + 1;
+    }
+    return out + "\"";
+}
+
+pub fn fold_run_argv(cmd: String, a1: String, a2: String, a3: String, a4: String) -> String {
+    let mut out: String = fold_run_quote(cmd);
+    if chars_len(a1) > 0 { out = out + " " + fold_run_quote(a1); }
+    if chars_len(a2) > 0 { out = out + " " + fold_run_quote(a2); }
+    if chars_len(a3) > 0 { out = out + " " + fold_run_quote(a3); }
+    if chars_len(a4) > 0 { out = out + " " + fold_run_quote(a4); }
+    return out;
+}
+
+fn fold_run_has_nul(s: String) -> Bool {
+    let n: Int = bytes_len(s);
+    let mut i: Int = 0;
+    while i < n {
+        if byte_at(s, i) == 0 { return true; }
+        i = i + 1;
+    }
+    return false;
+}
+
+pub fn fold_run_spawn(p: &ProcessCap, cmd: String, a1: String, a2: String, a3: String, a4: String) -> FoldSpawn {
+    if chars_len(cmd) == 0 { return FoldSpawn { ok: false, captured: "", err: "no-spawn" }; }
+    if fold_run_has_nul(cmd) || fold_run_has_nul(a1) || fold_run_has_nul(a2) || fold_run_has_nul(a3) || fold_run_has_nul(a4) { return FoldSpawn { ok: false, captured: "", err: "no-spawn" }; }
+    let has1: Bool = chars_len(a1) > 0;
+    let has2: Bool = chars_len(a2) > 0;
+    let has3: Bool = chars_len(a3) > 0;
+    let has4: Bool = chars_len(a4) > 0;
+    if has2 && !has1 { return FoldSpawn { ok: false, captured: "", err: "no-spawn" }; }
+    if has3 && (!has1 || !has2) { return FoldSpawn { ok: false, captured: "", err: "no-spawn" }; }
+    if has4 && (!has1 || !has2 || !has3) { return FoldSpawn { ok: false, captured: "", err: "no-spawn" }; }
+    let r: Result[String, String] = if has4 {
+        sys_exec(p, cmd, a1, a2, a3, a4)
+    } else if has3 {
+        sys_exec(p, cmd, a1, a2, a3)
+    } else if has2 {
+        sys_exec(p, cmd, a1, a2)
+    } else if has1 {
+        sys_exec(p, cmd, a1)
+    } else {
+        sys_exec(p, cmd)
+    };
+    if r.is_ok() {
+        let out: String = match r { Ok(s) => s, Err(_) => "" };
+        return FoldSpawn { ok: true, captured: out, err: "" };
+    }
+    let cap: String = match r { Ok(_) => "", Err(m) => m };
+    if cap == "sys_exec failed" { return FoldSpawn { ok: false, captured: "", err: "no-capture" }; }
+    return FoldSpawn { ok: false, captured: cap, err: "" };
+}
+
+pub fn fold_run_signal(fs: &FsReadCap, before: String) -> String {
+    let rd: Result[String, String] = read_file(fs, fold_fault_autopsy_path());
+    if rd.is_err() { return ""; }
+    let json: String = match rd { Ok(s) => s, Err(_) => "" };
+    if json == before { return ""; }
+    let sig: Int = fold_fault_parse_int(fold_fault_json_str(json, "crash_signal"));
+    if sig <= 0 { return ""; }
+    return "sig:" + sig.to_string() + ":" + fold_exit_signal_name(sig);
+}
+
+pub fn fold_run_capture(p: &ProcessCap, fs: &FsReadCap, cmd: String, a1: String, a2: String, a3: String, a4: String) -> FoldRun {
+    let mut before: String = "";
+    let rb: Result[String, String] = read_file(fs, fold_fault_autopsy_path());
+    if rb.is_ok() { before = match rb { Ok(s) => s, Err(_) => "" }; }
+    let sp: FoldSpawn = fold_run_spawn(p, cmd, a1, a2, a3, a4);
+    let argv: String = fold_run_argv(cmd, a1, a2, a3, a4);
+    if chars_len(sp.err) > 0 {
+        return FoldRun { exit_val: "", captured: "", argv: argv, err: sp.err };
+    }
+    if sp.ok {
+        return FoldRun { exit_val: fold_exit_format(true, 0, 0), captured: sp.captured, argv: argv, err: "" };
+    }
+    let sig_v: String = fold_run_signal(fs, before);
+    if chars_len(sig_v) > 0 {
+        return FoldRun { exit_val: sig_v, captured: sp.captured, argv: argv, err: "" };
+    }
+    return FoldRun { exit_val: fold_exit_format(false, 1, 0), captured: sp.captured, argv: argv, err: "" };
+}

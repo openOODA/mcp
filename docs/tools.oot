@@ -1,7 +1,7 @@
 # MCP Tool Catalog
 File: mcp/docs/tools.oot
 
-Twenty-six tools. Results wrap as `{"content":[{"type":"text","text":"..."}]}`.
+Twenty-seven tools. Results wrap as `{"content":[{"type":"text","text":"..."}]}`.
 
 requiresCap 0 uses the session default. requiresCap 1 is FsReadCap.
 
@@ -33,5 +33,6 @@ requiresCap 0 uses the session default. requiresCap 1 is FsReadCap.
 | oodac_check | 1 | {path, max_chars?} | oodac check --json-errors on one file |
 | oodac_emit | 1 | {path, backend?, max_chars?} | oodac emit-llvm (live backend llvm; c residual) |
 | oodac_build | 1 | {entry, out, max_chars?} | oodac build (LLVM default) on one entry |
+| crash_report | 10 | {cmd, args?, stderr_tail_bytes?} | Run argv and fold the crash into a TSV report |
 
 Boards: ANCHOR, RULES, NORTHSTAR, RFC-0001..RFC-0007, REDTEAM, WORKFLOW, RELEASE.

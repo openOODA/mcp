@@ -8,7 +8,7 @@
 //   1. mcp_setup.oot — host over stdio.
 //   2. protocol.oot — JSON-RPC wire.
 //   3. client_config.oot — client config.
-//   4. tools.oot — 26 tools. SSoT for the website mcp page.
+//   4. tools.oot — 27 tools. SSoT for the website mcp page.
 
 // Sibling documentation documents (.oot files):
 // - mcp_setup.oot
