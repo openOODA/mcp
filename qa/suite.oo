@@ -98,7 +98,7 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
     if ps.is_err() { println("FAIL: probe_slice"); return ps; }
     println("PASS: probe_slice");
 
-    let pa: Result[Int, String] = probe_attenuation_run(p, fs_r);
+    let pa: Result[Int, String] = probe_attenuation_run(p, fs_r, env);
     if pa.is_err() {
         let e_pa: String = match pa { Ok(_) => "", Err(msg) => msg };
         println("FAIL: probe_attenuation: " + e_pa);

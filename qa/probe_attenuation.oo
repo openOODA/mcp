@@ -22,9 +22,10 @@ fn probe_ready(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph)
     return mcp_server_handle_body(fs, s, g, "codex-body", "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", p);
 }
 
-pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, String] {
+pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap, env: &EnvCap) -> Result[Int, String] {
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "openOODA");
     let mut s: McpSession = mcp_session_new();
+    s.attenuation_secret = mcp_attenuation_resolve_secret(env);
     mcp_session_grant_cap(&mut s, 8); // FsReadCap (oodar bit 3, mask 8)
     mcp_session_grant_cap(&mut s, 4); // FsWriteCap (oodar bit 2, mask 4)
     let _init1: String = probe_ready(p, fs, &mut s, &g);
@@ -95,6 +96,7 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, Stri
 
     // 9. Monotonic TTL expiration check
     let mut s_exp: McpSession = mcp_session_new();
+    s_exp.attenuation_secret = mcp_attenuation_resolve_secret(env);
     mcp_session_grant_cap(&mut s_exp, 8);
     s_exp.request_seq = 200; // expires_seq was ~50, so 200 is expired
     let v_exp: Result[Int, String] = mcp_attenuate_verify(&s_exp, tok_sha256, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
@@ -102,7 +104,7 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, Stri
 
     // 10. Legacy 6-field token backward-compatibility
     let leg_payload: String = "tok-1-1|FsReadCap|8|/home/jeryd/Projects/openOODA|100";
-    let leg_sig: String = crypto_sha256_internal(leg_payload + "|" + "openooda-primary-attenuation-secret-2026");
+    let leg_sig: String = crypto_sha256_internal(leg_payload + "|" + s.attenuation_secret);
     let leg_tok: String = "ATTEN.tok-1-1.FsReadCap.8./home/jeryd/Projects/openOODA.100." + leg_sig;
     let v_leg: Result[Int, String] = mcp_attenuate_verify(&s, leg_tok, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
     if v_leg.is_err() { return Err("probe_attenuation: legacy 6-field token verification failed"); }
@@ -131,6 +133,7 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, Stri
 
     // 14. Double-run determinism: Run_1 == Run_2
     let mut s1: McpSession = mcp_session_new();
+    s1.attenuation_secret = mcp_attenuation_resolve_secret(env);
     mcp_session_grant_cap(&mut s1, 8);
     let _i1: String = probe_ready(p, fs, &mut s1, &g);
     let r_t1: Result[String, String] = mcp_attenuate_token(&mut s1, "FsReadCap", 8, "/test", 10, "blake3");
@@ -138,6 +141,7 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, Stri
     let t1: String = match r_t1 { Ok(x) => x, Err(_) => "" };
 
     let mut s2: McpSession = mcp_session_new();
+    s2.attenuation_secret = mcp_attenuation_resolve_secret(env);
     mcp_session_grant_cap(&mut s2, 8);
     let _i2: String = probe_ready(p, fs, &mut s2, &g);
     let r_t2: Result[String, String] = mcp_attenuate_token(&mut s2, "FsReadCap", 8, "/test", 10, "blake3");
@@ -147,6 +151,28 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap) -> Result[Int, Stri
     if t1 != t2 {
         return Err("probe_attenuation: double-run determinism failed: Run_1 != Run_2");
     }
+
+    // 15. Cross-secret isolation: token sealed under A must not verify under B
+    let mut s_a: McpSession = mcp_session_new();
+    s_a.attenuation_secret = "cross-secret-A";
+    mcp_session_grant_cap(&mut s_a, 8);
+    let r_xa: Result[String, String] = mcp_attenuate_token(&mut s_a, "FsReadCap", 8, "/x", 10, "sha256");
+    if r_xa.is_err() { return Err("probe_attenuation: cross-secret setup derive failed"); }
+    let t_xa: String = match r_xa { Ok(x) => x, Err(_) => "" };
+    let mut s_b: McpSession = mcp_session_new();
+    s_b.attenuation_secret = "cross-secret-B";
+    let v_xb: Result[Int, String] = mcp_attenuate_verify(&s_b, t_xa, "FsReadCap", "/x/sub");
+    if v_xb.is_ok() { return Err("probe_attenuation: cross-secret verify must fail"); }
+
+    // 16. Empty secret fails closed on derive and verify
+    let mut s_e: McpSession = mcp_session_new();
+    mcp_session_grant_cap(&mut s_e, 8);
+    let r_e: Result[String, String] = mcp_attenuate_token(&mut s_e, "FsReadCap", 8, "/e", 10, "sha256");
+    if r_e.is_ok() { return Err("probe_attenuation: empty-secret derive must fail closed"); }
+    let e_e: String = match r_e { Ok(_) => "", Err(m) => m };
+    if !str_contains(e_e, "secret not configured") { return Err("probe_attenuation: empty-secret derive must name the cause: " + e_e); }
+    let v_e: Result[Int, String] = mcp_attenuate_verify(&s_e, tok_sha256, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
+    if v_e.is_ok() { return Err("probe_attenuation: empty-secret verify must fail closed"); }
 
     return Ok(0);
 }

@@ -27,6 +27,7 @@ import "engine/resource/mcp_schema.oo";
 import "engine/state/mcp_ooda_state.oo";
 import "engine/state/mcp_graph.oo";
 import "engine/state/mcp_cap.oo";
+import "engine/state/mcp_attenuation.oo";
 
 pub fn mcp_server_handle_body(fs: &FsReadCap, s: &mut McpSession, g: &McpGraph, codex_text: String, body: String, p: &ProcessCap) -> String {
     let caps_before: Int = s.caps_held;
@@ -209,6 +210,7 @@ pub fn mcp_server_run(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, t: &McpTran
     let graph: McpGraph = cache.graph;
     let mut session: McpSession = mcp_session_new();
     session.exec_oodac = mcp_exec_resolve_compiler(fs, env);
+    session.attenuation_secret = mcp_attenuation_resolve_secret(env);
     let mut buf: String = raw;
     let mut out: String = "";
     let mut frames: Int = 0;

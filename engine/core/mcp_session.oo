@@ -50,7 +50,8 @@ pub type McpSession = struct {
     token_prompt_tokens: Int,
     token_tool_payload_bytes: Int,
     token_calls: Int,
-    exec_oodac: String
+    exec_oodac: String,
+    attenuation_secret: String
 };
 
 pub fn mcp_session_new() -> McpSession {
@@ -79,7 +80,8 @@ pub fn mcp_session_new() -> McpSession {
         token_prompt_tokens: 0,
         token_tool_payload_bytes: 0,
         token_calls: 0,
-        exec_oodac: ""
+        exec_oodac: "",
+        attenuation_secret: ""
     };
 }
 

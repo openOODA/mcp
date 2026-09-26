@@ -24,8 +24,9 @@ pub type McpAttenuatedToken = struct {
     signature: String
 };
 
-fn mcp_attenuation_secret() -> String {
-    return "openooda-primary-attenuation-secret-2026";
+pub fn mcp_attenuation_resolve_secret(env: &EnvCap) -> String {
+    let r: Result[String, String] = env_get(env, "OODA_MCP_ATTENUATION_SECRET");
+    return match r { Ok(s) => s, Err(_) => "" };
 }
 
 fn ascii_lower(s: String) -> String {
@@ -114,8 +115,11 @@ pub fn mcp_attenuate_token(
     let tok_id: String = "tok-" + s.request_seq.to_string() + "-" + actual_child_mask.to_string();
     let norm_pfx: String = if chars_len(path_prefix) > 0 { path_prefix } else { "*" };
 
+    if chars_len(s.attenuation_secret) == 0 {
+        return Err("attenuation rejected: secret not configured");
+    }
     let payload: String = tok_id + "|" + parent_cap + "|" + actual_child_mask.to_string() + "|" + norm_pfx + "|" + exp_seq.to_string();
-    let r_sig: Result[String, String] = mcp_attenuation_sign(norm_algo, payload, mcp_attenuation_secret());
+    let r_sig: Result[String, String] = mcp_attenuation_sign(norm_algo, payload, s.attenuation_secret);
     if r_sig.is_err() {
         let err_msg: String = match r_sig { Ok(_) => "", Err(e) => e };
         return Err("attenuation sign failed: " + err_msg);
@@ -206,8 +210,11 @@ pub fn mcp_attenuate_verify(
         return Err("attenuated token malformed: missing signature");
     }
 
+    if chars_len(s.attenuation_secret) == 0 {
+        return Err("attenuated token rejected: secret not configured");
+    }
     let payload: String = tok_id + "|" + parent_cap + "|" + mask_str + "|" + norm_pfx + "|" + exp_str;
-    let r_exp_sig: Result[String, String] = mcp_attenuation_sign(algo, payload, mcp_attenuation_secret());
+    let r_exp_sig: Result[String, String] = mcp_attenuation_sign(algo, payload, s.attenuation_secret);
     if r_exp_sig.is_err() {
         return Err("attenuated token signature verification error");
     }

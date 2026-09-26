@@ -19,6 +19,7 @@ import "engine/federation/mcp_codex.oo";
 import "engine/state/mcp_graph.oo";
 import "engine/health/mcp_audit.oo";
 import "engine/tool/mcp_tool_exec.oo";
+import "engine/state/mcp_attenuation.oo";
 
 pub fn mcp_stdio_poll_ms() -> Int { return 1; }
 pub fn mcp_stdio_idle_iters() -> Int { return 300000; }
@@ -31,6 +32,7 @@ pub fn mcp_stdio_serve(fw: &FsWriteCap, fs: &FsReadCap, env: &EnvCap, p: &Proces
     let graph: McpGraph = cache.graph;
     let mut session: McpSession = mcp_session_new();
     session.exec_oodac = mcp_exec_resolve_compiler(fs, env);
+    session.attenuation_secret = mcp_attenuation_resolve_secret(env);
     let mut buf: String = "";
     let mut total: Int = 0;
     let mut frames: Int = 0;
