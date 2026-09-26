@@ -59,6 +59,8 @@ jobs:
         working-directory: ${{ github.workspace }}
         env:
           OO_LIST_AMBIENT_QUOTA: "8589934592"
+          # Attenuation fails closed without a secret; CI uses a test-only value.
+          OODA_MCP_ATTENUATION_SECRET: "ci-test-attenuation-secret"
           OODA_COMPILER: ${{ github.workspace }}/oodac/bin/oodac
           OODA_FS_READDIR: ${{ github.workspace }}
           OODA_FS_WRITEDIR: ${{ github.workspace }}
