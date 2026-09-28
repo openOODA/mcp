@@ -46,7 +46,9 @@ pub fn mcp_revalidate_and_queue_caps(s: &mut McpSession, g: &McpGraph) -> String
     if revoked_bits == 0 { return ""; }
     let mut revoked: String = "";
     let mut bit: Int = 0;
-    while bit < 14 {
+    // Bits run 0..=29 (CompilerReadCap); stopping at 14 silently drops
+    // high-bit revocations from the notification (enforcement still held).
+    while bit < 30 {
         let mask: Int = 1 << bit;
         if (before & mask) > 0 && (valid_mask & mask) == 0 {
             let name: String = mcp_bit_to_token(bit);

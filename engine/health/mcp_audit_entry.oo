@@ -30,7 +30,9 @@ pub fn mcp_audit_entry_new(epoch: Int, method: String, id: String, decision: Int
 }
 
 pub fn mcp_audit_entry_body(entry: &McpAuditEntry) -> String {
-    return entry.epoch.to_string() + "|" + entry.method + "|" + entry.id + "|" + entry.decision.to_string() + "|" + entry.code.to_string() + "|" + entry.caps_before.to_string() + "|" + entry.caps_after.to_string() + "|" + entry.revoked + "|" + entry.prev_sha + "|" + entry.sha;
+    // Canonical hashed body: content + prev link, never the entry's own
+    // sha (hashing the hash makes record and verify disagree always).
+    return entry.epoch.to_string() + "|" + entry.method + "|" + entry.id + "|" + entry.decision.to_string() + "|" + entry.code.to_string() + "|" + entry.caps_before.to_string() + "|" + entry.caps_after.to_string() + "|" + entry.revoked + "|" + entry.prev_sha;
 }
 
 pub fn mcp_audit_entry_to_json(entry: &McpAuditEntry) -> String {

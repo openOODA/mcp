@@ -1,0 +1,81 @@
+// # MCP Guard Probe — Schema and Roots Boundaries
+//
+// Logline: Fail closed if tool input validation or roots scoping admits what it must refuse.
+//
+// Setup: Pure. No caps, no fs, no server. Calls the validators directly.
+//
+// Beats:
+//   1. Unknown tools and missing required strings fail with -32602.
+//   2. Optional ints accept absent/non-negative, refuse negative/non-numeric.
+//   3. Algo allowlist admits sha2 family, refuses the rest.
+//   4. ooda:// URIs pass; others need a matching client root.
+
+import "engine/core/mcp_session.oo";
+import "engine/resource/mcp_schema.oo";
+import "engine/state/mcp_roots.oo";
+
+fn guard_schema(name: String, args: String, want: Int) -> Result[Int, String] {
+    let got: Int = mcp_schema_validate(name, args);
+    if got != want {
+        return Err("schema " + name + " " + args + " got " + got.to_string() + " want " + want.to_string());
+    }
+    return Ok(0);
+}
+
+pub fn probe_schema_roots_run() -> Result[Int, String] {
+    let bad: Int = 0 - 32602;
+    let g1: Result[Int, String] = guard_schema("get_rules", "{}", 0);
+    if g1.is_err() { return g1; }
+    let g2: Result[Int, String] = guard_schema("get_rules", "", 0);
+    if g2.is_err() { return g2; }
+    let g3: Result[Int, String] = guard_schema("no_such_tool", "{}", bad);
+    if g3.is_err() { return g3; }
+    let g4: Result[Int, String] = guard_schema("read_board", "{}", bad);
+    if g4.is_err() { return g4; }
+    let g5: Result[Int, String] = guard_schema("read_board", "", bad);
+    if g5.is_err() { return g5; }
+    let g6: Result[Int, String] = guard_schema("get_audit_log", "{}", 0);
+    if g6.is_err() { return g6; }
+    let g7: Result[Int, String] = guard_schema("get_audit_log", "", 0);
+    if g7.is_err() { return g7; }
+    let ok_name: Result[Int, String] = guard_schema("read_board", "{\"name\":\"b1\"}", 0);
+    if ok_name.is_err() { return ok_name; }
+    let empty_name: Result[Int, String] = guard_schema("read_board", "{\"name\":\"\"}", bad);
+    if empty_name.is_err() { return empty_name; }
+    let ok_tail: Result[Int, String] = guard_schema("get_audit_log", "{\"tail\":5}", 0);
+    if ok_tail.is_err() { return ok_tail; }
+    let neg_tail: Result[Int, String] = guard_schema("get_audit_log", "{\"tail\":-1}", bad);
+    if neg_tail.is_err() { return neg_tail; }
+    let str_tail: Result[Int, String] = guard_schema("get_audit_log", "{\"tail\":\"x\"}", bad);
+    if str_tail.is_err() { return str_tail; }
+    let ok_algo: Result[Int, String] = guard_schema("attenuate_capability", "{\"parent_capability\":\"p\",\"algo\":\"sha256\"}", 0);
+    if ok_algo.is_err() { return ok_algo; }
+    let bad_algo: Result[Int, String] = guard_schema("attenuate_capability", "{\"parent_capability\":\"p\",\"algo\":\"md5\"}", bad);
+    if bad_algo.is_err() { return bad_algo; }
+    let no_parent: Result[Int, String] = guard_schema("attenuate_capability", "{\"algo\":\"sha256\"}", bad);
+    if no_parent.is_err() { return no_parent; }
+    let no_out: Result[Int, String] = guard_schema("oodac_build", "{\"entry\":\"a\"}", bad);
+    if no_out.is_err() { return no_out; }
+    let ok_build: Result[Int, String] = guard_schema("oodac_build", "{\"entry\":\"a\",\"out\":\"b\"}", 0);
+    if ok_build.is_err() { return ok_build; }
+    let mut s: McpSession = mcp_session_new();
+    if !mcp_root_allows(&s, "ooda://board/x") {
+        return Err("roots must pass ooda:// URIs");
+    }
+    if mcp_root_allows(&s, "file:///etc/passwd") {
+        return Err("roots must refuse non-ooda URIs with no client roots");
+    }
+    mcp_roots_apply_result(&mut s, "{\"roots\":[{\"uri\":\"file:///a/\"},{\"uri\":\"file:///b/\"}]}");
+    if !mcp_root_allows(&s, "file:///a/x") {
+        return Err("roots must pass URIs under an applied root");
+    }
+    if mcp_root_allows(&s, "file:///c/x") {
+        return Err("roots must refuse URIs outside applied roots");
+    }
+    let req: String = mcp_roots_list_request("7");
+    if !str_contains(req, "roots/list") || !str_contains(req, "\"id\":7") {
+        return Err("roots list request malformed: " + req);
+    }
+    println("PASS: probe_schema_roots");
+    return Ok(0);
+}

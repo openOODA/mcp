@@ -48,14 +48,18 @@ pub fn mcp_audit_tail(s: &McpSession, n: Int) -> String {
 }
 
 pub fn mcp_audit_persist(fw: &FsWriteCap, s: &McpSession) -> Int {
+    // NOTE: write_file overwrites, so accumulate the whole chain and write
+    // once; writing per entry keeps only the last line (found by probe).
     let writer: FileWriter = file_writer_open(fw, mcp_audit_log_path(), true);
     let total: Int = list_len(s.audit_log);
+    let mut body: String = "";
     let mut i: Int = 0;
     while i < total {
         let entry: McpAuditEntry = list_get(s.audit_log, i);
-        let _: Result[FileWriter, String] = file_writer_write(fw, writer, mcp_audit_entry_to_json(&entry) + "\n");
+        body = body + mcp_audit_entry_to_json(&entry) + "\n";
         i = i + 1;
     }
+    let _: Result[FileWriter, String] = file_writer_write(fw, writer, body);
     return total;
 }
 

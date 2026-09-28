@@ -1,0 +1,76 @@
+// # MCP Audit Probe — Hash-Chain Roundtrip
+//
+// Logline: Fail closed if the audit trail cannot record, persist, verify, or reject tampering.
+//
+// Setup: In-memory McpSession plus FsWriteCap for the on-disk JSONL chain.
+// No network, no server. Runs before any other audit writer in the suite.
+//
+// Beats:
+//   1. Two records advance the chain head.
+//   2. Tail serves the last N entries.
+//   3. Persist + verify roundtrips clean.
+//   4. Tampered and missing chains fail verification.
+
+import "engine/core/mcp_session.oo";
+import "engine/health/mcp_audit.oo";
+import "std/fs/os/fs.oo";
+
+pub fn probe_audit_run(fs_r: &FsReadCap, fw: &FsWriteCap) -> Result[Int, String] {
+    let mut s: McpSession = mcp_session_new();
+    let h1: String = mcp_audit_record(&mut s, 100, "tools/list", "a1", 1, 0, 7, 7, "");
+    let h2: String = mcp_audit_record(&mut s, 101, "tools/call", "a2", 1, 0, 7, 3, "");
+    if h1 == "" || h2 == "" {
+        return Err("audit record must return chain heads");
+    }
+    if h1 == h2 {
+        return Err("audit chain head must advance per entry");
+    }
+    let last1: String = mcp_audit_tail(&s, 1);
+    if !str_contains(last1, "tools/call") {
+        return Err("audit tail(1) must hold the newest entry: " + last1);
+    }
+    if str_contains(last1, "tools/list") {
+        return Err("audit tail(1) must not hold older entries: " + last1);
+    }
+    let last5: String = mcp_audit_tail(&s, 5);
+    if !str_contains(last5, "tools/list") || !str_contains(last5, "tools/call") {
+        return Err("audit tail(5) must hold both entries: " + last5);
+    }
+    let n: Int = mcp_audit_persist(fw, &s);
+    if n != 2 {
+        return Err("audit persist must report 2 entries, got " + n.to_string());
+    }
+    if !mcp_audit_verify(fs_r) {
+        return Err("audit verify must accept the just-persisted chain");
+    }
+    let tw: Result[Void, String] = write_file(fw, mcp_audit_log_path(), "{\"epoch\":1,\"garbage\":true}\n");
+    if tw.is_err() {
+        return Err("audit tamper setup failed");
+    }
+    if mcp_audit_verify(fs_r) {
+        return Err("audit verify must reject a tampered chain");
+    }
+    let rw: Result[Void, String] = write_file(fw, mcp_audit_log_path(), "");
+    if rw.is_err() {
+        return Err("audit restore setup failed");
+    }
+    if mcp_audit_verify(fs_r) {
+        return Err("audit verify must reject an empty chain");
+    }
+    let n2: Int = mcp_audit_persist(fw, &s);
+    if n2 != 2 {
+        return Err("audit re-persist must report 2 entries");
+    }
+    if !mcp_audit_verify(fs_r) {
+        return Err("audit verify must accept the restored chain");
+    }
+    let rm: Result[Void, String] = fs_remove_file(fw, mcp_audit_log_path());
+    if rm.is_err() {
+        return Err("audit remove setup failed");
+    }
+    if mcp_audit_verify(fs_r) {
+        return Err("audit verify must reject a missing chain file");
+    }
+    println("PASS: probe_audit");
+    return Ok(0);
+}

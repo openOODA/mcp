@@ -1,0 +1,63 @@
+// # MCP Notify Probe — Revocation Queue and Bits
+//
+// Logline: Fail closed if revocation queueing, draining, or high-bit notification naming drifts.
+//
+// Setup: In-memory sessions and graphs. No caps, no fs, no server.
+//
+// Beats:
+//   1. Empty notifications are refused; queued ones drain once.
+//   2. Low-bit revocation is enforced and named.
+//   3. High-bit revocation (bit 22) is enforced and named.
+
+import "engine/core/mcp_session.oo";
+import "engine/state/mcp_graph.oo";
+import "engine/state/mcp_notification.oo";
+
+pub fn probe_notify_run() -> Result[Int, String] {
+    let mut s: McpSession = mcp_session_new();
+    if mcp_queue_notification(&mut s, "") != 0 {
+        return Err("queue must refuse empty notifications");
+    }
+    if mcp_queue_notification(&mut s, "n1") != 1 {
+        return Err("queue must accept n1");
+    }
+    if mcp_pending_count(&s) != 1 {
+        return Err("pending count must be 1");
+    }
+    let drained: String = mcp_drain_into_response(&mut s, "", "R");
+    if !str_contains(drained, "R") || !str_contains(drained, "n1") {
+        return Err("drain must append frames to the response: " + drained);
+    }
+    if mcp_pending_count(&s) != 0 {
+        return Err("drain must empty the queue");
+    }
+    let mut g: McpGraph = mcp_graph_new("t", "");
+    g.capabilities = mcp_cap_push(list_new(), "FsReadCap", "fs", "core", 1, true, "r");
+    let mut s2: McpSession = mcp_session_new();
+    s2.caps_held = (1 << 2) + (1 << 3);
+    let n2: String = mcp_revalidate_and_queue_caps(&mut s2, &g);
+    if s2.caps_held != 8 {
+        return Err("revalidate must clear unlisted low bits");
+    }
+    if !str_contains(n2, "FsWriteCap") {
+        return Err("revalidate must name revoked low bits: " + n2);
+    }
+    if mcp_pending_count(&s2) != 1 {
+        return Err("revalidate must queue one notification");
+    }
+    let g3: McpGraph = mcp_graph_canonical("t", "");
+    let mut s3: McpSession = mcp_session_new();
+    s3.caps_held = (1 << 22) + (1 << 3);
+    let n3: String = mcp_revalidate_and_queue_caps(&mut s3, &g3);
+    if s3.caps_held != 8 {
+        return Err("revalidate must clear unlisted high bits");
+    }
+    if !str_contains(n3, "UsbCap") {
+        return Err("revalidate must name revoked high bits: " + n3);
+    }
+    if mcp_pending_count(&s3) != 1 {
+        return Err("revalidate must queue the high-bit notification");
+    }
+    println("PASS: probe_notify");
+    return Ok(0);
+}

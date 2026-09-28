@@ -1,0 +1,50 @@
+// # MCP Format Probe — Constraints and Validation
+//
+// Logline: Fail closed if the published format rules or the header/line-cap validator drifts.
+//
+// Setup: Pure. No caps. Builds good and bad codex texts inline.
+//
+// Beats:
+//   1. Constraints JSON carries the RFC-0003 invariants.
+//   2. Good Academy and oot headers validate compliant.
+//   3. Missing title, missing Logline, and >256 lines each violate.
+
+import "engine/resource/mcp_format.oo";
+
+pub fn probe_format_run() -> Result[Int, String] {
+    let c: String = mcp_format_get_constraints();
+    if !str_contains(c, "line_cap") || !str_contains(c, "256") {
+        return Err("constraints must carry the 256 line cap");
+    }
+    if !str_contains(c, "academy_header") || !str_contains(c, "0003") {
+        return Err("constraints must name Academy header and RFC-0003");
+    }
+    let good: String = mcp_format_validate_codex("// # Title\n//\n// Logline: x\n");
+    if !str_contains(good, "compliant") || !str_contains(good, "true") {
+        return Err("good Academy header must validate: " + good);
+    }
+    let oot: String = mcp_format_validate_codex("# Title\nFile: openOODA/x\n");
+    if !str_contains(oot, "true") {
+        return Err("good oot header must validate: " + oot);
+    }
+    let no_title: String = mcp_format_validate_codex("plain body\n// Logline: x\n");
+    if !str_contains(no_title, "title") || !str_contains(no_title, "false") {
+        return Err("missing title must violate: " + no_title);
+    }
+    let no_log: String = mcp_format_validate_codex("// # Title\nplain body\n");
+    if !str_contains(no_log, "header") || !str_contains(no_log, "false") {
+        return Err("missing Logline must violate: " + no_log);
+    }
+    let mut big: String = "// # Title\n// Logline: x\n";
+    let mut i: Int = 0;
+    while i < 260 {
+        big = big + "filler line\n";
+        i = i + 1;
+    }
+    let over: String = mcp_format_validate_codex(big);
+    if !str_contains(over, "line_cap") || !str_contains(over, "false") {
+        return Err("over-cap text must violate: " + over);
+    }
+    println("PASS: probe_format");
+    return Ok(0);
+}

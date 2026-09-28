@@ -1,0 +1,88 @@
+// # MCP Batch Probe — Split, Collect, Notifications
+//
+// Logline: Fail closed if batch detection, top-level splitting, or notification filtering drifts.
+//
+// Setup: Pure. No caps. Exercises the splitter edge cases inline (braces in strings, escapes, nesting).
+//
+// Beats:
+//   1. is_batch gates on [ ... ] shape.
+//   2. Split extracts top-level objects, respecting strings and escapes.
+//   3. Collect joins non-empty responses, skipping notifications.
+//   4. Missing id marks a notification.
+
+import "engine/core/mcp_batch.oo";
+
+pub fn probe_batch_run() -> Result[Int, String] {
+    if !mcp_batch_is_batch("[{}]") {
+        return Err("is_batch must accept [{}]");
+    }
+    if mcp_batch_is_batch("{}") || mcp_batch_is_batch("") || mcp_batch_is_batch("[") {
+        return Err("is_batch must refuse non-arrays");
+    }
+    let two: List[String] = mcp_batch_split("[{\"a\":1},{\"b\":2}]");
+    if list_len(two) != 2 {
+        return Err("split must yield 2 items");
+    }
+    if list_get(two, 0) != "{\"a\":1}" || list_get(two, 1) != "{\"b\":2}" {
+        return Err("split items must roundtrip exactly");
+    }
+    let braced: List[String] = mcp_batch_split("[{\"a\":\"{}\"}]");
+    if list_len(braced) != 1 {
+        return Err("split braced must yield 1 item");
+    }
+    // NOTE: exact != against the braced literal breaks the LLVM emitter
+    // ("unsupported expr RPAREN" though check passes); len+contains pins it.
+    let b0: String = list_get(braced, 0);
+    if chars_len(b0) != 10 {
+        return Err("split braced item must be 10 chars");
+    }
+    if !str_contains(b0, "{}") {
+        return Err("split braced item must keep inner braces");
+    }
+    let nested: List[String] = mcp_batch_split("[{\"a\":{\"b\":1}}]");
+    if list_len(nested) != 1 {
+        return Err("split nested must yield 1 item");
+    }
+    let n0: String = list_get(nested, 0);
+    if chars_len(n0) != 13 {
+        return Err("split nested item must be 13 chars");
+    }
+    if !str_contains(n0, "b") {
+        return Err("split nested item must keep inner key");
+    }
+    let esc: List[String] = mcp_batch_split("[{\"a\":\"\\\"}\"}]");
+    if list_len(esc) != 1 {
+        return Err("split must survive escaped quotes");
+    }
+    let mt: List[String] = mcp_batch_split("[]");
+    if list_len(mt) != 0 {
+        return Err("split of [] must be empty");
+    }
+    let na: List[String] = mcp_batch_split("{}");
+    if list_len(na) != 0 {
+        return Err("split of non-array must be empty");
+    }
+    let mut rs: List[String] = list_new();
+    rs = list_push(rs, "{\"id\":1}");
+    rs = list_push(rs, "");
+    rs = list_push(rs, "{\"id\":2}");
+    if mcp_batch_collect(rs) != "[{\"id\":1},{\"id\":2}]" {
+        return Err("collect must skip empty responses");
+    }
+    let mut em: List[String] = list_new();
+    em = list_push(em, "");
+    if mcp_batch_collect(em) != "[]" {
+        return Err("collect of all-empty must be []");
+    }
+    if !mcp_batch_is_notification("{\"jsonrpc\":\"2.0\",\"method\":\"x\"}") {
+        return Err("missing id must mark a notification");
+    }
+    if mcp_batch_is_notification("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"x\"}") {
+        return Err("present id must not mark a notification");
+    }
+    if mcp_batch_is_notification("{\"jsonrpc\":\"2.0\",\"id\":\"s1\",\"method\":\"x\"}") {
+        return Err("present string id must not mark a notification");
+    }
+    println("PASS: probe_batch");
+    return Ok(0);
+}
