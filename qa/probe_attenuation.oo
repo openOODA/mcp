@@ -13,7 +13,6 @@
 import "engine/core/mcp_server.oo";
 import "engine/core/mcp_session.oo";
 import "engine/state/mcp_graph.oo";
-import "engine/state/mcp_cap.oo";
 import "engine/state/mcp_attenuation.oo";
 
 fn probe_ready(p: &ProcessCap, fs: &FsReadCap, s: &mut McpSession, g: &McpGraph) -> String {

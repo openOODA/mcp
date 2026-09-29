@@ -11,7 +11,6 @@
 //   4. Session snapshot.
 
 import "engine/core/mcp_session.oo";
-import "engine/health/mcp_audit.oo";
 import "engine/state/mcp_graph.oo";
 import "engine/health/mcp_redteam.oo";
 

@@ -14,7 +14,6 @@
 
 import "engine/core/mcp_json.oo";
 import "std/fs/process/env.oo";
-import "std/fs/file/path.oo";
 
 pub fn mcp_exec_default_max() -> Int { return 4000; }
 
