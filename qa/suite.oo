@@ -1,6 +1,6 @@
 // # Test MCP
 //
-// Logline: Run the twenty-eight probe functions and the surface verifier. Any Err fails the package.
+// Logline: Run the twenty-eight probe functions and the surface verifier. Report every failure.
 //
 // Setup: In-process. Merge probe needs FsWriteCap. Exec probe needs ProcessCap plus
 //        OODA_COMPILER or OODAC_BIN. Ecap probe drives oodac_check/build over
@@ -8,9 +8,9 @@
 //        compiler. No fake passed++.
 //
 // Beats:
-//   1. verify surface.
-//   2. Run twenty-eight probes.
-//   3. Return the first Err.
+//   1. verify surface (fail-fast: drift invalidates every probe below).
+//   2. Run twenty-eight probes, reporting all failures.
+//   3. Exit 0 only when every probe passes; otherwise the failure count.
 
 import "qa/probe_initialize.oo";
 import "qa/probe_tools_list.oo";
@@ -41,206 +41,189 @@ import "qa/probe_batch.oo";
 import "qa/probe_notify.oo";
 import "qa/probe_format.oo";
 import "verify_surface.oo";
+
+fn suite_err_msg(r: Result[Int, String]) -> String {
+    return match r { Ok(_) => "", Err(m) => m };
+}
+
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
     let v: Result[Int, String] = mcp_verify_surface_zero_trust(fs_r);
     if v.is_err() { println("FAIL: surface"); return v; }
     println("PASS: surface");
+    let mut failed: Int = 0;
+    let mut first_err: String = "";
     let au: Result[Int, String] = probe_audit_run(fs_r, fw);
     if au.is_err() {
-        let e_au: String = match au { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_audit: " + e_au);
-        return au;
-    }
-    println("PASS: probe_audit");
+        println("FAIL: probe_audit: " + suite_err_msg(au));
+        if failed == 0 { first_err = "probe_audit"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_audit"); }
     let gs: Result[Int, String] = probe_schema_roots_run();
     if gs.is_err() {
-        let e_gs: String = match gs { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_schema_roots: " + e_gs);
-        return gs;
-    }
-    println("PASS: probe_schema_roots");
+        println("FAIL: probe_schema_roots: " + suite_err_msg(gs));
+        if failed == 0 { first_err = "probe_schema_roots"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_schema_roots"); }
     let pb: Result[Int, String] = probe_batch_run();
     if pb.is_err() {
-        let e_pb: String = match pb { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_batch: " + e_pb);
-        return pb;
-    }
-    println("PASS: probe_batch");
+        println("FAIL: probe_batch: " + suite_err_msg(pb));
+        if failed == 0 { first_err = "probe_batch"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_batch"); }
     let pn: Result[Int, String] = probe_notify_run();
     if pn.is_err() {
-        let e_pn: String = match pn { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_notify: " + e_pn);
-        return pn;
-    }
-    println("PASS: probe_notify");
+        println("FAIL: probe_notify: " + suite_err_msg(pn));
+        if failed == 0 { first_err = "probe_notify"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_notify"); }
     let pf: Result[Int, String] = probe_format_run();
     if pf.is_err() {
-        let e_pf: String = match pf { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_format: " + e_pf);
-        return pf;
-    }
-    println("PASS: probe_format");
+        println("FAIL: probe_format: " + suite_err_msg(pf));
+        if failed == 0 { first_err = "probe_format"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_format"); }
     let a: Result[Int, String] = probe_initialize_run(p, fs_r);
     if a.is_err() {
-        let e_a: String = match a { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_initialize: " + e_a);
-        return a;
-    }
-    println("PASS: probe_initialize");
+        println("FAIL: probe_initialize: " + suite_err_msg(a));
+        if failed == 0 { first_err = "probe_initialize"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_initialize"); }
     let b: Result[Int, String] = probe_tools_list_run(p, fs_r);
     if b.is_err() {
-        let e_b: String = match b { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_tools_list: " + e_b);
-        return b;
-    }
-    println("PASS: probe_tools_list");
+        println("FAIL: probe_tools_list: " + suite_err_msg(b));
+        if failed == 0 { first_err = "probe_tools_list"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_tools_list"); }
     let c: Result[Int, String] = probe_tool_call_run(p, fs_r);
     if c.is_err() {
-        let e_c: String = match c { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_tool_call: " + e_c);
-        return c;
-    }
-    println("PASS: probe_tool_call");
+        println("FAIL: probe_tool_call: " + suite_err_msg(c));
+        if failed == 0 { first_err = "probe_tool_call"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_tool_call"); }
     let d: Result[Int, String] = probe_resources_list_run(p, fs_r);
     if d.is_err() {
-        let e_d: String = match d { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_resources_list: " + e_d);
-        return d;
-    }
-    println("PASS: probe_resources_list");
+        println("FAIL: probe_resources_list: " + suite_err_msg(d));
+        if failed == 0 { first_err = "probe_resources_list"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_resources_list"); }
     let e: Result[Int, String] = probe_ping_run(p, fs_r);
     if e.is_err() {
-        let e_e: String = match e { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_ping: " + e_e);
-        return e;
-    }
-    println("PASS: probe_ping");
+        println("FAIL: probe_ping: " + suite_err_msg(e));
+        if failed == 0 { first_err = "probe_ping"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_ping"); }
     let f: Result[Int, String] = probe_double_run_run(p, fs_r);
     if f.is_err() {
-        let e_f: String = match f { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_double_run: " + e_f);
-        return f;
-    }
-    println("PASS: probe_double_run");
+        println("FAIL: probe_double_run: " + suite_err_msg(f));
+        if failed == 0 { first_err = "probe_double_run"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_double_run"); }
     let h: Result[Int, String] = probe_merge_run(fs_r, fw);
     if h.is_err() {
-        let e_h: String = match h { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_merge: " + e_h);
-        return h;
-    }
-    println("PASS: probe_merge");
+        println("FAIL: probe_merge: " + suite_err_msg(h));
+        if failed == 0 { first_err = "probe_merge"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_merge"); }
     let r: Result[Int, String] = probe_redteam_run();
     if r.is_err() {
-        let e_r: String = match r { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_redteam: " + e_r);
-        return r;
-    }
-    println("PASS: probe_redteam");
+        println("FAIL: probe_redteam: " + suite_err_msg(r));
+        if failed == 0 { first_err = "probe_redteam"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_redteam"); }
     let t: Result[Int, String] = probe_token_run(p, fs_r);
     if t.is_err() {
-        let e_t: String = match t { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_token: " + e_t);
-        return t;
-    }
-    println("PASS: probe_token");
+        println("FAIL: probe_token: " + suite_err_msg(t));
+        if failed == 0 { first_err = "probe_token"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_token"); }
     let fz: Result[Int, String] = probe_fuzz_ingest_run();
     if fz.is_err() {
-        let e_fz: String = match fz { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_fuzz_ingest: " + e_fz);
-        return fz;
-    }
-    println("PASS: probe_fuzz_ingest");
+        println("FAIL: probe_fuzz_ingest: " + suite_err_msg(fz));
+        if failed == 0 { first_err = "probe_fuzz_ingest"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_fuzz_ingest"); }
     let pr: Result[Int, String] = probe_protocol_run(p, fs_r);
     if pr.is_err() {
-        let e_pr: String = match pr { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_protocol: " + e_pr);
-        return pr;
-    }
-    println("PASS: probe_protocol");
+        println("FAIL: probe_protocol: " + suite_err_msg(pr));
+        if failed == 0 { first_err = "probe_protocol"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_protocol"); }
     let ps: Result[Int, String] = probe_slice_run(p, fs_r);
     if ps.is_err() {
-        let e_ps: String = match ps { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_slice: " + e_ps);
-        return ps;
-    }
-    println("PASS: probe_slice");
+        println("FAIL: probe_slice: " + suite_err_msg(ps));
+        if failed == 0 { first_err = "probe_slice"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_slice"); }
     let pa: Result[Int, String] = probe_attenuation_run(p, fs_r, env);
     if pa.is_err() {
-        let e_pa: String = match pa { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_attenuation: " + e_pa);
-        return pa;
-    }
-    println("PASS: probe_attenuation");
+        println("FAIL: probe_attenuation: " + suite_err_msg(pa));
+        if failed == 0 { first_err = "probe_attenuation"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_attenuation"); }
     let pe: Result[Int, String] = probe_exec_run(p, fs_r, fw, env);
     if pe.is_err() {
-        let e_pe: String = match pe { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_exec: " + e_pe);
-        return pe;
-    }
-    println("PASS: probe_exec");
+        println("FAIL: probe_exec: " + suite_err_msg(pe));
+        if failed == 0 { first_err = "probe_exec"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_exec"); }
     let cj: Result[Int, String] = probe_cwd_jail_run();
     if cj.is_err() {
-        let e_cj: String = match cj { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_cwd_jail: " + e_cj);
-        return cj;
-    }
-    println("PASS: probe_cwd_jail");
+        println("FAIL: probe_cwd_jail: " + suite_err_msg(cj));
+        if failed == 0 { first_err = "probe_cwd_jail"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_cwd_jail"); }
     let ec: Result[Int, String] = probe_ecap_injection_run(p, fs_r, fw, env);
     if ec.is_err() {
-        let e_ec: String = match ec { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_ecap_injection: " + e_ec);
-        return ec;
-    }
-    println("PASS: probe_ecap_injection");
+        println("FAIL: probe_ecap_injection: " + suite_err_msg(ec));
+        if failed == 0 { first_err = "probe_ecap_injection"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_ecap_injection"); }
     let fr: Result[Int, String] = probe_fold_run_run(p, fs_r, fw, env);
     if fr.is_err() {
-        let e_fr: String = match fr { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_fold_run: " + e_fr);
-        return fr;
-    }
-    println("PASS: probe_fold_run");
+        println("FAIL: probe_fold_run: " + suite_err_msg(fr));
+        if failed == 0 { first_err = "probe_fold_run"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_fold_run"); }
     let fe: Result[Int, String] = probe_fold_exit_run();
     if fe.is_err() {
-        let e_fe: String = match fe { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_fold_exit: " + e_fe);
-        return fe;
-    }
-    println("PASS: probe_fold_exit");
+        println("FAIL: probe_fold_exit: " + suite_err_msg(fe));
+        if failed == 0 { first_err = "probe_fold_exit"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_fold_exit"); }
     let ff: Result[Int, String] = probe_fold_fault_run(fs_r, fw);
     if ff.is_err() {
-        let e_ff: String = match ff { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_fold_fault: " + e_ff);
-        return ff;
-    }
-    println("PASS: probe_fold_fault");
+        println("FAIL: probe_fold_fault: " + suite_err_msg(ff));
+        if failed == 0 { first_err = "probe_fold_fault"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_fold_fault"); }
     let fs2: Result[Int, String] = probe_fold_stderr_run();
     if fs2.is_err() {
-        let e_fs2: String = match fs2 { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_fold_stderr: " + e_fs2);
-        return fs2;
-    }
-    println("PASS: probe_fold_stderr");
+        println("FAIL: probe_fold_stderr: " + suite_err_msg(fs2));
+        if failed == 0 { first_err = "probe_fold_stderr"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_fold_stderr"); }
     let fp: Result[Int, String] = probe_fold_probe_run();
     if fp.is_err() {
-        let e_fp: String = match fp { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_fold_probe: " + e_fp);
-        return fp;
-    }
-    println("PASS: probe_fold_probe");
+        println("FAIL: probe_fold_probe: " + suite_err_msg(fp));
+        if failed == 0 { first_err = "probe_fold_probe"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_fold_probe"); }
     let fe2: Result[Int, String] = probe_fold_emit_run();
     if fe2.is_err() {
-        let e_fe2: String = match fe2 { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_fold_emit: " + e_fe2);
-        return fe2;
-    }
-    println("PASS: probe_fold_emit");
+        println("FAIL: probe_fold_emit: " + suite_err_msg(fe2));
+        if failed == 0 { first_err = "probe_fold_emit"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_fold_emit"); }
     let ft: Result[Int, String] = probe_fold_tool_run(p, fs_r);
     if ft.is_err() {
-        let e_ft: String = match ft { Ok(_) => "", Err(msg) => msg };
-        println("FAIL: probe_fold_tool: " + e_ft);
-        return ft;
+        println("FAIL: probe_fold_tool: " + suite_err_msg(ft));
+        if failed == 0 { first_err = "probe_fold_tool"; }
+        failed = failed + 1;
+    } else { println("PASS: probe_fold_tool"); }
+    if failed != 0 {
+        println("test: " + failed.to_string() + " of 28 probes failed; first: " + first_err);
+        return Err(first_err);
     }
-    println("PASS: probe_fold_tool");
     println("test: 28 probes + verify passed");
     return Ok(0);
 }
