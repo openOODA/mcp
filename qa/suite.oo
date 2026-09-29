@@ -1,6 +1,6 @@
 // # Test MCP
 //
-// Logline: Run the twenty-seven probe functions and the surface verifier. Any Err fails the package.
+// Logline: Run the twenty-eight probe functions and the surface verifier. Any Err fails the package.
 //
 // Setup: In-process. Merge probe needs FsWriteCap. Exec probe needs ProcessCap plus
 //        OODA_COMPILER or OODAC_BIN. Ecap probe drives oodac_check/build over
@@ -9,7 +9,7 @@
 //
 // Beats:
 //   1. verify surface.
-//   2. Run twenty-seven probes.
+//   2. Run twenty-eight probes.
 //   3. Return the first Err.
 
 import "qa/probe_initialize.oo";
@@ -42,7 +42,7 @@ import "qa/probe_notify.oo";
 import "qa/probe_format.oo";
 import "verify_surface.oo";
 pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, args: List[String]) -> Result[Int, String] {
-    let v: Result[Int, String] = mcp_verify_surface();
+    let v: Result[Int, String] = mcp_verify_surface_zero_trust(fs_r);
     if v.is_err() { println("FAIL: surface"); return v; }
     println("PASS: surface");
     let au: Result[Int, String] = probe_audit_run(fs_r, fw);
@@ -241,6 +241,6 @@ pub fn main(p: &ProcessCap, fs_r: &FsReadCap, fw: &FsWriteCap, env: &EnvCap, arg
         return ft;
     }
     println("PASS: probe_fold_tool");
-    println("test: 27 probes + verify passed");
+    println("test: 28 probes + verify passed");
     return Ok(0);
 }

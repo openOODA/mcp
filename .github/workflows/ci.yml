@@ -67,6 +67,24 @@ jobs:
         run: |
           "${OODA_COMPILER}" build mcp/qa/suite.oo -o /tmp/mcp_suite
           /tmp/mcp_suite
+      - name: fail-closed without secret (negative control)
+        working-directory: ${{ github.workspace }}
+        env:
+          OO_LIST_AMBIENT_QUOTA: "8589934592"
+          OODA_COMPILER: ${{ github.workspace }}/oodac/bin/oodac
+          OODA_FS_READDIR: ${{ github.workspace }}
+          OODA_FS_WRITEDIR: ${{ github.workspace }}
+        run: |
+          # OODA_MCP_ATTENUATION_SECRET deliberately unset: attenuation must
+          # fail closed, so the suite MUST exit nonzero at probe_attenuation.
+          # This proves the env->secret wiring end to end (no hardcoded secret).
+          set +e
+          out=$(/tmp/mcp_suite 2>&1)
+          rc=$?
+          set -e
+          echo "$out" | grep -q "FAIL: probe_attenuation" || { echo "ERR fail-closed control: no attenuation failure without secret"; echo "$out" | tail -5; exit 1; }
+          test "$rc" -ne 0 || { echo "ERR fail-closed control: suite passed without secret"; exit 1; }
+          echo "[fail-closed OK] suite rc=$rc without secret at probe_attenuation"
   build:
     runs-on: ubuntu-latest
     env:
