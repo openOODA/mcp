@@ -8,6 +8,9 @@
 //
 // Beats:
 //   1. Attempt TCP connect with the capability argument missing.
+//
+// Attested 2026-09-30: intentionally-broken adversarial input. Never repair,
+// never add to a check gate; tree-wide audits must exclude this file.
 
 import "std/net/net.oo";
 
