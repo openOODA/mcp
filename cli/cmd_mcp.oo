@@ -41,7 +41,7 @@ pub fn run_ooda_mcp(fw: &FsWriteCap, fr: &FsReadCap, env: &EnvCap, args: List[St
         return Ok(0);
     }
     if cmd_mcp_has_flag(args, "--version") || cmd_mcp_has_flag(args, "-v") {
-        println("mcp v2.11.10");
+        println("mcp v2.11.11");
         return Ok(0);
     }
     let has_stdio: Bool = cmd_mcp_has_flag(args, "--stdio");
