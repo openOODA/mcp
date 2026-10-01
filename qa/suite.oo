@@ -12,35 +12,36 @@
 //   2. Run twenty-eight probes, reporting all failures.
 //   3. Exit 0 only when every probe passes; otherwise the failure count.
 
-import "qa/probe_initialize.oo";
-import "qa/probe_tools_list.oo";
-import "qa/probe_tool_call.oo";
-import "qa/probe_resources_list.oo";
-import "qa/probe_ping.oo";
-import "qa/probe_double_run.oo";
-import "qa/probe_merge.oo";
-import "qa/probe_redteam.oo";
-import "qa/probe_token.oo";
-import "qa/probe_fuzz_ingest.oo";
-import "qa/probe_protocol.oo";
-import "qa/probe_slice.oo";
-import "qa/probe_attenuation.oo";
-import "qa/probe_exec.oo";
-import "qa/probe_cwd_jail.oo";
-import "qa/probe_ecap_injection.oo";
-import "qa/probe_fold_run.oo";
-import "qa/probe_fold_exit.oo";
-import "qa/probe_fold_fault.oo";
-import "qa/probe_fold_stderr.oo";
-import "qa/probe_fold_probe.oo";
-import "qa/probe_fold_emit.oo";
-import "qa/probe_fold_tool.oo";
-import "qa/probe_audit.oo";
-import "qa/probe_schema_roots.oo";
-import "qa/probe_batch.oo";
-import "qa/probe_notify.oo";
-import "qa/probe_format.oo";
+import "server/probe_initialize.oo";
+import "server/probe_tools_list.oo";
+import "server/probe_tool_call.oo";
+import "server/probe_resources_list.oo";
+import "server/probe_ping.oo";
+import "sec/probe_double_run.oo";
+import "data/probe_merge.oo";
+import "sec/probe_redteam.oo";
+import "data/probe_token.oo";
+import "sec/probe_fuzz_ingest.oo";
+import "server/probe_protocol.oo";
+import "data/probe_slice.oo";
+import "sec/probe_attenuation.oo";
+import "sec/probe_exec.oo";
+import "sec/probe_cwd_jail.oo";
+import "sec/probe_ecap_injection.oo";
+import "fold/probe_fold_run.oo";
+import "fold/probe_fold_exit.oo";
+import "fold/probe_fold_fault.oo";
+import "fold/probe_fold_stderr.oo";
+import "fold/probe_fold_probe.oo";
+import "fold/probe_fold_emit.oo";
+import "fold/probe_fold_tool.oo";
+import "data/probe_audit.oo";
+import "data/probe_schema_roots.oo";
+import "data/probe_batch.oo";
+import "server/probe_notify.oo";
+import "data/probe_format.oo";
 import "verify_surface.oo";
+
 
 fn suite_err_msg(r: Result[Int, String]) -> String {
     return match r { Ok(_) => "", Err(m) => m };

@@ -1,0 +1,18 @@
+// # MCP QA Fold Probes Anchor
+//
+// Logline: Fault autopsy and fold runner verification probes.
+//
+// Setup: Sovereign test harness re-exporting all fold probe modules.
+//
+// Beats:
+//   1. Re-export fold probes.
+//   2. Expose probe functions to test runners.
+//   3. Retain module symbol bindings.
+
+import "probe_fold_emit.oo";
+import "probe_fold_exit.oo";
+import "probe_fold_fault.oo";
+import "probe_fold_probe.oo";
+import "probe_fold_run.oo";
+import "probe_fold_stderr.oo";
+import "probe_fold_tool.oo";

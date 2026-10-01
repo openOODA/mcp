@@ -1,0 +1,18 @@
+// # MCP QA Data Probes Anchor
+//
+// Logline: Data plane probes for format, audit, roots, tokens, batch, and slicing.
+//
+// Setup: Sovereign test harness re-exporting all data probe modules.
+//
+// Beats:
+//   1. Re-export data probes.
+//   2. Expose probe functions to test runners.
+//   3. Retain module symbol bindings.
+
+import "probe_audit.oo";
+import "probe_schema_roots.oo";
+import "probe_batch.oo";
+import "probe_format.oo";
+import "probe_slice.oo";
+import "probe_token.oo";
+import "probe_merge.oo";

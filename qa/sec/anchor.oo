@@ -1,0 +1,18 @@
+// # MCP QA Security Probes Anchor
+//
+// Logline: Security sandbox probes for attenuation, jail, ecap, fuzzing, and redteam.
+//
+// Setup: Sovereign test harness re-exporting all security probe modules.
+//
+// Beats:
+//   1. Re-export security probes.
+//   2. Expose probe functions to test runners.
+//   3. Retain module symbol bindings.
+
+import "probe_attenuation.oo";
+import "probe_cwd_jail.oo";
+import "probe_ecap_injection.oo";
+import "probe_exec.oo";
+import "probe_fuzz_ingest.oo";
+import "probe_redteam.oo";
+import "probe_double_run.oo";
