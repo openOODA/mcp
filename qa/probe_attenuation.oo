@@ -25,6 +25,9 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap, env: &EnvCap) -> Re
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "openOODA");
     let mut s: McpSession = mcp_session_new();
     s.attenuation_secret = mcp_attenuation_resolve_secret(env);
+    if chars_len(s.attenuation_secret) == 0 {
+        s.attenuation_secret = "mcp_probe_attenuation_test_secret_0123456789abcdef";
+    }
     mcp_session_grant_cap(&mut s, 8); // FsReadCap (oodar bit 3, mask 8)
     mcp_session_grant_cap(&mut s, 4); // FsWriteCap (oodar bit 2, mask 4)
     let _init1: String = probe_ready(p, fs, &mut s, &g);
@@ -133,6 +136,7 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap, env: &EnvCap) -> Re
     // 14. Double-run determinism: Run_1 == Run_2
     let mut s1: McpSession = mcp_session_new();
     s1.attenuation_secret = mcp_attenuation_resolve_secret(env);
+    if chars_len(s1.attenuation_secret) == 0 { s1.attenuation_secret = s.attenuation_secret; }
     mcp_session_grant_cap(&mut s1, 8);
     let _i1: String = probe_ready(p, fs, &mut s1, &g);
     let r_t1: Result[String, String] = mcp_attenuate_token(&mut s1, "FsReadCap", 8, "/test", 10, "blake3");
@@ -141,6 +145,7 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap, env: &EnvCap) -> Re
 
     let mut s2: McpSession = mcp_session_new();
     s2.attenuation_secret = mcp_attenuation_resolve_secret(env);
+    if chars_len(s2.attenuation_secret) == 0 { s2.attenuation_secret = s.attenuation_secret; }
     mcp_session_grant_cap(&mut s2, 8);
     let _i2: String = probe_ready(p, fs, &mut s2, &g);
     let r_t2: Result[String, String] = mcp_attenuate_token(&mut s2, "FsReadCap", 8, "/test", 10, "blake3");

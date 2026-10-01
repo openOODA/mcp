@@ -22,11 +22,17 @@ import "fold/fold_emit.oo";
 import "fold/fold_tool.oo";
 
 pub fn mcp_verify_surface_zero_trust(fs: &FsReadCap) -> Result[Int, String] {
-    let t: Result[String, String] = read_file(fs, "oodar/sec/cap/cap_table.json");
+    let mut t: Result[String, String] = read_file(fs, "oodar/sec/cap/cap_table.json");
+    if t.is_err() {
+        t = read_file(fs, "../oodar/sec/cap/cap_table.json");
+    }
     if t.is_err() { return Err("cap_table.json missing"); }
     let j: String = match t { Ok(s) => s, Err(_) => "" };
     if str_index_of(j, "\"cap_count\": 26") < 0 { return Err("cap_table.json not 26"); }
-    let h: Result[String, String] = read_file(fs, "oodar/sec/cap/caps.h");
+    let mut h: Result[String, String] = read_file(fs, "oodar/sec/cap/caps.h");
+    if h.is_err() {
+        h = read_file(fs, "../oodar/sec/cap/caps.h");
+    }
     if h.is_err() { return Err("caps.h missing"); }
     let hs: String = match h { Ok(s) => s, Err(_) => "" };
     let mut c: Int = 0;
