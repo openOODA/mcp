@@ -25,6 +25,9 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap, env: &EnvCap) -> Re
     let g: McpGraph = mcp_graph_canonical("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "openOODA");
     let mut s: McpSession = mcp_session_new();
     s.attenuation_secret = mcp_attenuation_resolve_secret(env);
+    if chars_len(s.attenuation_secret) == 0 {
+        s.attenuation_secret = "probe-attenuation-secret-32bytes!";
+    }
     mcp_session_grant_cap(&mut s, 8); // FsReadCap (oodar bit 3, mask 8)
     mcp_session_grant_cap(&mut s, 4); // FsWriteCap (oodar bit 2, mask 4)
     let _init1: String = probe_ready(p, fs, &mut s, &g);
@@ -95,7 +98,7 @@ pub fn probe_attenuation_run(p: &ProcessCap, fs: &FsReadCap, env: &EnvCap) -> Re
 
     // 9. Monotonic TTL expiration check
     let mut s_exp: McpSession = mcp_session_new();
-    s_exp.attenuation_secret = mcp_attenuation_resolve_secret(env);
+    s_exp.attenuation_secret = s.attenuation_secret;
     mcp_session_grant_cap(&mut s_exp, 8);
     s_exp.request_seq = 200; // expires_seq was ~50, so 200 is expired
     let v_exp: Result[Int, String] = mcp_attenuate_verify(&s_exp, tok_sha256, "FsReadCap", "/home/jeryd/Projects/openOODA/lsp");
